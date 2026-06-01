@@ -3,11 +3,14 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const settingsRoutes =
 require("./routes/settings");
+const serverless = require("serverless-http");
+
 
 const authRoutes = require("./authRoutes");
 const authMiddleware = require("./middleware/authMiddleware");
 const questionRoutes = require("./routes/questionsR");
 const resultRoutes = require("./routes/resultRoutes");
+
 
 require("dotenv").config();
 
@@ -43,6 +46,4 @@ app.get("/api/protected", authMiddleware, (req, res) => {
 
 const PORT = 3000;
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+module.exports = serverless(app);
