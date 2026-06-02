@@ -86,7 +86,6 @@ function Register() {
   value={role}
   onChange={(e) => setRole(e.target.value)}
 >
-
   <option value="student">
     Student
   </option>
@@ -98,7 +97,6 @@ function Register() {
   <option value="superadmin">
     Super Admin
   </option>
-
 </select>
 
           <button
