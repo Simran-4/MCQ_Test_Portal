@@ -31,13 +31,22 @@ function Login() {
         JSON.stringify(res.data.user)
       );
 
+      // Role Based Navigation
+
       if (res.data.user.role === "teacher") {
 
         navigate("/dashboard");
 
-      } else {
+      } 
+      else if (res.data.user.role === "superadmin") {
+
+        navigate("/superadmin");
+
+      } 
+      else {
 
         navigate("/test");
+
       }
 
     } catch (err) {
@@ -45,6 +54,7 @@ function Login() {
       alert("Login Failed");
 
       console.log(err);
+
     }
   };
 

@@ -82,20 +82,24 @@ function Register() {
           />
 
           <select
-            className="auth-select"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-          >
+  className="auth-select"
+  value={role}
+  onChange={(e) => setRole(e.target.value)}
+>
 
-            <option value="student">
-              Student
-            </option>
+  <option value="student">
+    Student
+  </option>
 
-            <option value="teacher">
-              Teacher
-            </option>
+  <option value="teacher">
+    Teacher
+  </option>
 
-          </select>
+  <option value="superadmin">
+    Super Admin
+  </option>
+
+</select>
 
           <button
             className="auth-button"
