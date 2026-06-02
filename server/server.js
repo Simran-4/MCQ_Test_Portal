@@ -6,6 +6,7 @@ const authRoutes = require("./authRoutes");
 const authMiddleware = require("./middleware/authMiddleware");
 const questionRoutes = require("./routes/questionsR");
 const resultRoutes = require("./routes/resultRoutes");
+const cors = require("cors");
 
 require("dotenv").config();
 
@@ -18,6 +19,12 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
+}));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/questions", questionRoutes);
