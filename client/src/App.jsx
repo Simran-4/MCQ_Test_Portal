@@ -9,6 +9,7 @@ import Test from "./pages/Test";
 import Register from "./pages/register";
 import ViewResults from "./pages/ViewResults";
 import AdminSettings from "./pages/AdminSettings";
+import SuperAdmin from "./pages/SuperAdmin";
 
 
 function App() {
@@ -31,6 +32,8 @@ function App() {
             path="/register"
             element={<Register />}
           />
+
+          <Route path="/superadmin" element={<SuperAdmin />} />
 
           <Route
             path="/results"
