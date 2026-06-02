@@ -99,8 +99,12 @@ function SuperAdmin() {
   return (
     <div className="container">
       <aside className="sidebar">
-        <div className="logo">
-          <h2>PersonaAdmin</h2>
+        <div className="superadmin-brand">
+          <img src="/Logo.png" alt="Snehalaya logo" />
+          <div>
+            <p>MCQ Test Portal</p>
+            <h2>Super Admin</h2>
+          </div>
         </div>
 
         <nav>
@@ -153,41 +157,43 @@ function SuperAdmin() {
 
           {error && <p className="error-message">{error}</p>}
 
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Access</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user) => (
-                <tr key={user._id}>
-                  <td>{user.name}</td>
-                  <td>{user.email}</td>
-                  <td>
-                    <span className={`badge ${user.role === "student" ? "student" : "admin"}`}>
-                      {user.role}
-                    </span>
-                  </td>
-                  <td>{user.isActive ? "Active" : "Disabled"}</td>
-                  <td>
-                    <label className="switch">
-                      <input
-                        type="checkbox"
-                        checked={user.isActive}
-                        onChange={(event) => updateAccess(user._id, event.target.checked)}
-                      />
-                      <span className="slider"></span>
-                    </label>
-                  </td>
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Access</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr key={user._id}>
+                    <td>{user.name}</td>
+                    <td>{user.email}</td>
+                    <td>
+                      <span className={`badge ${user.role === "student" ? "student" : "admin"}`}>
+                        {user.role}
+                      </span>
+                    </td>
+                    <td>{user.isActive ? "Active" : "Disabled"}</td>
+                    <td>
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          checked={user.isActive}
+                          onChange={(event) => updateAccess(user._id, event.target.checked)}
+                        />
+                        <span className="slider"></span>
+                      </label>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {!loading && !error && filteredUsers.length === 0 && (
             <p className="empty-message">No users found.</p>
