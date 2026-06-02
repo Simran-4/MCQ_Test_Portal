@@ -8,7 +8,7 @@ import Test from "./pages/Test";
 import Register from "./pages/register";
 import ViewResults from "./pages/ViewResults";
 import AdminSettings from "./pages/AdminSettings";
-import SuperAdmin from "./pages/SuperAdmin";
+
 
 function App() {
 
@@ -30,12 +30,7 @@ function App() {
           element={<Register />}
         />
 
-        {/* Super Admin */}
-        <Route
-          path="/superadmin"
-          element={<SuperAdmin />}
-        />
-
+        
         {/* Dashboard */}
         <Route
           path="/dashboard"
