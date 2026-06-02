@@ -13,7 +13,7 @@ function ViewQuestions() {
     try {
 
       const res = await axios.get(
-        "http://localhost:3000/api/questions/all"
+        "https://mcqtestportal-production.up.railway.app/api/questions/all"
       );
 
       setQuestions(res.data);

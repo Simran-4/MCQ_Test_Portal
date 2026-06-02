@@ -28,7 +28,7 @@ function AddQuestion() {
     try {
 
       await axios.post(
-        "http://localhost:3000/api/questions/add",
+        "https://mcqtestportal-production.up.railway.app/api/questions/add",
         {
 
           question,

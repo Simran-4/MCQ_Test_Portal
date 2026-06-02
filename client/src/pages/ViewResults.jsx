@@ -18,10 +18,10 @@ function ViewResults() {
     try {
       let res;
       if (storedUser.role === "teacher") {
-        res = await axios.get("http://localhost:3000/api/results/all");
+        res = await axios.get("https://mcqtestportal-production.up.railway.app/api/results/all");
       } else {
         res = await axios.get(
-          `http://localhost:3000/api/results/my/${storedUser.email}`
+          `https://mcqtestportal-production.up.railway.app/api/results/my/${storedUser.email}`
         );
       }
       setResults(res.data);

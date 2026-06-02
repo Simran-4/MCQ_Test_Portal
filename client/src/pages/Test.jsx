@@ -50,7 +50,7 @@ function Test() {
     try {
 
       const res = await axios.get(
-        "http://localhost:3000/api/settings"
+        "https://mcqtestportal-production.up.railway.app/api/settings"
       );
 
       if (res.data.totalTime) {
@@ -70,7 +70,7 @@ function Test() {
     try {
 
       const res = await axios.get(
-        "http://localhost:3000/api/questions/all"
+        "https://mcqtestportal-production.up.railway.app/api/questions/all"
       );
 
       // KEEP ORIGINAL ORDER
@@ -160,7 +160,7 @@ function Test() {
 
       // SAVE RESULT
       await axios.post(
-        "http://localhost:3000/api/results/add",
+        "https://mcqtestportal-production.up.railway.app/api/results/add",
         {
 
           userName:

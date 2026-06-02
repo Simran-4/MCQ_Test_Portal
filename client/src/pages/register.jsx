@@ -17,7 +17,7 @@ function Register() {
     try {
 
       await axios.post(
-        "http://localhost:3000/api/auth/register",
+        "https://mcqtestportal-production.up.railway.app/api/auth/register",
         {
           name,
           email,

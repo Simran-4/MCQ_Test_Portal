@@ -25,7 +25,7 @@ function AdminSettings() {
     try {
 
       const res = await axios.get(
-        "http://localhost:3000/api/settings"
+        "https://mcqtestportal-production.up.railway.app/api/settings"
       );
 
       if (res.data) {
@@ -54,7 +54,7 @@ function AdminSettings() {
     try {
 
       await axios.post(
-        "http://localhost:3000/api/settings/save",
+        "https://mcqtestportal-production.up.railway.app/api/settings/save",
         settings
       );
 
