@@ -1,42 +1,12 @@
 import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import "./dashboard.css";
 
 function Dashboard() {
 
   const navigate = useNavigate();
 
-  useEffect(() => {
-
-    const script = document.createElement("script");
-
-    script.src =
-      "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
-
-    script.async = true;
-
-    document.body.appendChild(script);
-
-    window.googleTranslateElementInit = () => {
-
-      if (
-        window.google &&
-        window.google.translate
-      ) {
-
-        new window.google.translate.TranslateElement(
-          {
-            pageLanguage: "en",
-            includedLanguages: "en,hi,mr",
-            layout:
-              window.google.translate.TranslateElement.InlineLayout.SIMPLE,
-          },
-          "google_translate_element"
-        );
-      }
-    };
-
-  }, []);
+  const { t, i18n } = useTranslation();
 
   const logout = () => {
 
@@ -49,20 +19,35 @@ function Dashboard() {
 
     <>
 
-      {/* GOOGLE TRANSLATE */}
-      <div
-        id="google_translate_element"
+      {/* LANGUAGE SELECTOR */}
+      <select
+        onChange={(e) =>
+          i18n.changeLanguage(e.target.value)
+        }
         style={{
           position: "fixed",
           top: "20px",
           left: "20px",
           zIndex: 999999,
-          background: "white",
           padding: "10px",
           borderRadius: "10px",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+          border: "1px solid #ccc",
+          background: "white",
+          fontWeight: "600",
+          cursor: "pointer",
         }}
-      ></div>
+      >
+        <option value="en">English</option>
+
+        <option value="hi">
+          हिन्दी
+        </option>
+
+        <option value="mr">
+          मराठी
+        </option>
+
+      </select>
 
       {/* DASHBOARD */}
       <div className="dashboard-page">
@@ -73,10 +58,12 @@ function Dashboard() {
 
             <div>
 
-              <h1>Admin Dashboard</h1>
+              <h1>
+                {t("dashboard")}
+              </h1>
 
               <p>
-                Welcome back! Manage questions and view results.
+                {t("welcome")}
               </p>
 
             </div>
@@ -98,7 +85,7 @@ function Dashboard() {
                 navigate("/add-question")
               }
             >
-              Add Question
+              {t("addQuestion")}
             </button>
 
             <button
@@ -106,7 +93,7 @@ function Dashboard() {
                 navigate("/view-questions")
               }
             >
-              View Questions
+              {t("viewQuestions")}
             </button>
 
             <button
@@ -114,11 +101,11 @@ function Dashboard() {
                 navigate("/view-results")
               }
             >
-              View Results
+              {t("viewResults")}
             </button>
 
             <button onClick={logout}>
-              Logout
+              {t("logout")}
             </button>
 
             <button
@@ -126,7 +113,7 @@ function Dashboard() {
                 navigate("/settings")
               }
             >
-              Exam Settings
+              {t("examSettings")}
             </button>
 
           </div>
