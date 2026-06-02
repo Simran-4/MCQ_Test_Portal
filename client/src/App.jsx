@@ -12,31 +12,7 @@ import AdminSettings from "./pages/AdminSettings";
 
 function App() {
 
-  useEffect(() => {
-
-    const addScript = document.createElement("script");
-
-    addScript.src =
-      "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
-
-    addScript.async = true;
-
-    document.body.appendChild(addScript);
-
-    window.googleTranslateElementInit = () => {
-
-      new window.google.translate.TranslateElement(
-        {
-          pageLanguage: "en",
-          includedLanguages: "en,hi,mr",
-          layout:
-            window.google.translate.TranslateElement.InlineLayout.SIMPLE,
-        },
-        "google_translate_element"
-      );
-    };
-
-  }, []);
+  
 
   return (
 
