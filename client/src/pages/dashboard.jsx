@@ -6,7 +6,7 @@ function Dashboard() {
 
   const navigate = useNavigate();
 
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
 
   const logout = () => {
 
@@ -18,36 +18,6 @@ function Dashboard() {
   return (
 
     <>
-
-      {/* LANGUAGE SELECTOR */}
-      <select
-        onChange={(e) =>
-          i18n.changeLanguage(e.target.value)
-        }
-        style={{
-          position: "fixed",
-          top: "20px",
-          left: "20px",
-          zIndex: 999999,
-          padding: "10px",
-          borderRadius: "10px",
-          border: "1px solid #ccc",
-          background: "white",
-          fontWeight: "600",
-          cursor: "pointer",
-        }}
-      >
-        <option value="en">English</option>
-
-        <option value="hi">
-          हिन्दी
-        </option>
-
-        <option value="mr">
-          मराठी
-        </option>
-
-      </select>
 
       {/* DASHBOARD */}
       <div className="dashboard-page">
