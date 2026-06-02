@@ -17,7 +17,9 @@ require("dotenv").config();
 const app = express();
 
 app.use(cors({
-  origin: "*"
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 app.use(express.json());
 
@@ -46,6 +48,6 @@ app.get("/api/protected", authMiddleware, (req, res) => {
 
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 module.exports = serverless(app);
