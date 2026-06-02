@@ -104,7 +104,7 @@ function Register() {
             onClick={handleRegister}
           >
             Register
-          </button>
+          </button>s
 
           <p className="auth-link">
 
