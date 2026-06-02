@@ -7,7 +7,7 @@ function Test() {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(600);
+  const [timeLeft, setTimeLeft] = useState(0);
 
   // FETCH QUESTIONS + SETTINGS
   useEffect(() => {
@@ -53,7 +53,7 @@ function Test() {
         "https://mcqtestportal-production.up.railway.app/api/settings"
       );
 
-      if (res.data.totalTime) {
+      if (res.data.examTime) {
 
         setTimeLeft(res.data.totalTime * 60);
       }
