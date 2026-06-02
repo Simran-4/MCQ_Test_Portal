@@ -181,16 +181,11 @@
   display: flex;
   justify-content: center;
   align-items: center;
-
-  background:
-    linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)),
-    url("background.png");
-
+  background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url("/background.png");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
 }
-
 .login-card {
   width: 350px;
   padding: 40px;
@@ -257,7 +252,7 @@
   background:
     linear-gradient(rgba(0,0,0,0.5),
     rgba(0,0,0,0.5)),
-    url("./assets/background.png");
+    url("/background.png");
 
   background-size: cover;
   background-position: center;

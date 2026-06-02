@@ -17,7 +17,7 @@ function ViewResults() {
   const fetchResults = async (storedUser) => {
     try {
       let res;
-      if (storedUser.role === "teacher") {
+      if (storedUser.role === "admin") {
         res = await axios.get("https://mcqtestportal-production.up.railway.app/api/results/all");
       } else {
         res = await axios.get(
@@ -70,7 +70,7 @@ function ViewResults() {
           Here is what we found
         </h1>
 
-        {user && user.role !== "teacher" && (
+        {user && user.role !== "admin" && (
           <p style={{ color: "#888", fontSize: "16px", marginBottom: "30px" }}>
             Results for <strong>{user.name}</strong> ({user.email})
           </p>
@@ -89,7 +89,7 @@ function ViewResults() {
               }}
             >
               {/* Teacher sees student name */}
-              {user && user.role === "teacher" && (
+              {user && user.role === "admin" && (
                 <div style={{ marginBottom: "20px" }}>
                   <h3 style={{ fontSize: "22px", color: "#333", margin: 0 }}>
                     {result.userName}
