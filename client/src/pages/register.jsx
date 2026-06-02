@@ -95,10 +95,6 @@ function Register() {
               Teacher
             </option>
 
-            <option value="superadmin">
-              Super Admin
-            </option>
-
           </select>
 
           <button

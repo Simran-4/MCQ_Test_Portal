@@ -44,16 +44,23 @@ body{
     gap:12px;
 }
 
-.sidebar a{
+.sidebar a,
+.sidebar button{
     text-decoration:none;
     color:white;
     padding:12px;
     border-radius:10px;
     transition:.3s;
+    background:none;
+    border:none;
+    cursor:pointer;
+    font:inherit;
+    text-align:left;
 }
 
 .sidebar a:hover,
-.sidebar a.active{
+.sidebar a.active,
+.sidebar button:hover{
     background:rgba(255,255,255,.15);
 }
 
@@ -145,6 +152,17 @@ th,td{
     padding:15px;
     text-align:left;
     border-bottom:1px solid #eee;
+}
+
+.error-message{
+    color:#b91c1c;
+    margin-bottom:15px;
+}
+
+.empty-message{
+    color:#64748b;
+    padding-top:20px;
+    text-align:center;
 }
 
 .badge{

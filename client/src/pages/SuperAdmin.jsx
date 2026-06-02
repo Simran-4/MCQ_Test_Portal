@@ -1,115 +1,159 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import "./superadmin.css";
 
+const API_URL = "https://mcqtestportal-production.up.railway.app/api/auth";
+
+const emptyStats = {
+  totalUsers: 0,
+  activeUsers: 0,
+  administrators: 0,
+  assessments: 0,
+};
+
+const getOverview = async () => {
+  const token = localStorage.getItem("token");
+  const res = await axios.get(`${API_URL}/superadmin/overview`, {
+    headers: { Authorization: token },
+  });
+
+  return res.data;
+};
+
 function SuperAdmin() {
+  const navigate = useNavigate();
+  const [users, setUsers] = useState([]);
+  const [stats, setStats] = useState(emptyStats);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-
-    const searchInput = document.getElementById("searchInput");
-
-    if (searchInput) {
-      const handleSearch = () => {
-        const value = searchInput.value.toLowerCase();
-        const rows = document.querySelectorAll("#userTable tr");
-
-        rows.forEach((row) => {
-          row.style.display = row.innerText
-            .toLowerCase()
-            .includes(value)
-            ? ""
-            : "none";
-        });
-      };
-
-      searchInput.addEventListener("keyup", handleSearch);
-
-      return () => {
-        searchInput.removeEventListener("keyup", handleSearch);
-      };
-    }
-
+  const setOverview = useCallback((overview) => {
+    setUsers(overview.users);
+    setStats(overview.stats);
+    setError("");
   }, []);
 
+  const fetchOverview = async () => {
+    try {
+      setOverview(await getOverview());
+    } catch (err) {
+      setError(err.response?.data?.message || "Unable to load users");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let ignore = false;
+
+    getOverview()
+      .then((overview) => {
+        if (!ignore) {
+          setOverview(overview);
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          setError(err.response?.data?.message || "Unable to load users");
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [setOverview]);
+
+  const updateAccess = async (userId, isActive) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        `${API_URL}/superadmin/users/${userId}/access`,
+        { isActive },
+        { headers: { Authorization: token } },
+      );
+
+      await fetchOverview();
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to update user access");
+    }
+  };
+
+  const logout = () => {
+    localStorage.clear();
+    navigate("/");
+  };
+
+  const filteredUsers = users.filter((user) =>
+    `${user.name} ${user.email} ${user.role}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  );
+
   return (
-
     <div className="container">
-
-      {/* Sidebar */}
       <aside className="sidebar">
-
         <div className="logo">
-          <h2>🧠 PersonaAdmin</h2>
+          <h2>PersonaAdmin</h2>
         </div>
 
         <nav>
           <a href="#" className="active">Dashboard</a>
-          <a href="#">Users</a>
-          <a href="#">Administrators</a>
-          <a href="#">Reports</a>
-          <a href="#">Settings</a>
-          <a href="#">Logout</a>
+          <a href="#users">Users</a>
+          <a href="#users">Administrators</a>
+          <a href="#users">Reports</a>
+          <a href="#users">Settings</a>
+          <button type="button" onClick={logout}>Logout</button>
         </nav>
-
       </aside>
 
-      {/* Main */}
       <main className="main-content">
-
-        {/* Welcome */}
         <section className="welcome-card">
-
           <div>
-            <h1>Welcome Back, Super Admin 👋</h1>
-
-            <p>
-              Manage users, Administrators and monitor assessment activities.
-            </p>
+            <h1>Welcome Back, Super Admin</h1>
+            <p>Manage users, administrators and monitor assessment activities.</p>
           </div>
-
         </section>
 
-        {/* Stats */}
         <section className="stats-grid">
-
           <div className="stat-card">
             <h3>Total Users</h3>
-            <h2>1240</h2>
+            <h2>{stats.totalUsers}</h2>
           </div>
-
           <div className="stat-card">
             <h3>Active Users</h3>
-            <h2>1185</h2>
+            <h2>{stats.activeUsers}</h2>
           </div>
-
           <div className="stat-card">
             <h3>Administrators</h3>
-            <h2>15</h2>
+            <h2>{stats.administrators}</h2>
           </div>
-
           <div className="stat-card">
             <h3>Assessments</h3>
-            <h2>3480</h2>
+            <h2>{stats.assessments}</h2>
           </div>
-
         </section>
 
-        {/* User Management */}
-        <section className="card">
-
+        <section className="card" id="users">
           <div className="section-header">
-
             <h2>User Management</h2>
-
             <input
               type="text"
-              id="searchInput"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Search users..."
             />
-
           </div>
 
-          <table>
+          {error && <p className="error-message">{error}</p>}
 
+          <table>
             <thead>
               <tr>
                 <th>Name</th>
@@ -119,64 +163,39 @@ function SuperAdmin() {
                 <th>Access</th>
               </tr>
             </thead>
-
-            <tbody id="userTable">
-
-              <tr>
-                <td>Rahul Sharma</td>
-                <td>rahul@gmail.com</td>
-                <td><span className="badge student">Student</span></td>
-                <td>Active</td>
-
-                <td>
-                  <label className="switch">
-                    <input type="checkbox" defaultChecked />
-                    <span className="slider"></span>
-                  </label>
-                </td>
-
-              </tr>
-
-              <tr>
-                <td>Priya Singh</td>
-                <td>priya@gmail.com</td>
-                <td><span className="badge student">Student</span></td>
-                <td>Disabled</td>
-
-                <td>
-                  <label className="switch">
-                    <input type="checkbox" />
-                    <span className="slider"></span>
-                  </label>
-                </td>
-
-              </tr>
-
-              <tr>
-                <td>Amit Verma</td>
-                <td>amit@gmail.com</td>
-                <td><span className="badge admin">Admin</span></td>
-                <td>Active</td>
-
-                <td>
-                  <label className="switch">
-                    <input type="checkbox" defaultChecked />
-                    <span className="slider"></span>
-                  </label>
-                </td>
-
-              </tr>
-
+            <tbody>
+              {filteredUsers.map((user) => (
+                <tr key={user._id}>
+                  <td>{user.name}</td>
+                  <td>{user.email}</td>
+                  <td>
+                    <span className={`badge ${user.role === "student" ? "student" : "admin"}`}>
+                      {user.role}
+                    </span>
+                  </td>
+                  <td>{user.isActive ? "Active" : "Disabled"}</td>
+                  <td>
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={user.isActive}
+                        onChange={(event) => updateAccess(user._id, event.target.checked)}
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </td>
+                </tr>
+              ))}
             </tbody>
-
           </table>
 
+          {!loading && !error && filteredUsers.length === 0 && (
+            <p className="empty-message">No users found.</p>
+          )}
+          {loading && <p className="empty-message">Loading users...</p>}
         </section>
-
       </main>
-
     </div>
-
   );
 }
 

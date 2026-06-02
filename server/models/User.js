@@ -8,7 +8,11 @@ const userSchema = new mongoose.Schema({
    type: String,
    enum: ["student", "teacher", "superadmin"],
    default: "student"
-}
+},
+    isActive: {
+        type: Boolean,
+        default: true
+    }
 });
 
 module.exports = mongoose.model("User", userSchema);
