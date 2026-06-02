@@ -9,6 +9,7 @@ import Test from "./pages/Test";
 import Register from "./pages/register";
 import ViewResults from "./pages/ViewResults";
 import AdminSettings from "./pages/AdminSettings";
+import Translator from "./components/Translator";
 
 function App() {
 
@@ -18,7 +19,7 @@ function App() {
 
     <>
 
-      <div id="google_translate_element"></div>
+      <Translator />
 
       <BrowserRouter>
 
