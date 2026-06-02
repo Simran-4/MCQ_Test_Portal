@@ -8,75 +8,27 @@ import Test from "./pages/Test";
 import Register from "./pages/register";
 import ViewResults from "./pages/ViewResults";
 import AdminSettings from "./pages/AdminSettings";
-
-
+import SuperAdmin from "./pages/SuperAdmin";
 
 function App() {
-
   return (
-
     <BrowserRouter>
-
       <Routes>
+        <Route path="/" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/add-question" element={<AddQuestion />} />
+        <Route path="/view-questions" element={<ViewQuestions />} />
+        <Route path="/test" element={<Test />} />
+        <Route path="/results" element={<ViewResults />} />
+        <Route path="/view-results" element={<ViewResults />} />
+        <Route path="/settings" element={<AdminSettings />} />
+        <Route path="/superadmin" element={<SuperAdmin />} />
 
-        {/* Login */}
-        <Route
-          path="/"
-          element={<Login />}
-        />
-
-        {/* Register */}
-        <Route
-          path="/register"
-          element={<Register />}
-        />
-
-        
-        {/* Dashboard */}
-        <Route
-          path="/dashboard"
-          element={<Dashboard />}
-        />
-
-        {/* Add Question */}
-        <Route
-          path="/add-question"
-          element={<AddQuestion />}
-        />
-
-        {/* View Questions */}
-        <Route
-          path="/view-questions"
-          element={<ViewQuestions />}
-        />
-
-        {/* Test */}
-        <Route
-          path="/test"
-          element={<Test />}
-        />
-
-        {/* Results */}
-        <Route
-          path="/results"
-          element={<ViewResults />}
-        />
-
-        <Route
-          path="/view-results"
-          element={<ViewResults />}
-        />
-
-        {/* Settings */}
-        <Route
-          path="/settings"
-          element={<AdminSettings />}
-        />
-
+        {/* Catch all - redirect unknown routes to login */}
+        <Route path="*" element={<Login />} />
       </Routes>
-
     </BrowserRouter>
-
   );
 }
 

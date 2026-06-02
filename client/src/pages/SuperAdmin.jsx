@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import "./superadmin.css";
 
 function SuperAdmin() {
@@ -6,12 +6,11 @@ function SuperAdmin() {
   useEffect(() => {
 
     const searchInput = document.getElementById("searchInput");
-    const rows = document.querySelectorAll("#userTable tr");
 
     if (searchInput) {
-      searchInput.addEventListener("keyup", () => {
-
+      const handleSearch = () => {
         const value = searchInput.value.toLowerCase();
+        const rows = document.querySelectorAll("#userTable tr");
 
         rows.forEach((row) => {
           row.style.display = row.innerText
@@ -20,8 +19,13 @@ function SuperAdmin() {
             ? ""
             : "none";
         });
+      };
 
-      });
+      searchInput.addEventListener("keyup", handleSearch);
+
+      return () => {
+        searchInput.removeEventListener("keyup", handleSearch);
+      };
     }
 
   }, []);
