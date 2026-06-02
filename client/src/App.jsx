@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { useEffect } from "react";
 
 import Login from "./pages/login";
 import Dashboard from "./pages/dashboard";
@@ -11,71 +10,76 @@ import ViewResults from "./pages/ViewResults";
 import AdminSettings from "./pages/AdminSettings";
 import SuperAdmin from "./pages/SuperAdmin";
 
-
-
 function App() {
-
-  
 
   return (
 
-    <>
+    <BrowserRouter>
 
-      
+      <Routes>
 
-      <BrowserRouter>
+        {/* Login */}
+        <Route
+          path="/"
+          element={<Login />}
+        />
 
-        <Routes>
+        {/* Register */}
+        <Route
+          path="/register"
+          element={<Register />}
+        />
 
-          <Route path="/" element={<Login />} />
+        {/* Super Admin */}
+        <Route
+          path="/superadmin"
+          element={<SuperAdmin />}
+        />
 
-          <Route
-            path="/register"
-            element={<Register />}
-          />
+        {/* Dashboard */}
+        <Route
+          path="/dashboard"
+          element={<Dashboard />}
+        />
 
-          <Route path="/superadmin" element={<SuperAdmin />} />
+        {/* Add Question */}
+        <Route
+          path="/add-question"
+          element={<AddQuestion />}
+        />
 
-          <Route
-            path="/results"
-            element={<ViewResults />}
-          />
+        {/* View Questions */}
+        <Route
+          path="/view-questions"
+          element={<ViewQuestions />}
+        />
 
-          <Route
-            path="/view-results"
-            element={<ViewResults />}
-          />
+        {/* Test */}
+        <Route
+          path="/test"
+          element={<Test />}
+        />
 
-          <Route
-            path="/settings"
-            element={<AdminSettings />}
-          />
+        {/* Results */}
+        <Route
+          path="/results"
+          element={<ViewResults />}
+        />
 
-          <Route
-            path="/dashboard"
-            element={<Dashboard />}
-          />
+        <Route
+          path="/view-results"
+          element={<ViewResults />}
+        />
 
-          <Route
-            path="/add-question"
-            element={<AddQuestion />}
-          />
+        {/* Settings */}
+        <Route
+          path="/settings"
+          element={<AdminSettings />}
+        />
 
-          <Route
-            path="/view-questions"
-            element={<ViewQuestions />}
-          />
+      </Routes>
 
-          <Route
-            path="/test"
-            element={<Test />}
-          />
-
-        </Routes>
-
-      </BrowserRouter>
-
-    </>
+    </BrowserRouter>
 
   );
 }
