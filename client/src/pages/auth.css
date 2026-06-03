@@ -1,181 +1,105 @@
 .auth-page {
-
   min-height: 100vh;
-
   background-image: url("/background.png");
-
   background-size: cover;
-
   background-position: center;
-
   background-repeat: no-repeat;
-
   display: flex;
-
   justify-content: center;
-
   align-items: center;
-
   font-family: Arial, sans-serif;
 }
 
-
 .auth-overlay {
-
   width: 100%;
-
   height: 100vh;
-
   background: rgba(0, 0, 0, 0.45);
-
   display: flex;
-
   justify-content: center;
-
   align-items: center;
 }
 
-
 .auth-card {
-
   width: 400px;
-
   padding: 45px;
-
   border-radius: 30px;
-
   text-align: center;
-
   backdrop-filter: blur(18px);
-
   background: rgba(255, 255, 255, 0.18);
-
   border: 1px solid rgba(255, 255, 255, 0.25);
-
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-
 .auth-logo {
-
   width: 90px;
-
   height: 90px;
-
   border-radius: 50%;
-
   margin-bottom: 15px;
-
   object-fit: cover;
-
   background: white;
-
   padding: 8px;
 }
 
-
 .auth-title {
-
   color: white;
-
   font-size: 38px;
-
   font-weight: bold;
-
   margin-bottom: 30px;
 }
 
-
 .auth-input {
-
   width: 100%;
-
   padding: 15px;
-
   margin-bottom: 18px;
-
   border: none;
-
   border-radius: 12px;
-
   font-size: 16px;
-
   outline: none;
-
   background: rgba(255,255,255,0.9);
 }
-
 
 .auth-select {
-
   width: 100%;
-
   padding: 15px;
-
   margin-bottom: 18px;
-
   border: none;
-
   border-radius: 12px;
-
   font-size: 16px;
-
   outline: none;
-
   background: rgba(255,255,255,0.9);
 }
 
-
 .auth-button {
-
   width: 100%;
-
   padding: 15px;
-
   border: none;
-
   border-radius: 12px;
-
-  background: #1b4332;
-
+  background: #2D5F3F;
   color: white;
-
   font-size: 18px;
-
   font-weight: bold;
-
   cursor: pointer;
-
   transition: 0.3s;
 }
 
-
 .auth-button:hover {
-
-  background: #2d6a4f;
-
+  background: #1A3D28;
   transform: scale(1.02);
 }
 
-
 .auth-link {
-
   margin-top: 20px;
-
   color: white;
-
   font-size: 16px;
 }
 
-
 .auth-link a {
-
   color: #ffffff;
-
   font-weight: bold;
-
   text-decoration: underline;
 }
+
+/* ===== LOGIN PAGE ===== */
 .login-page {
   min-height: 100vh;
   display: flex;
@@ -186,16 +110,14 @@
   background-position: center;
   background-repeat: no-repeat;
 }
+
 .login-card {
   width: 350px;
   padding: 40px;
   border-radius: 20px;
-
   background: rgba(255,255,255,0.12);
   backdrop-filter: blur(10px);
-
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-
   text-align: center;
 }
 
@@ -213,28 +135,29 @@
   width: 100%;
   padding: 12px;
   margin: 10px 0;
-
   border: none;
   border-radius: 10px;
   outline: none;
 }
 
+/* âœ… Fixed: was #2563eb (blue), now green */
 .login-card button {
   width: 100%;
   padding: 12px;
   margin-top: 15px;
-
   border: none;
-  border-radius: 10px;
-
-  background: #2563eb;
+  border-radius: 22px;
+  background: #2D5F3F;
   color: white;
   font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
+  transition: 0.3s;
 }
 
 .login-card button:hover {
-  background: #1d4ed8;
+  background: #1A3D28;
+  transform: scale(1.01);
 }
 
 .register-link {
@@ -242,302 +165,165 @@
   margin-top: 15px;
   cursor: pointer;
 }
+
+/* ===== SETTINGS PAGE ===== */
 .settings-page {
   min-height: 100vh;
-
   display: flex;
   justify-content: center;
   align-items: center;
-
-  background:
-    linear-gradient(rgba(0,0,0,0.5),
-    rgba(0,0,0,0.5)),
-    url("/background.png");
-
+  background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url("/background.png");
   background-size: cover;
   background-position: center;
 }
 
 .settings-card {
-
   width: 400px;
-
   padding: 40px;
-
   border-radius: 20px;
-
   background: rgba(255,255,255,0.1);
-
   backdrop-filter: blur(10px);
-
   text-align: center;
-
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
 }
 
 .settings-card h1 {
-
   color: white;
-
   margin-bottom: 25px;
 }
 
 .settings-card input {
-
   width: 100%;
-
   padding: 12px;
-
   margin: 10px 0;
-
   border: none;
-
   border-radius: 10px;
-
   outline: none;
 }
 
+/* âœ… Fixed: was #2563eb (blue), now green */
 .settings-card button {
-
   width: 100%;
-
   padding: 12px;
-
   margin-top: 20px;
-
   border: none;
-
-  border-radius: 10px;
-
-  background: #2563eb;
-
+  border-radius: 22px;
+  background: #2D5F3F;
   color: white;
-
   font-size: 16px;
-
+  font-weight: 600;
   cursor: pointer;
+  transition: 0.3s;
 }
+
+.settings-card button:hover {
+  background: #1A3D28;
+}
+
 /* ===== EXAM SETTINGS PAGE ===== */
-
 .exam-settings-page {
-
   min-height: 100vh;
-
-  background: #f5f3ef;
-
+  background: #EEE9E0;
   display: flex;
-
   justify-content: center;
-
   padding: 50px 20px;
 }
 
-
-
-/* ===== SETTINGS CONTAINER ===== */
-
 .exam-settings-container {
-
   width: 100%;
-
   max-width: 950px;
-
   background: white;
-
   padding: 50px;
-
   border-radius: 25px;
-
-  box-shadow:
-    0 8px 25px rgba(0,0,0,0.08);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
 }
 
-
-
-/* ===== HEADER ===== */
-
 .settings-header {
-
   display: flex;
-
   justify-content: space-between;
-
   align-items: center;
-
   margin-bottom: 40px;
-
-  border-bottom:
-    2px solid #e5e5e5;
-
+  border-bottom: 2px solid #e5e5e5;
   padding-bottom: 25px;
 }
 
-
-
-/* ===== TITLE ===== */
-
 .settings-header h1 {
-
   font-size: 60px;
-
-  color: #1d6b4f;
-
+  color: #2D5F3F;
   margin-bottom: 10px;
 }
 
-
-
-/* ===== SUBTITLE ===== */
-
 .settings-header p {
-
   font-size: 20px;
-
   color: #666;
 }
 
-
-
-/* ===== LOGO ===== */
-
 .settings-logo {
-
   width: 130px;
-
   height: 130px;
-
   object-fit: contain;
-
   border-radius: 50%;
-
   background: white;
-
-  box-shadow:
-    0 5px 15px rgba(0,0,0,0.08);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
 }
 
-
-
-/* ===== INPUT GROUP ===== */
-
 .settings-input-group {
-
   margin-bottom: 30px;
 }
 
-
-
-/* ===== LABEL ===== */
-
 .settings-input-group label {
-
   display: block;
-
   margin-bottom: 12px;
-
   font-size: 22px;
-
   color: #333;
-
   font-weight: 600;
 }
 
-
-
-/* ===== INPUT ===== */
-
 .settings-input-group input {
-
   width: 100%;
-
   padding: 18px;
-
   border-radius: 18px;
-
   border: 2px solid #e3e3e3;
-
   font-size: 18px;
-
   outline: none;
-
   transition: 0.3s;
 }
-
-
-
-/* ===== INPUT FOCUS ===== */
 
 .settings-input-group input:focus {
-
-  border-color: #1d6b4f;
-
-  box-shadow:
-    0 0 10px rgba(29,107,79,0.2);
+  border-color: #2D5F3F;
+  box-shadow: 0 0 10px rgba(45,95,63,0.2);
 }
 
-
-
-/* ===== BUTTON ===== */
-
 .save-settings-btn {
-
   width: 100%;
-
   padding: 18px;
-
   border: none;
-
-  border-radius: 18px;
-
-  background: #1d6b4f;
-
+  border-radius: 22px;
+  background: #2D5F3F;
   color: white;
-
   font-size: 20px;
-
   font-weight: bold;
-
   cursor: pointer;
-
   transition: 0.3s;
-
   margin-top: 10px;
 }
 
-
-
-/* ===== BUTTON HOVER ===== */
-
 .save-settings-btn:hover {
-
-  background: #15533d;
-
+  background: #1A3D28;
   transform: translateY(-2px);
 }
+
 /* ===== GLOBAL PAGE LOGO ===== */
-
 .page-logo {
-
   position: absolute;
-
   top: 25px;
-
   right: 30px;
-
   width: 110px;
-
   height: 110px;
-
   object-fit: contain;
-
   border-radius: 50%;
-
   background: white;
-
   padding: 10px;
-
-  box-shadow:
-    0 5px 15px rgba(0,0,0,0.12);
-
+  box-shadow: 0 5px 15px rgba(0,0,0,0.12);
   z-index: 1000;
 }
