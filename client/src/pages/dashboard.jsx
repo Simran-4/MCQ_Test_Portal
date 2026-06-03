@@ -130,147 +130,276 @@ export default function Dashboard() {
   };
 
   return (
-    <div style={{ minHeight:"100vh", background: BG, fontFamily:"'Segoe UI', sans-serif" }}>
+  <div className="dashboard-page">
 
-      {/* ── Top bar ── */}
-      <div style={{ padding:"16px 28px 0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:"14px" }}>
-          <div style={{ width:"52px", height:"52px", borderRadius:"50%", background: WHITE, border:"0.5px solid rgba(0,0,0,0.1)", overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-            <img
-              src={`${import.meta.env.BASE_URL}Logo.png`}
-              alt="Snehalaya"
-              style={{ width:"48px", height:"48px", objectFit:"contain" }}
-              onError={e => { e.target.style.display="none"; }}
-            />
+    {/* HEADER */}
+    <div className="topbar">
+
+      <div className="topbar-left">
+        <div className="logo-circle">
+          📋
+        </div>
+
+        <div>
+          <div className="dashboard-title">
+            Admin Dashboard
           </div>
-          <div>
-            <div style={{ fontSize:"20px", fontWeight:"700", color: GREEN_DARK, lineHeight:1.2 }}>Admin Dashboard</div>
-            <div style={{ fontSize:"13px", color:"#6B6B5E", marginTop:"2px" }}>Manage test suites and questions.</div>
+
+          <div className="dashboard-subtitle">
+            Manage test suites and questions.
           </div>
         </div>
-        
       </div>
 
-      {/* ── Nav ── */}
-      <div style={{ padding:"12px 28px", display:"flex", gap:"24px", alignItems:"center", borderBottom:"0.5px solid rgba(0,0,0,0.09)", marginTop:"4px" }}>
-        <span
-          onClick={() => navigate("/view-results")}
-          style={{ fontSize:"14px", color:"#4A7A5C", fontWeight:"500", cursor:"pointer", paddingBottom:"2px", borderBottom:"2px solid transparent" }}
-          onMouseEnter={e => e.target.style.borderBottomColor = GREEN}
-          onMouseLeave={e => e.target.style.borderBottomColor = "transparent"}
-        >
-          View results
-        </span>
-        <span
-          onClick={() => navigate("/settings")}
-          style={{ fontSize:"14px", color:"#4A7A5C", fontWeight:"500", cursor:"pointer", paddingBottom:"2px", borderBottom:"2px solid transparent" }}
-          onMouseEnter={e => e.target.style.borderBottomColor = GREEN}
-          onMouseLeave={e => e.target.style.borderBottomColor = "transparent"}
-        >
-          Exam settings
-        </span>
-        <span
-          onClick={() => { localStorage.removeItem("token"); navigate("/"); }}
-          style={{ fontSize:"14px", color:"#C0392B", fontWeight:"500", cursor:"pointer", marginLeft:"auto" }}
+      <div className="admin-section">
+
+        <div className="admin-profile">
+          <div className="admin-icon">👤</div>
+          <span>Admin</span>
+        </div>
+
+        <button
+          className="logout-btn"
+          onClick={() => {
+            localStorage.removeItem("token");
+            navigate("/");
+          }}
         >
           Logout
-        </span>
+        </button>
+
       </div>
 
-      {/* ── Content ── */}
-      <div style={{ padding:"24px 28px" }}>
-
-        {/* Stat cards */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:"12px", marginBottom:"24px" }}>
-          {[
-            { label:"Test Suites",     value: suites.length,                                         sub:"Total suites" },
-            { label:"Total Questions", value: suites.reduce((a,s) => a + (s.questionCount ?? 0), 0), sub:"Across all suites" },
-            { label:"Active Suites",   value: suites.filter(s => s.status === "active").length,      sub:"Live right now" },
-          ].map(card => (
-            <div key={card.label} style={{ background: WHITE, borderRadius:"14px", border:"0.5px solid rgba(0,0,0,0.07)", padding:"16px 18px" }}>
-              <div style={{ fontSize:"12px", color:"#8A8A7E", marginBottom:"4px" }}>{card.label}</div>
-              <div style={{ fontSize:"24px", fontWeight:"700", color: GREEN_DARK }}>{card.value}</div>
-              <div style={{ fontSize:"12px", color:"#4A7A5C", marginTop:"2px" }}>{card.sub}</div>
-              <div style={{ height:"5px", background:"#E0DDD5", borderRadius:"3px", overflow:"hidden", marginTop:"10px" }}>
-                <div style={{ height:"100%", background: GREEN, borderRadius:"3px", width: card.value > 0 ? "60%" : "0%" }} />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Section header */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"14px" }}>
-          <span style={{ fontSize:"11px", fontWeight:"700", color:"#8A8A7E", letterSpacing:"0.08em", textTransform:"uppercase" }}>Test Suites</span>
-          <button
-            onClick={() => { setEditing(null); setShowModal(true); }}
-            style={{ background: GREEN, color: WHITE, border:"none", borderRadius:"22px", padding:"10px 20px", fontSize:"14px", fontWeight:"600", cursor:"pointer", display:"flex", alignItems:"center", gap:"6px" }}
-            onMouseEnter={e => e.currentTarget.style.background = GREEN_DARK}
-            onMouseLeave={e => e.currentTarget.style.background = GREEN}
-          >
-            + New test suite
-          </button>
-        </div>
-
-        {/* Suite list */}
-        {loading ? (
-          <p style={{ textAlign:"center", color:"#aaa", padding:"48px 0" }}>Loading…</p>
-
-        ) : suites.length === 0 ? (
-          <div style={{ background: WHITE, borderRadius:"16px", border:"0.5px solid rgba(0,0,0,0.08)", padding:"48px 28px", display:"flex", flexDirection:"column", alignItems:"center", gap:"10px" }}>
-            <div style={{ width:"52px", height:"52px", borderRadius:"50%", background:"#E8F2EC", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"24px" }}>📄</div>
-            <p style={{ color:"#A0A098", fontSize:"15px", margin:0 }}>No test suites yet.</p>
-            <button
-              onClick={() => { setEditing(null); setShowModal(true); }}
-              style={{ background:"none", border:"none", color: GREEN, fontWeight:"600", fontSize:"14px", cursor:"pointer", textDecoration:"underline" }}
-            >
-              Create your first test suite →
-            </button>
-          </div>
-
-        ) : (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(210px, 1fr))", gap:"14px" }}>
-            {suites.map(suite => (
-              <div
-                key={suite._id}
-                onClick={() => navigate(`/admin/test-suites/${suite._id}`)}
-                style={{ background: WHITE, border:"1px solid #e5e7eb", borderRadius:"14px", padding:"18px", cursor:"pointer", transition:"border-color 0.2s" }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = GREEN}
-                onMouseLeave={e => e.currentTarget.style.borderColor = "#e5e7eb"}
-              >
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"8px" }}>
-                  <p style={{ fontWeight:"700", fontSize:"15px", color: GREEN_DARK, margin:0, flex:1, marginRight:"8px" }}>{suite.name}</p>
-                  <span style={{ fontSize:"11px", padding:"3px 10px", borderRadius:"999px", fontWeight:"600", whiteSpace:"nowrap", ...(STATUS_COLOR[suite.status] || STATUS_COLOR.draft) }}>
-                    {suite.status}
-                  </span>
-                </div>
-                {suite.description && <p style={{ fontSize:"12px", color:"#999", margin:"0 0 6px" }}>{suite.description}</p>}
-                <p style={{ fontSize:"12px", color:"#aaa", margin:"0 0 14px" }}>
-                  {suite.questionCount ?? 0} question{suite.questionCount !== 1 ? "s" : ""}
-                </p>
-                <div style={{ display:"flex", gap:"8px" }} onClick={e => e.stopPropagation()}>
-                  <button onClick={() => navigate(`/admin/test-suites/${suite._id}`)} style={{ flex:1, padding:"8px", fontSize:"13px", fontWeight:"600", background: GREEN, color: WHITE, border:"none", borderRadius:"8px", cursor:"pointer" }}>
-                    Open
-                  </button>
-                  <button onClick={() => { setEditing(suite); setShowModal(true); }} style={{ flex:1, padding:"8px", fontSize:"13px", fontWeight:"600", background: WHITE, color:"#333", border:"1px solid #ddd", borderRadius:"8px", cursor:"pointer" }}>
-                    Edit
-                  </button>
-                  <button onClick={e => handleDelete(suite._id, suite.name, e)} style={{ flex:1, padding:"8px", fontSize:"13px", fontWeight:"600", background: WHITE, color:"#dc2626", border:"1px solid #ddd", borderRadius:"8px", cursor:"pointer" }}>
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {showModal && (
-        <SuiteModal
-          suite={editingSuite}
-          onClose={() => setShowModal(false)}
-          onSave={handleModalSave}
-        />
-      )}
     </div>
-  );
+
+    {/* NAVBAR */}
+    <div className="dashboard-nav">
+
+      <div className="nav-item nav-active">
+        Dashboard
+      </div>
+
+      <div
+        className="nav-item"
+        onClick={() => navigate("/view-results")}
+      >
+        View results
+      </div>
+
+      <div
+        className="nav-item"
+        onClick={() => navigate("/settings")}
+      >
+        Exam settings
+      </div>
+
+    </div>
+
+    {/* CONTENT */}
+    <div className="dashboard-content">
+
+      {/* STATS */}
+      <div className="stats-grid">
+
+        <div className="stat-card">
+          <div className="stat-icon">📦</div>
+
+          <div className="stat-title">
+            TEST SUITES
+          </div>
+
+          <div className="stat-value">
+            {suites.length}
+          </div>
+
+          <div className="stat-sub">
+            Total suites
+          </div>
+
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{ width: "35%" }}
+            />
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">❓</div>
+
+          <div className="stat-title">
+            TOTAL QUESTIONS
+          </div>
+
+          <div className="stat-value">
+            {suites.reduce(
+              (a, s) => a + (s.questionCount ?? 0),
+              0
+            )}
+          </div>
+
+          <div className="stat-sub">
+            Across all suites
+          </div>
+
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{ width: "15%" }}
+            />
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">📡</div>
+
+          <div className="stat-title">
+            ACTIVE SUITES
+          </div>
+
+          <div className="stat-value">
+            {
+              suites.filter(
+                s => s.status === "active"
+              ).length
+            }
+          </div>
+
+          <div className="stat-sub">
+            Live right now
+          </div>
+
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{ width: "100%" }}
+            />
+          </div>
+        </div>
+
+      </div>
+
+      {/* SECTION HEADER */}
+      <div className="section-header">
+
+        <div className="section-title">
+          TEST SUITES
+          <div className="section-line"></div>
+        </div>
+
+        <button
+          className="new-suite-btn"
+          onClick={() => {
+            setEditing(null);
+            setShowModal(true);
+          }}
+        >
+          + New test suite
+        </button>
+
+      </div>
+
+      {/* SUITE LIST */}
+      {loading ? (
+
+        <p>Loading...</p>
+
+      ) : suites.length === 0 ? (
+
+        <p>No suites available.</p>
+
+      ) : (
+
+        <div className="suite-list">
+
+          {suites.map((suite) => (
+
+            <div
+              key={suite._id}
+              className="suite-card"
+            >
+
+              <div className="suite-left">
+
+                <div className="suite-icon">
+                  📄
+                </div>
+
+                <div>
+
+                  <div className="suite-name">
+                    {suite.name}
+                  </div>
+
+                  <div className="suite-info">
+                    {suite.questionCount ?? 0} questions
+                  </div>
+
+                </div>
+
+              </div>
+
+              <div className="suite-right">
+
+                <div className="status-pill">
+                  {suite.status}
+                </div>
+
+                <button
+                  className="action-btn open-btn"
+                  onClick={() =>
+                    navigate(
+                      `/admin/test-suites/${suite._id}`
+                    )
+                  }
+                >
+                  Open
+                </button>
+
+                <button
+                  className="action-btn"
+                  onClick={() => {
+                    setEditing(suite);
+                    setShowModal(true);
+                  }}
+                >
+                  Edit
+                </button>
+
+                <button
+                  className="action-btn delete-btn"
+                  onClick={(e) =>
+                    handleDelete(
+                      suite._id,
+                      suite.name,
+                      e
+                    )
+                  }
+                >
+                  Delete
+                </button>
+
+              </div>
+
+            </div>
+
+          ))}
+
+        </div>
+
+      )}
+
+    </div>
+
+    {/* MODAL */}
+    {showModal && (
+      <SuiteModal
+        suite={editingSuite}
+        onClose={() => setShowModal(false)}
+        onSave={handleModalSave}
+      />
+    )}
+
+  </div>
+);
 }
