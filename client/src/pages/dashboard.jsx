@@ -4,13 +4,11 @@ import axios from "axios";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-/* ─── Shared colours ─── */
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
 const BG         = "#EEE9E0";
 const WHITE      = "#ffffff";
 
-/* ─── Suite Modal ─── */
 function SuiteModal({ suite, onClose, onSave }) {
   const [name, setName]       = useState(suite?.name || "");
   const [description, setDesc]= useState(suite?.description || "");
@@ -54,9 +52,7 @@ function SuiteModal({ suite, onClose, onSave }) {
         <h2 style={{ fontSize:"17px", fontWeight:"700", color: GREEN_DARK, marginBottom:"18px" }}>
           {suite ? "Edit Test Suite" : "New Test Suite"}
         </h2>
-
         {error && <p style={{ color:"#dc2626", fontSize:"13px", marginBottom:"12px" }}>{error}</p>}
-
         <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
           <div>
             <label style={{ fontSize:"12px", color:"#666", display:"block", marginBottom:"5px", fontWeight:"600", textTransform:"uppercase", letterSpacing:"0.05em" }}>Name *</label>
@@ -75,7 +71,6 @@ function SuiteModal({ suite, onClose, onSave }) {
             </select>
           </div>
         </div>
-
         <div style={{ display:"flex", gap:"10px", justifyContent:"flex-end", marginTop:"22px" }}>
           <button onClick={onClose} style={{ padding:"10px 20px", fontSize:"14px", borderRadius:"22px", border:"1px solid #ddd", background: WHITE, cursor:"pointer", fontWeight:"600", color:"#555" }}>
             Cancel
@@ -89,14 +84,12 @@ function SuiteModal({ suite, onClose, onSave }) {
   );
 }
 
-/* ─── Status badge colours ─── */
 const STATUS_COLOR = {
   active:    { background:"#dcfce7", color:"#166534" },
   draft:     { background:"#f3f4f6", color:"#4b5563" },
   scheduled: { background:"#fef3c7", color:"#92400e" },
 };
 
-/* ─── Main Dashboard ─── */
 export default function Dashboard() {
   const navigate = useNavigate();
   const [suites, setSuites]       = useState([]);
@@ -144,7 +137,7 @@ export default function Dashboard() {
         <div style={{ display:"flex", alignItems:"center", gap:"14px" }}>
           <div style={{ width:"52px", height:"52px", borderRadius:"50%", background: WHITE, border:"0.5px solid rgba(0,0,0,0.1)", overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
             <img
-              src="/Logo.png"
+              src={`${import.meta.env.BASE_URL}Logo.png`}
               alt="Snehalaya"
               style={{ width:"48px", height:"48px", objectFit:"contain" }}
               onError={e => { e.target.style.display="none"; }}
@@ -155,7 +148,6 @@ export default function Dashboard() {
             <div style={{ fontSize:"13px", color:"#6B6B5E", marginTop:"2px" }}>Manage test suites and questions.</div>
           </div>
         </div>
-
         <button style={{ background: GREEN, color: WHITE, border:"none", borderRadius:"20px", padding:"8px 16px", fontSize:"13px", cursor:"pointer", display:"flex", alignItems:"center", gap:"6px", fontWeight:"500" }}>
           🌐 English ▾
         </button>
