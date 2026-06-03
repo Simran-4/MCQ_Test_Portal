@@ -17,7 +17,6 @@ const getOverview = async () => {
   const res = await axios.get(`${API_URL}/superadmin/overview`, {
     headers: { Authorization: token },
   });
-
   return res.data;
 };
 
@@ -28,6 +27,7 @@ function SuperAdmin() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeNav, setActiveNav] = useState("dashboard"); // ✅ track active nav
 
   const setOverview = useCallback((overview) => {
     setUsers(overview.users);
@@ -47,27 +47,11 @@ function SuperAdmin() {
 
   useEffect(() => {
     let ignore = false;
-
     getOverview()
-      .then((overview) => {
-        if (!ignore) {
-          setOverview(overview);
-        }
-      })
-      .catch((err) => {
-        if (!ignore) {
-          setError(err.response?.data?.message || "Unable to load users");
-        }
-      })
-      .finally(() => {
-        if (!ignore) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      ignore = true;
-    };
+      .then((overview) => { if (!ignore) setOverview(overview); })
+      .catch((err) => { if (!ignore) setError(err.response?.data?.message || "Unable to load users"); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
   }, [setOverview]);
 
   const updateAccess = async (userId, isActive) => {
@@ -76,9 +60,8 @@ function SuperAdmin() {
       await axios.put(
         `${API_URL}/superadmin/users/${userId}/access`,
         { isActive },
-        { headers: { Authorization: token } },
+        { headers: { Authorization: token } }
       );
-
       await fetchOverview();
     } catch (err) {
       alert(err.response?.data?.message || "Unable to update user access");
@@ -90,11 +73,26 @@ function SuperAdmin() {
     navigate("/");
   };
 
-  const filteredUsers = users.filter((user) =>
-    `${user.name} ${user.email} ${user.role}`
-      .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
+  // ✅ Filter based on active nav
+  const getFilteredUsers = () => {
+    let base = users;
+    if (activeNav === "students") base = users.filter(u => u.role === "student");
+    if (activeNav === "administrators") base = users.filter(u => u.role === "admin" || u.role === "superadmin");
+    return base.filter(u =>
+      `${u.name} ${u.email} ${u.role}`.toLowerCase().includes(search.toLowerCase())
+    );
+  };
+
+  const filteredUsers = getFilteredUsers();
+
+  // ✅ Section title based on nav
+  const getSectionTitle = () => {
+    if (activeNav === "students") return "Students";
+    if (activeNav === "administrators") return "Administrators";
+    if (activeNav === "reports") return "Reports";
+    if (activeNav === "settings") return "Settings";
+    return "User Management";
+  };
 
   return (
     <div className="container">
@@ -108,98 +106,222 @@ function SuperAdmin() {
         </div>
 
         <nav>
-          <a href="#" className="active">Dashboard</a>
-          <a href="#users">Users</a>
-          <a href="#users">Administrators</a>
-          <a href="#users">Reports</a>
-          <a href="#users">Settings</a>
-          <button type="button" onClick={logout}>Logout</button>
+          {/* ✅ All nav buttons now work */}
+          <button
+            type="button"
+            className={activeNav === "dashboard" ? "active" : ""}
+            onClick={() => { setActiveNav("dashboard"); setSearch(""); }}
+          >
+            🏠 Dashboard
+          </button>
+
+          <button
+            type="button"
+            className={activeNav === "students" ? "active" : ""}
+            onClick={() => { setActiveNav("students"); setSearch(""); }}
+          >
+            🎓 Students
+          </button>
+
+          <button
+            type="button"
+            className={activeNav === "administrators" ? "active" : ""}
+            onClick={() => { setActiveNav("administrators"); setSearch(""); }}
+          >
+            🛡️ Administrators
+          </button>
+
+          <button
+            type="button"
+            className={activeNav === "reports" ? "active" : ""}
+            onClick={() => { setActiveNav("reports"); setSearch(""); }}
+          >
+            📊 Reports
+          </button>
+
+          <button
+            type="button"
+            className={activeNav === "settings" ? "active" : ""}
+            onClick={() => { setActiveNav("settings"); setSearch(""); }}
+          >
+            ⚙️ Settings
+          </button>
+
+          <button type="button" onClick={logout}>
+            🚪 Logout
+          </button>
         </nav>
       </aside>
 
       <main className="main-content">
-        <section className="welcome-card">
-          <div>
-            <h1>Welcome Back, Super Admin</h1>
-            <p>Manage users, administrators and monitor assessment activities.</p>
-          </div>
-        </section>
 
-        <section className="stats-grid">
-          <div className="stat-card">
-            <h3>Total Users</h3>
-            <h2>{stats.totalUsers}</h2>
-          </div>
-          <div className="stat-card">
-            <h3>Active Users</h3>
-            <h2>{stats.activeUsers}</h2>
-          </div>
-          <div className="stat-card">
-            <h3>Administrators</h3>
-            <h2>{stats.administrators}</h2>
-          </div>
-          <div className="stat-card">
-            <h3>Assessments</h3>
-            <h2>{stats.assessments}</h2>
-          </div>
-        </section>
+        {/* WELCOME CARD - only on dashboard */}
+        {activeNav === "dashboard" && (
+          <section className="welcome-card">
+            <div>
+              <h1>Welcome Back, Super Admin</h1>
+              <p>Manage users, administrators and monitor assessment activities.</p>
+            </div>
+          </section>
+        )}
 
-        <section className="card" id="users">
-          <div className="section-header">
-            <h2>User Management</h2>
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search users..."
-            />
-          </div>
+        {/* STATS - only on dashboard */}
+        {activeNav === "dashboard" && (
+          <section className="stats-grid">
+            <div className="stat-card" onClick={() => setActiveNav("students")} style={{ cursor: "pointer" }}>
+              <h3>Total Users</h3>
+              <h2>{stats.totalUsers}</h2>
+              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
+            </div>
+            <div className="stat-card" onClick={() => setActiveNav("students")} style={{ cursor: "pointer" }}>
+              <h3>Active Users</h3>
+              <h2>{stats.activeUsers}</h2>
+              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
+            </div>
+            <div className="stat-card" onClick={() => setActiveNav("administrators")} style={{ cursor: "pointer" }}>
+              <h3>Administrators</h3>
+              <h2>{stats.administrators}</h2>
+              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
+            </div>
+            <div className="stat-card">
+              <h3>Assessments</h3>
+              <h2>{stats.assessments}</h2>
+              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Total submitted</p>
+            </div>
+          </section>
+        )}
 
-          {error && <p className="error-message">{error}</p>}
+        {/* REPORTS VIEW */}
+        {activeNav === "reports" && (
+          <section className="card">
+            <div className="section-header">
+              <h2>📊 Reports</h2>
+            </div>
+            <div style={{ textAlign: "center", padding: "60px 0", color: "#888" }}>
+              <div style={{ fontSize: "60px", marginBottom: "20px" }}>📊</div>
+              <h3 style={{ fontSize: "22px", color: "#2d5d50", marginBottom: "10px" }}>
+                Total Assessments Submitted
+              </h3>
+              <div style={{
+                fontSize: "64px",
+                fontWeight: "800",
+                color: "#1f5d42",
+                margin: "20px 0"
+              }}>
+                {stats.assessments}
+              </div>
+              <p style={{ color: "#aaa" }}>View detailed results in the Admin Dashboard</p>
+              <button
+                onClick={() => navigate("/view-results")}
+                style={{
+                  marginTop: "24px",
+                  padding: "12px 30px",
+                  background: "linear-gradient(135deg, #1f4037, #2c7744)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "12px",
+                  fontSize: "16px",
+                  cursor: "pointer",
+                }}
+              >
+                View All Results →
+              </button>
+            </div>
+          </section>
+        )}
 
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Access</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((user) => (
-                  <tr key={user._id}>
-                    <td>{user.name}</td>
-                    <td>{user.email}</td>
-                    <td>
-                      <span className={`badge ${user.role === "student" ? "student" : "admin"}`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td>{user.isActive ? "Active" : "Disabled"}</td>
-                    <td>
-                      <label className="switch">
-                        <input
-                          type="checkbox"
-                          checked={user.isActive}
-                          onChange={(event) => updateAccess(user._id, event.target.checked)}
-                        />
-                        <span className="slider"></span>
-                      </label>
-                    </td>
+        {/* SETTINGS VIEW */}
+        {activeNav === "settings" && (
+          <section className="card">
+            <div className="section-header">
+              <h2>⚙️ Settings</h2>
+            </div>
+            <div style={{ textAlign: "center", padding: "60px 0", color: "#888" }}>
+              <div style={{ fontSize: "60px", marginBottom: "20px" }}>⚙️</div>
+              <h3 style={{ fontSize: "22px", color: "#2d5d50", marginBottom: "10px" }}>
+                Exam Settings
+              </h3>
+              <p style={{ color: "#aaa", marginBottom: "24px" }}>
+                Configure exam duration and question limits
+              </p>
+              <button
+                onClick={() => navigate("/settings")}
+                style={{
+                  padding: "12px 30px",
+                  background: "linear-gradient(135deg, #1f4037, #2c7744)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "12px",
+                  fontSize: "16px",
+                  cursor: "pointer",
+                }}
+              >
+                Go to Exam Settings →
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* USER TABLE - dashboard, students, administrators */}
+        {(activeNav === "dashboard" || activeNav === "students" || activeNav === "administrators") && (
+          <section className="card" id="users">
+            <div className="section-header">
+              <h2>{getSectionTitle()}</h2>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search users..."
+              />
+            </div>
+
+            {error && <p className="error-message">{error}</p>}
+
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Access</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((user) => (
+                    <tr key={user._id}>
+                      <td>{user.name}</td>
+                      <td>{user.email}</td>
+                      <td>
+                        <span className={`badge ${user.role === "student" ? "student" : "admin"}`}>
+                          {user.role}
+                        </span>
+                      </td>
+                      <td>{user.isActive ? "Active" : "Disabled"}</td>
+                      <td>
+                        <label className="switch">
+                          <input
+                            type="checkbox"
+                            checked={user.isActive}
+                            onChange={(e) => updateAccess(user._id, e.target.checked)}
+                          />
+                          <span className="slider"></span>
+                        </label>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          {!loading && !error && filteredUsers.length === 0 && (
-            <p className="empty-message">No users found.</p>
-          )}
-          {loading && <p className="empty-message">Loading users...</p>}
-        </section>
+            {!loading && !error && filteredUsers.length === 0 && (
+              <p className="empty-message">No users found.</p>
+            )}
+            {loading && <p className="empty-message">Loading users...</p>}
+          </section>
+        )}
+
       </main>
     </div>
   );
