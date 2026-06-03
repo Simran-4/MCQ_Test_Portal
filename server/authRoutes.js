@@ -150,29 +150,5 @@ router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, as
         res.status(500).json({ message: "Error updating user access" });
     }
 });
-// ✅ Change POST to GET so you can visit it in browser
-router.get("/create-superadmin", async (req, res) => {
-  try {
-    const existing = await User.findOne({ role: "superadmin" });
-    if (existing) {
-      return res.status(400).json({ message: "Superadmin already exists" });
-    }
 
-    const hashedPassword = await bcrypt.hash("YourSecretPassword123", 10);
-
-    const superAdmin = new User({
-      name: "Super Admin",
-      email: "superadmin@yourdomain.com",
-      password: hashedPassword,
-      role: "superadmin",
-      isActive: true
-    });
-
-    await superAdmin.save();
-    res.json({ message: "Superadmin created successfully" });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 module.exports = router;
