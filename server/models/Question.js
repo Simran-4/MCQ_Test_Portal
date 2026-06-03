@@ -18,7 +18,7 @@ const questionSchema = new mongoose.Schema(
       validate: (v) => v.length >= 2,
     },
     correctAnswer: {
-      type: Number,
+      type: [Number],  // ✅ array of correct indices
       required: true,
     },
     explanation: {
@@ -34,8 +34,8 @@ const questionSchema = new mongoose.Schema(
       default: "en",
     },
     category: {
-      type: String,
-      default: "",
+      type: [String],  // ✅ array of categories
+      default: [],
     },
   },
   { timestamps: true }

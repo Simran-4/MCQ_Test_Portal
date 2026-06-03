@@ -1,10 +1,10 @@
 const mongoose = require("mongoose");
 
 const answerSchema = new mongoose.Schema({
-  questionId:     { type: mongoose.Schema.Types.ObjectId, ref: "Question" },
-  selectedOption: { type: Number, default: -1 },
-  isCorrect:      { type: Boolean, default: false },
-  category:       { type: String, default: "" },
+  questionId:      { type: mongoose.Schema.Types.ObjectId, ref: "Question" },
+  selectedOptions: { type: [Number], default: [] },  // ✅ array
+  isCorrect:       { type: Boolean, default: false },
+  category:        { type: [String], default: [] },   // ✅ array
 }, { _id: false });
 
 const resultSchema = new mongoose.Schema({
@@ -16,8 +16,6 @@ const resultSchema = new mongoose.Schema({
   totalMarks:     { type: Number, default: 0 },
   correctAnswers: { type: Number, default: 0 },
   submittedAt:    { type: Date, default: Date.now },
-
-  // legacy fields kept so old results don't break
   userName:       { type: String, default: "" },
   userEmail:      { type: String, default: "" },
   totalQuestions: { type: Number, default: 0 },

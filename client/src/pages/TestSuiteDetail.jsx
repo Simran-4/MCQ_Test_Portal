@@ -11,12 +11,12 @@ const BG         = "#EEE9E0";
 const WHITE      = "#ffffff";
 
 const emptyForm = {
-  questionText:  "",
-  options:       ["", "", "", ""],
-  correctAnswer: 0,
-  explanation:   "",
-  marks:         1,
-  category:      "",
+  questionText:   "",
+  options:        ["", "", "", ""],
+  correctAnswers: [],   // ✅ array of indices
+  explanation:    "",
+  marks:          1,
+  categories:     [],   // ✅ array of category strings
 };
 
 export default function TestSuiteDetail() {
@@ -31,16 +31,13 @@ export default function TestSuiteDetail() {
   const [error, setError]         = useState("");
   const [editingQ, setEditingQ]   = useState(null);
 
-  // ── Duration editor state ──
-  const [showDuration, setShowDuration]   = useState(false);
-  const [durationVal, setDurationVal]     = useState(30);
-  const [savingDur, setSavingDur]         = useState(false);
+  const [showDuration, setShowDuration] = useState(false);
+  const [durationVal, setDurationVal]   = useState(30);
+  const [savingDur, setSavingDur]       = useState(false);
 
-  // ── Category manager state ──
-  const [categories, setCategories]       = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(`cats_${suiteId}`)) || [];
-    } catch { return []; }
+  const [categories, setCategories]         = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`cats_${suiteId}`)) || []; }
+    catch { return []; }
   });
   const [showCatManager, setShowCatManager] = useState(false);
   const [newCatInput, setNewCatInput]       = useState("");
@@ -61,7 +58,9 @@ export default function TestSuiteDetail() {
       setSuite(suiteRes.data);
       setDurationVal(suiteRes.data.duration || 30);
       setQuestions(qRes.data);
-      const existingCats = [...new Set(qRes.data.map(q => q.category).filter(Boolean))];
+      const existingCats = [...new Set(qRes.data.flatMap(q =>
+        Array.isArray(q.category) ? q.category : (q.category ? [q.category] : [])
+      ))];
       setCategories(prev => [...new Set([...prev, ...existingCats])]);
     } catch (err) {
       console.error("Failed to fetch suite data:", err);
@@ -70,7 +69,6 @@ export default function TestSuiteDetail() {
     }
   };
 
-  // ── Save duration ──
   const handleSaveDuration = async () => {
     if (!durationVal || durationVal < 1) return alert("Please enter a valid duration");
     setSavingDur(true);
@@ -83,14 +81,10 @@ export default function TestSuiteDetail() {
       setSuite(prev => ({ ...prev, duration: Number(durationVal) }));
       setShowDuration(false);
       alert("Duration saved!");
-    } catch (err) {
-      alert("Failed to save duration");
-    } finally {
-      setSavingDur(false);
-    }
+    } catch { alert("Failed to save duration"); }
+    finally { setSavingDur(false); }
   };
 
-  // ── Category manager handlers ──
   const handleAddCategory = () => {
     const name = newCatInput.trim();
     if (!name) { setCatError("Category name cannot be empty"); return; }
@@ -101,13 +95,32 @@ export default function TestSuiteDetail() {
   };
 
   const handleDeleteCategory = (cat) => {
-    const usedInQuestion = questions.some(q => q.category === cat);
-    if (usedInQuestion && !window.confirm(`"${cat}" is used by some questions. Remove it from the list anyway?`)) return;
+    const used = questions.some(q => (Array.isArray(q.category) ? q.category : [q.category]).includes(cat));
+    if (used && !window.confirm(`"${cat}" is used by some questions. Remove anyway?`)) return;
     setCategories(prev => prev.filter(c => c !== cat));
-    if (form.category === cat) setForm(f => ({ ...f, category: "" }));
+    setForm(f => ({ ...f, categories: f.categories.filter(c => c !== cat) }));
   };
 
-  // ── Option handlers ──
+  // ── Toggle category on question form ──
+  const toggleCategory = (cat) => {
+    setForm(f => ({
+      ...f,
+      categories: f.categories.includes(cat)
+        ? f.categories.filter(c => c !== cat)
+        : [...f.categories, cat],
+    }));
+  };
+
+  // ── Toggle correct answer checkbox ──
+  const toggleCorrectAnswer = (index) => {
+    setForm(f => ({
+      ...f,
+      correctAnswers: f.correctAnswers.includes(index)
+        ? f.correctAnswers.filter(i => i !== index)
+        : [...f.correctAnswers, index],
+    }));
+  };
+
   const handleOptionChange = (index, value) => {
     const opts = [...form.options];
     opts[index] = value;
@@ -121,31 +134,43 @@ export default function TestSuiteDetail() {
 
   const removeOption = (index) => {
     if (form.options.length <= 2) return;
-    const opts    = form.options.filter((_, i) => i !== index);
-    const correct = form.correctAnswer >= opts.length ? 0 : form.correctAnswer;
-    setForm({ ...form, options: opts, correctAnswer: correct });
+    const opts = form.options.filter((_, i) => i !== index);
+    setForm({
+      ...form,
+      options: opts,
+      correctAnswers: form.correctAnswers
+        .filter(i => i !== index)
+        .map(i => i > index ? i - 1 : i),
+    });
   };
 
-  // ── Submit question ──
   const handleSubmit = async () => {
     setError("");
     if (!form.questionText.trim()) { setError("Question text is required"); return; }
     const filledOptions = form.options.filter(o => o.trim());
     if (filledOptions.length < 2) { setError("At least 2 options are required"); return; }
-    if (!form.options[form.correctAnswer]?.trim()) { setError("Please select a valid correct answer"); return; }
+    if (form.correctAnswers.length === 0) { setError("Please select at least one correct answer"); return; }
+    if (form.categories.length === 0) { setError("Please select at least one category"); return; }
 
     const trimmedOptions = form.options.map(o => o.trim()).filter(Boolean);
-    const correctIndex   = form.options
-      .slice(0, form.correctAnswer + 1)
-      .filter(o => o.trim()).length - 1;
+
+    // Remap correctAnswers indices after filtering empty options
+    const oldToNew = {};
+    let newIdx = 0;
+    form.options.forEach((opt, oldIdx) => {
+      if (opt.trim()) { oldToNew[oldIdx] = newIdx++; }
+    });
+    const remappedCorrect = form.correctAnswers
+      .filter(i => form.options[i]?.trim())
+      .map(i => oldToNew[i]);
 
     const payload = {
       questionText:  form.questionText.trim(),
       options:       trimmedOptions,
-      correctAnswer: Math.max(0, correctIndex),
+      correctAnswer: remappedCorrect,   // backend field name kept same
       explanation:   form.explanation,
       marks:         form.marks,
-      category:      form.category,
+      category:      form.categories,   // backend field name kept same
     };
 
     setSaving(true);
@@ -168,15 +193,16 @@ export default function TestSuiteDetail() {
   };
 
   const handleEdit = (q) => {
+    const opts = q.options.length < 4
+      ? [...q.options, ...Array(4 - q.options.length).fill("")]
+      : q.options;
     setForm({
-      questionText:  q.questionText,
-      options:       q.options.length < 4
-                       ? [...q.options, ...Array(4 - q.options.length).fill("")]
-                       : q.options,
-      correctAnswer: q.correctAnswer,
-      explanation:   q.explanation || "",
-      marks:         q.marks || 1,
-      category:      q.category || "",
+      questionText:   q.questionText,
+      options:        opts,
+      correctAnswers: Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer],
+      explanation:    q.explanation || "",
+      marks:          q.marks || 1,
+      categories:     Array.isArray(q.category) ? q.category : (q.category ? [q.category] : []),
     });
     setEditingQ(q._id);
     setShowForm(true);
@@ -208,19 +234,17 @@ export default function TestSuiteDetail() {
     fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em",
   };
 
+  // Group by first category or Uncategorized
   const grouped = questions.reduce((acc, q) => {
-    const cat = q.category || "Uncategorized";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(q);
+    const cats = Array.isArray(q.category) && q.category.length > 0 ? q.category : ["Uncategorized"];
+    const key = cats[0];
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(q);
     return acc;
   }, {});
 
-  if (loading) return (
-    <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif", color: "#aaa" }}>Loading…</div>
-  );
-  if (!suite) return (
-    <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif", color: "#dc2626" }}>Test suite not found.</div>
-  );
+  if (loading) return <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif", color: "#aaa" }}>Loading…</div>;
+  if (!suite)  return <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif", color: "#dc2626" }}>Test suite not found.</div>;
 
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "'Segoe UI', sans-serif" }}>
@@ -232,7 +256,7 @@ export default function TestSuiteDetail() {
             <img src={`${import.meta.env.BASE_URL}Logo.png`} alt="Logo" style={{ width: "48px", height: "48px", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; }} />
           </div>
           <div>
-            <div style={{ fontSize: "20px", fontWeight: "700", color: GREEN_DARK, lineHeight: 1.2 }}>{suite.name}</div>
+            <div style={{ fontSize: "20px", fontWeight: "700", color: GREEN_DARK }}>{suite.name}</div>
             {suite.description && <div style={{ fontSize: "13px", color: "#6B6B5E", marginTop: "2px" }}>{suite.description}</div>}
           </div>
         </div>
@@ -247,34 +271,24 @@ export default function TestSuiteDetail() {
         <span onClick={() => { localStorage.removeItem("token"); navigate("/"); }} style={{ fontSize: "14px", color: "#C0392B", fontWeight: "500", cursor: "pointer", marginLeft: "auto" }}>Logout</span>
       </div>
 
-      {/* ── Content ── */}
       <div style={{ padding: "24px 28px" }}>
 
         {/* ── Action buttons ── */}
         <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
-          <button
-            onClick={() => { setEditingQ(null); setForm(emptyForm); setError(""); setShowForm(s => !s); }}
-            style={{ padding: "10px 20px", background: showForm && !editingQ ? "#555" : GREEN, color: WHITE, border: "none", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
-          >
+          <button onClick={() => { setEditingQ(null); setForm(emptyForm); setError(""); setShowForm(s => !s); }}
+            style={{ padding: "10px 20px", background: showForm && !editingQ ? "#555" : GREEN, color: WHITE, border: "none", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
             {showForm && !editingQ ? "Cancel" : "+ Add question"}
           </button>
-          <button
-            onClick={() => setShowCatManager(s => !s)}
-            style={{ padding: "10px 20px", background: WHITE, color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
-          >
+          <button onClick={() => setShowCatManager(s => !s)}
+            style={{ padding: "10px 20px", background: WHITE, color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
             🏷️ Manage categories {categories.length > 0 ? `(${categories.length})` : ""}
           </button>
-          {/* ── Duration button ── */}
-          <button
-            onClick={() => setShowDuration(s => !s)}
-            style={{ padding: "10px 20px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
-          >
+          <button onClick={() => setShowDuration(s => !s)}
+            style={{ padding: "10px 20px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
             ⏱ Set duration ({suite.duration || 30} min)
           </button>
-          <button
-            onClick={() => navigate(`/admin/results?suite=${suiteId}`)}
-            style={{ padding: "10px 20px", background: WHITE, color: "#333", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
-          >
+          <button onClick={() => navigate(`/admin/results?suite=${suiteId}`)}
+            style={{ padding: "10px 20px", background: WHITE, color: "#333", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
             View results
           </button>
         </div>
@@ -284,28 +298,12 @@ export default function TestSuiteDetail() {
           <div style={{ background: WHITE, border: "1px solid #e5e7eb", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
             <h2 style={{ fontSize: "15px", fontWeight: "700", color: GREEN_DARK, marginTop: 0, marginBottom: "14px" }}>⏱ Test Duration</h2>
             <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-              <input
-                type="number"
-                min={1}
-                max={300}
-                value={durationVal}
-                onChange={e => setDurationVal(e.target.value)}
-                style={{ ...inputStyle, width: "120px" }}
-              />
+              <input type="number" min={1} max={300} value={durationVal} onChange={e => setDurationVal(e.target.value)} style={{ ...inputStyle, width: "120px" }} />
               <span style={{ fontSize: "14px", color: "#666" }}>minutes</span>
-              <button
-                onClick={handleSaveDuration}
-                disabled={savingDur}
-                style={{ padding: "10px 20px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: savingDur ? 0.6 : 1 }}
-              >
+              <button onClick={handleSaveDuration} disabled={savingDur} style={{ padding: "10px 20px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: savingDur ? 0.6 : 1 }}>
                 {savingDur ? "Saving…" : "Save"}
               </button>
-              <button
-                onClick={() => setShowDuration(false)}
-                style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}
-              >
-                Cancel
-              </button>
+              <button onClick={() => setShowDuration(false)} style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}>Cancel</button>
             </div>
           </div>
         )}
@@ -315,16 +313,10 @@ export default function TestSuiteDetail() {
           <div style={{ background: WHITE, border: "1px solid #e5e7eb", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
             <h2 style={{ fontSize: "15px", fontWeight: "700", color: GREEN_DARK, marginTop: 0, marginBottom: "14px" }}>🏷️ Your Categories</h2>
             <div style={{ display: "flex", gap: "8px", marginBottom: "6px" }}>
-              <input
-                style={{ ...inputStyle, flex: 1 }}
-                placeholder="Type a new category name…"
-                value={newCatInput}
+              <input style={{ ...inputStyle, flex: 1 }} placeholder="Type a new category name…" value={newCatInput}
                 onChange={e => { setNewCatInput(e.target.value); setCatError(""); }}
-                onKeyDown={e => e.key === "Enter" && handleAddCategory()}
-              />
-              <button onClick={handleAddCategory} style={{ padding: "10px 20px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>
-                + Add
-              </button>
+                onKeyDown={e => e.key === "Enter" && handleAddCategory()} />
+              <button onClick={handleAddCategory} style={{ padding: "10px 20px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>+ Add</button>
             </div>
             {catError && <p style={{ color: "#dc2626", fontSize: "12px", margin: "0 0 10px" }}>{catError}</p>}
             {categories.length === 0 ? (
@@ -349,13 +341,19 @@ export default function TestSuiteDetail() {
               {editingQ ? "✏️ Edit question" : "New question"}
             </h2>
             {error && <p style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>{error}</p>}
+
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+
+              {/* Question text */}
               <div>
                 <label style={labelStyle}>Question *</label>
-                <textarea rows={3} style={{ ...inputStyle, resize: "vertical" }} placeholder="Enter the question text here…" value={form.questionText} onChange={e => setForm({ ...form, questionText: e.target.value })} />
+                <textarea rows={3} style={{ ...inputStyle, resize: "vertical" }} placeholder="Enter the question text here…"
+                  value={form.questionText} onChange={e => setForm({ ...form, questionText: e.target.value })} />
               </div>
+
+              {/* ── Multi-category picker ── */}
               <div>
-                <label style={labelStyle}>Category</label>
+                <label style={labelStyle}>Categories * (select all that apply)</label>
                 {categories.length === 0 ? (
                   <p style={{ fontSize: "13px", color: "#aaa", margin: 0 }}>
                     No categories yet.{" "}
@@ -363,43 +361,82 @@ export default function TestSuiteDetail() {
                   </p>
                 ) : (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                    {categories.map(cat => (
-                      <button
-                        key={cat}
-                        onClick={() => setForm(f => ({ ...f, category: f.category === cat ? "" : cat }))}
-                        style={{
-                          padding: "6px 14px", borderRadius: "999px", fontSize: "13px", fontWeight: "600", cursor: "pointer", border: "1.5px solid",
-                          background:  form.category === cat ? GREEN : WHITE,
-                          color:       form.category === cat ? WHITE : GREEN,
-                          borderColor: form.category === cat ? GREEN : "#c8dfd0",
-                        }}
-                      >
-                        {cat}
-                      </button>
-                    ))}
+                    {categories.map(cat => {
+                      const selected = form.categories.includes(cat);
+                      return (
+                        <button key={cat} onClick={() => toggleCategory(cat)}
+                          style={{
+                            padding: "6px 14px", borderRadius: "999px", fontSize: "13px", fontWeight: "600",
+                            cursor: "pointer", border: "1.5px solid",
+                            background:  selected ? GREEN : WHITE,
+                            color:       selected ? WHITE : GREEN,
+                            borderColor: selected ? GREEN : "#c8dfd0",
+                          }}>
+                          {selected ? "✓ " : ""}{cat}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
+                {form.categories.length > 0 && (
+                  <p style={{ fontSize: "12px", color: "#888", margin: "6px 0 0" }}>
+                    Selected: {form.categories.join(", ")}
+                  </p>
+                )}
               </div>
+
+              {/* ── Options with multi-correct checkboxes ── */}
               <div>
-                <label style={labelStyle}>Options * — select the correct answer</label>
+                <label style={labelStyle}>Options * — check all correct answers</label>
+                <div style={{ fontSize: "12px", color: "#888", marginBottom: "10px" }}>
+                  Use checkboxes to mark one or more correct answers
+                </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {form.options.map((opt, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <input type="radio" name="correct" checked={form.correctAnswer === i} onChange={() => setForm({ ...form, correctAnswer: i })} style={{ accentColor: GREEN, width: "16px", height: "16px", flexShrink: 0 }} />
-                      <input style={{ ...inputStyle, flex: 1, width: "auto" }} placeholder={`Option ${i + 1}${i >= 2 ? " (optional)" : ""}`} value={opt} onChange={e => handleOptionChange(i, e.target.value)} />
-                      {form.correctAnswer === i && <span style={{ fontSize: "12px", color: GREEN, fontWeight: "600", whiteSpace: "nowrap", minWidth: "60px" }}>✓ Correct</span>}
-                      {form.options.length > 2 && (
-                        <button onClick={() => removeOption(i)} style={{ background: "none", border: "none", color: "#dc2626", fontSize: "20px", cursor: "pointer", padding: "0 4px", flexShrink: 0, lineHeight: 1 }}>×</button>
-                      )}
-                    </div>
-                  ))}
+                  {form.options.map((opt, i) => {
+                    const isCorrect = form.correctAnswers.includes(i);
+                    return (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        {/* ── Checkbox for correct answer ── */}
+                        <input
+                          type="checkbox"
+                          checked={isCorrect}
+                          onChange={() => toggleCorrectAnswer(i)}
+                          disabled={!opt.trim()}
+                          style={{ accentColor: GREEN, width: "16px", height: "16px", flexShrink: 0, cursor: opt.trim() ? "pointer" : "not-allowed" }}
+                        />
+                        <input
+                          style={{
+                            ...inputStyle, flex: 1, width: "auto",
+                            border: isCorrect ? `2px solid ${GREEN}` : "1px solid #ddd",
+                            background: isCorrect ? "#f0faf5" : WHITE,
+                          }}
+                          placeholder={`Option ${i + 1}${i >= 2 ? " (optional)" : ""}`}
+                          value={opt}
+                          onChange={e => handleOptionChange(i, e.target.value)}
+                        />
+                        {isCorrect && (
+                          <span style={{ fontSize: "12px", color: GREEN, fontWeight: "600", whiteSpace: "nowrap", minWidth: "60px" }}>✓ Correct</span>
+                        )}
+                        {form.options.length > 2 && (
+                          <button onClick={() => removeOption(i)} style={{ background: "none", border: "none", color: "#dc2626", fontSize: "20px", cursor: "pointer", padding: "0 4px", flexShrink: 0, lineHeight: 1 }}>×</button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 {form.options.length < 6 && (
                   <button onClick={addOption} style={{ marginTop: "10px", padding: "7px 16px", background: "none", border: `1px dashed ${GREEN}`, borderRadius: "10px", color: GREEN, fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
                     + Add option
                   </button>
                 )}
+                {form.correctAnswers.length > 1 && (
+                  <div style={{ marginTop: "10px", padding: "8px 14px", background: "#f0faf5", border: `1px solid ${GREEN}`, borderRadius: "10px", fontSize: "12px", color: GREEN_DARK, fontWeight: "600" }}>
+                    ✓ Multiple correct answers: {form.correctAnswers.length} selected
+                  </div>
+                )}
               </div>
+
+              {/* Explanation + Marks */}
               <div style={{ display: "flex", gap: "12px" }}>
                 <div style={{ flex: 1 }}>
                   <label style={labelStyle}>Explanation (optional)</label>
@@ -410,6 +447,7 @@ export default function TestSuiteDetail() {
                   <input type="number" min={1} style={inputStyle} value={form.marks} onChange={e => setForm({ ...form, marks: Number(e.target.value) })} />
                 </div>
               </div>
+
               <div style={{ display: "flex", gap: "10px" }}>
                 <button onClick={handleSubmit} disabled={saving} style={{ padding: "10px 24px", background: GREEN, color: WHITE, border: "none", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
                   {saving ? "Saving…" : editingQ ? "Save changes" : "Save question"}
@@ -422,7 +460,7 @@ export default function TestSuiteDetail() {
           </div>
         )}
 
-        {/* ── Questions grouped by category ── */}
+        {/* ── Questions list ── */}
         {questions.length === 0 ? (
           <div style={{ background: WHITE, borderRadius: "16px", border: "2px dashed #e5e7eb", padding: "48px 28px", textAlign: "center" }}>
             <p style={{ color: "#aaa", fontSize: "14px", margin: 0 }}>No questions yet. Click "+ Add question" to start.</p>
@@ -437,36 +475,52 @@ export default function TestSuiteDetail() {
                   <div style={{ flex: 1, height: "1px", background: "#e5e7eb" }} />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {qs.map((q, idx) => (
-                    <div key={q._id}
-                      style={{ background: WHITE, border: "1px solid #e5e7eb", borderRadius: "14px", padding: "16px 18px", transition: "border-color 0.2s" }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = GREEN}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = "#e5e7eb"}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: "14px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 10px" }}>
-                            <span style={{ color: "#aaa", marginRight: "6px" }}>Q{idx + 1}.</span>{q.questionText}
-                          </p>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                            {q.options.map((opt, i) => (
-                              <p key={i} style={{ fontSize: "13px", margin: 0, padding: "6px 10px", borderRadius: "8px", background: i === q.correctAnswer ? "#dcfce7" : "#f9fafb", color: i === q.correctAnswer ? "#166534" : "#555", fontWeight: i === q.correctAnswer ? "600" : "400" }}>
-                                {String.fromCharCode(65 + i)}. {opt}
-                              </p>
-                            ))}
+                  {qs.map((q, idx) => {
+                    const correctArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
+                    const catArr     = Array.isArray(q.category) ? q.category : (q.category ? [q.category] : []);
+                    return (
+                      <div key={q._id}
+                        style={{ background: WHITE, border: "1px solid #e5e7eb", borderRadius: "14px", padding: "16px 18px", transition: "border-color 0.2s" }}
+                        onMouseEnter={e => e.currentTarget.style.borderColor = GREEN}
+                        onMouseLeave={e => e.currentTarget.style.borderColor = "#e5e7eb"}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
+                          <div style={{ flex: 1 }}>
+                            {/* Category chips */}
+                            {catArr.length > 0 && (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "8px" }}>
+                                {catArr.map(c => (
+                                  <span key={c} style={{ fontSize: "11px", background: "#E8F2EC", color: GREEN, padding: "2px 8px", borderRadius: "999px", fontWeight: "600" }}>{c}</span>
+                                ))}
+                              </div>
+                            )}
+                            <p style={{ fontSize: "14px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 10px" }}>
+                              <span style={{ color: "#aaa", marginRight: "6px" }}>Q{idx + 1}.</span>{q.questionText}
+                            </p>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                              {q.options.map((opt, i) => {
+                                const isCorrect = correctArr.includes(i);
+                                return (
+                                  <p key={i} style={{ fontSize: "13px", margin: 0, padding: "6px 10px", borderRadius: "8px", background: isCorrect ? "#dcfce7" : "#f9fafb", color: isCorrect ? "#166534" : "#555", fontWeight: isCorrect ? "600" : "400" }}>
+                                    {String.fromCharCode(65 + i)}. {opt} {isCorrect ? "✓" : ""}
+                                  </p>
+                                );
+                              })}
+                            </div>
+                            {q.explanation && <p style={{ fontSize: "12px", color: "#888", marginTop: "8px", marginBottom: 0, fontStyle: "italic" }}>💡 {q.explanation}</p>}
+                            <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
+                              <span style={{ fontSize: "11px", background: "#f3f4f6", color: "#555", padding: "2px 8px", borderRadius: "999px" }}>{q.marks ?? 1} mark{(q.marks ?? 1) !== 1 ? "s" : ""}</span>
+                              {correctArr.length > 1 && <span style={{ fontSize: "11px", background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: "999px" }}>Multiple correct</span>}
+                            </div>
                           </div>
-                          {q.explanation && <p style={{ fontSize: "12px", color: "#888", marginTop: "8px", marginBottom: 0, fontStyle: "italic" }}>💡 {q.explanation}</p>}
-                          <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
-                            <span style={{ fontSize: "11px", background: "#f3f4f6", color: "#555", padding: "2px 8px", borderRadius: "999px" }}>{q.marks ?? 1} mark{(q.marks ?? 1) !== 1 ? "s" : ""}</span>
+                          <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                            <button onClick={() => handleEdit(q)} style={{ padding: "6px 12px", fontSize: "12px", fontWeight: "600", background: WHITE, color: GREEN, border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>Edit</button>
+                            <button onClick={() => handleDeleteQuestion(q._id)} style={{ padding: "6px 12px", fontSize: "12px", fontWeight: "600", background: WHITE, color: "#dc2626", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>Delete</button>
                           </div>
-                        </div>
-                        <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
-                          <button onClick={() => handleEdit(q)} style={{ padding: "6px 12px", fontSize: "12px", fontWeight: "600", background: WHITE, color: GREEN, border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>Edit</button>
-                          <button onClick={() => handleDeleteQuestion(q._id)} style={{ padding: "6px 12px", fontSize: "12px", fontWeight: "600", background: WHITE, color: "#dc2626", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>Delete</button>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}
