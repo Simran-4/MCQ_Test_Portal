@@ -10,7 +10,7 @@ function Register() {
   const [name, setName]         = useState("");
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole]         = useState("candidate");
+  const [role, setRole]         = useState("Candidate");
   const navigate = useNavigate();
 
   const handleRegister = async () => {
@@ -113,7 +113,7 @@ function Register() {
               value={role}
               onChange={e => setRole(e.target.value)}
             >
-              <option value="candidate" style={{ color: "#333", background: WHITE }}>Candidate</option>
+              <option value="Candidate" style={{ color: "#333", background: WHITE }}>Candidate</option>
               <option value="admin"   style={{ color: "#333", background: WHITE }}>Admin</option>
             </select>
           </div>
