@@ -1,47 +1,35 @@
-
 const mongoose = require("mongoose");
 
+const answerSchema = new mongoose.Schema({
+  questionId:     { type: mongoose.Schema.Types.ObjectId, ref: "Question" },
+  selectedOption: { type: Number, default: -1 },
+  isCorrect:      { type: Boolean, default: false },
+}, { _id: false });
+
 const resultSchema = new mongoose.Schema({
+  // ── New suite-based fields ──
+  suiteId:        { type: mongoose.Schema.Types.ObjectId, ref: "TestSuite" },
+  studentName:    { type: String, default: "" },
+  studentEmail:   { type: String, default: "" },
+  answers:        [answerSchema],
+  score:          { type: Number, default: 0 },
+  totalMarks:     { type: Number, default: 0 },
+  correctAnswers: { type: Number, default: 0 },
+  submittedAt:    { type: Date, default: Date.now },
 
-  userName: {
-    type: String,
-    required: true,
-  },
-
-  userEmail: {
-    type: String,
-    required: true,
-  },
-
-  score: {
-    type: Number,
-    required: true,
-  },
-
-  totalQuestions: {
-    type: Number,
-    required: true,
-  },
-
+  // ── Old fields kept so existing results don't break ──
+  userName:       { type: String, default: "" },
+  userEmail:      { type: String, default: "" },
+  totalQuestions: { type: Number, default: 0 },
   categoryResults: [
     {
-      category: String,
-      score: Number,
-      total: Number,
+      category:   String,
+      score:      Number,
+      total:      Number,
       percentage: Number,
     },
   ],
 
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
+}, { timestamps: true });
 
-});
-
-module.exports =
-  mongoose.model(
-    "Result",
-    resultSchema
-  );
-
+module.exports = mongoose.models.Result || mongoose.model("Result", resultSchema);

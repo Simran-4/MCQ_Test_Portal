@@ -22,7 +22,7 @@ function Login() {
 
       if (res.data.user.role === "admin")           navigate("/dashboard");
       else if (res.data.user.role === "superadmin") navigate("/superadmin");
-      else                                          navigate("/test");
+      else                                          navigate("/student");
     } catch (err) {
       alert(err.response?.data?.message || "Login Failed");
     }

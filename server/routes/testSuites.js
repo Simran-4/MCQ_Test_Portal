@@ -51,6 +51,24 @@ router.post("/", async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
+// GET /api/test-suites/active
+// Returns only active suites for students
+router.get("/active", async (req, res) => {
+  try {
+    const suites = await TestSuite.find({ status: "active" }).sort({ createdAt: -1 });
+
+    const suitesWithCount = await Promise.all(
+      suites.map(async (suite) => {
+        const count = await Question.countDocuments({ testSuite: suite._id });
+        return { ...suite.toObject(), questionCount: count };
+      })
+    );
+
+    res.json(suitesWithCount);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // GET /api/test-suites/:id
