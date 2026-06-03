@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import "../styles/quiz.css";
 
@@ -7,16 +7,19 @@ function Test() {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(null); // ✅ null = not loaded yet
+  const timerStarted = useRef(false); // ✅ prevents multiple timers
 
   useEffect(() => {
     fetchQuestions();
     fetchSettings();
   }, []);
 
-  // ✅ FIXED: Timer waits for both questions AND timeLeft
+  // ✅ FIXED: Timer only starts ONCE when both questions and timeLeft are ready
   useEffect(() => {
-    if (questions.length === 0 || timeLeft === 0) return;
+    if (questions.length === 0 || timeLeft === null || timerStarted.current) return;
+
+    timerStarted.current = true; // ✅ mark timer as started
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -32,14 +35,14 @@ function Test() {
     return () => clearInterval(timer);
   }, [questions, timeLeft]);
 
-  // ✅ FIXED: correct field name examDuration
+  // ✅ FIXED: parseInt to ensure number not string
   const fetchSettings = async () => {
     try {
       const res = await axios.get(
         "https://mcqtestportal-production.up.railway.app/api/settings"
       );
       if (res.data && res.data.examDuration) {
-        setTimeLeft(res.data.examDuration * 60);
+        setTimeLeft(parseInt(res.data.examDuration) * 60);
       }
     } catch (err) {
       console.log(err);
@@ -116,6 +119,23 @@ function Test() {
       alert("Error Submitting Test");
     }
   };
+
+  // ✅ Show loading until settings are fetched
+  if (timeLeft === null) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#f5f1eb",
+        fontSize: "20px",
+        color: "#2d5d50"
+      }}>
+        Loading exam...
+      </div>
+    );
+  }
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
