@@ -10,11 +10,7 @@ const questionSchema = new mongoose.Schema(
       required: true,
     },
 
-    testSuite: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "TestSuite",
-  required: true,
-},
+    
 
     // â”€â”€ Your existing fields (keep as-is) â”€â”€
     questionText: {
