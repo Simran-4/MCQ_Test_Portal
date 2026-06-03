@@ -1,18 +1,12 @@
-// models/Question.js  (replace your existing Question model with this)
 const mongoose = require("mongoose");
 
 const questionSchema = new mongoose.Schema(
   {
-    // â”€â”€ NEW: every question now belongs to a test suite â”€â”€
     testSuite: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "TestSuite",
       required: true,
     },
-
-    
-
-    // â”€â”€ Your existing fields (keep as-is) â”€â”€
     questionText: {
       type: String,
       required: true,
@@ -24,7 +18,7 @@ const questionSchema = new mongoose.Schema(
       validate: (v) => v.length >= 2,
     },
     correctAnswer: {
-      type: Number, // index of the correct option (0-based)
+      type: Number,
       required: true,
     },
     explanation: {
@@ -38,6 +32,10 @@ const questionSchema = new mongoose.Schema(
     language: {
       type: String,
       default: "en",
+    },
+    category: {
+      type: String,
+      default: "",
     },
   },
   { timestamps: true }
