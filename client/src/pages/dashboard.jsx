@@ -148,9 +148,7 @@ export default function Dashboard() {
             <div style={{ fontSize:"13px", color:"#6B6B5E", marginTop:"2px" }}>Manage test suites and questions.</div>
           </div>
         </div>
-        <button style={{ background: GREEN, color: WHITE, border:"none", borderRadius:"20px", padding:"8px 16px", fontSize:"13px", cursor:"pointer", display:"flex", alignItems:"center", gap:"6px", fontWeight:"500" }}>
-          🌐 English ▾
-        </button>
+        
       </div>
 
       {/* ── Nav ── */}
