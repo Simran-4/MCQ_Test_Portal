@@ -1,5 +1,5 @@
 // src/pages/CandidateTest.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -10,30 +10,32 @@ const GREEN_DARK = "#1A3D28";
 const BG         = "#EEE9E0";
 const WHITE      = "#ffffff";
 
-// Build category breakdown from questions + answers
 function buildCategoryStats(questions, answers) {
   const cats = {};
   questions.forEach(q => {
     const cat = q.category || "Uncategorized";
     if (!cats[cat]) cats[cat] = { total: 0, correct: 0, marks: 0, earnedMarks: 0 };
-    const marks   = q.marks ?? 1;
+    const marks    = q.marks ?? 1;
     const selected = answers[q._id] ?? -1;
     const isRight  = selected === q.correctAnswer;
-    cats[cat].total      += 1;
-    cats[cat].marks      += marks;
-    if (isRight) {
-      cats[cat].correct    += 1;
-      cats[cat].earnedMarks += marks;
-    }
+    cats[cat].total   += 1;
+    cats[cat].marks   += marks;
+    if (isRight) { cats[cat].correct += 1; cats[cat].earnedMarks += marks; }
   });
   return cats;
 }
 
-// Color for a percentage
 function pctColor(pct) {
   if (pct >= 75) return GREEN;
   if (pct >= 50) return "#f59e0b";
   return "#dc2626";
+}
+
+// Format seconds → MM:SS
+function formatTime(secs) {
+  const m = Math.floor(secs / 60).toString().padStart(2, "0");
+  const s = (secs % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
 }
 
 export default function CandidateTest() {
@@ -48,7 +50,16 @@ export default function CandidateTest() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult]         = useState(null);
   const [error, setError]           = useState("");
-  const [activeTab, setActiveTab]   = useState("summary"); // "summary" | "review"
+  const [activeTab, setActiveTab]   = useState("summary");
+
+  // ── Timer state ──
+  const [timeLeft, setTimeLeft]         = useState(null);   // seconds
+  const [showWarning, setShowWarning]   = useState(false);  // 60-sec warning modal
+  const timerRef                        = useRef(null);
+  const answersRef                      = useRef(answers);  // keep latest answers in ref for auto-submit
+
+  // Keep answersRef in sync
+  useEffect(() => { answersRef.current = answers; }, [answers]);
 
   const user = (() => {
     try { return JSON.parse(localStorage.getItem("user")) || {}; }
@@ -66,6 +77,9 @@ export default function CandidateTest() {
         ]);
         setSuite(suiteRes.data);
         setQuestions(qRes.data);
+        // Set timer from suite duration (default 30 min)
+        const durationSecs = (suiteRes.data.duration || 30) * 60;
+        setTimeLeft(durationSecs);
       } catch (err) {
         console.error("Failed to load test:", err);
         setError("Could not load this test. Please go back and try again.");
@@ -75,6 +89,55 @@ export default function CandidateTest() {
     };
     fetchData();
   }, [suiteId]);
+
+  // ── Start countdown once timeLeft is set and test not submitted ──
+  useEffect(() => {
+    if (timeLeft === null || submitted) return;
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          // Auto-submit with current answers
+          autoSubmit();
+          return 0;
+        }
+        // Show warning at 60 seconds
+        if (prev === 61) setShowWarning(true);
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerRef.current);
+  }, [timeLeft === null, submitted]); // only re-run when these change
+
+  const autoSubmit = async () => {
+    setShowWarning(false);
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem("token");
+      const currentAnswers = answersRef.current;
+      const payload = {
+        suiteId,
+        CandidateName:  user.name  || "Candidate",
+        CandidateEmail: user.email || "",
+        answers: questions.map(q => ({
+          questionId:     q._id,
+          selectedOption: currentAnswers[q._id] ?? -1,
+        })),
+      };
+      const res = await axios.post(`${API}/api/results`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setResult(res.data);
+      setSubmitted(true);
+    } catch (err) {
+      console.error("Auto-submit error:", err);
+      alert("Time is up! Failed to auto-submit. Please submit manually.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleSelect = (questionId, optionIndex) => {
     if (submitted) return;
@@ -86,6 +149,7 @@ export default function CandidateTest() {
     if (unanswered.length > 0) {
       if (!window.confirm(`You have ${unanswered.length} unanswered question(s). Submit anyway?`)) return;
     }
+    clearInterval(timerRef.current);
     setSubmitting(true);
     try {
       const token = localStorage.getItem("token");
@@ -122,55 +186,33 @@ export default function CandidateTest() {
     return (
       <div style={{ minHeight: "100vh", background: BG, fontFamily: "'Segoe UI', sans-serif", padding: "24px 16px" }}>
         <div style={{ maxWidth: "520px", margin: "0 auto" }}>
-
-          {/* ── Header card ── */}
           <div style={{ background: WHITE, borderRadius: "20px", padding: "32px 28px", textAlign: "center", boxShadow: "0 8px 32px rgba(0,0,0,0.08)", marginBottom: "16px" }}>
             <div style={{ fontSize: "48px", marginBottom: "10px" }}>{passed ? "🎉" : "📚"}</div>
             <h1 style={{ fontSize: "21px", fontWeight: "700", color: GREEN_DARK, margin: "0 0 4px" }}>
               {passed ? "Great job!" : "Keep practising!"}
             </h1>
             <p style={{ color: "#888", fontSize: "13px", margin: "0 0 20px" }}>{suite?.name}</p>
-
-            {/* Big score */}
             <div style={{ background: BG, borderRadius: "14px", padding: "18px", marginBottom: "16px" }}>
               <div style={{ fontSize: "52px", fontWeight: "800", color: pctColor(pct), lineHeight: 1 }}>{pct}%</div>
-              <div style={{ fontSize: "14px", color: "#888", marginTop: "6px" }}>
-                {result.score} / {result.totalMarks} marks
-              </div>
+              <div style={{ fontSize: "14px", color: "#888", marginTop: "6px" }}>{result.score} / {result.totalMarks} marks</div>
               <div style={{ fontSize: "12px", color: "#aaa", marginTop: "3px" }}>
                 {result.correctAnswers} correct · {questions.length - result.correctAnswers} wrong · {questions.length - Object.keys(answers).length} skipped
               </div>
             </div>
-
-            {/* Tabs */}
             <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
               {["summary", "review"].map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  style={{
-                    padding: "8px 20px", borderRadius: "999px", fontSize: "13px", fontWeight: "600", cursor: "pointer", border: "none",
-                    background: activeTab === tab ? GREEN : "#f3f4f6",
-                    color:      activeTab === tab ? WHITE : "#555",
-                  }}
-                >
+                <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: "8px 20px", borderRadius: "999px", fontSize: "13px", fontWeight: "600", cursor: "pointer", border: "none", background: activeTab === tab ? GREEN : "#f3f4f6", color: activeTab === tab ? WHITE : "#555" }}>
                   {tab === "summary" ? "📊 By Category" : "📝 Review"}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* ── Category breakdown tab ── */}
           {activeTab === "summary" && (
             <div style={{ background: WHITE, borderRadius: "16px", padding: "20px 24px", boxShadow: "0 4px 16px rgba(0,0,0,0.06)", marginBottom: "16px" }}>
-              <p style={{ fontSize: "11px", fontWeight: "700", color: "#8A8A7E", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 16px" }}>
-                Category Breakdown
-              </p>
-
+              <p style={{ fontSize: "11px", fontWeight: "700", color: "#8A8A7E", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 16px" }}>Category Breakdown</p>
               {!hasCategories ? (
-                <p style={{ color: "#aaa", fontSize: "13px", textAlign: "center", padding: "12px 0" }}>
-                  No categories assigned to questions in this test.
-                </p>
+                <p style={{ color: "#aaa", fontSize: "13px", textAlign: "center", padding: "12px 0" }}>No categories assigned to questions in this test.</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   {catEntries.map(([cat, stats]) => {
@@ -178,32 +220,17 @@ export default function CandidateTest() {
                     const color  = pctColor(catPct);
                     return (
                       <div key={cat}>
-                        {/* Category label row */}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                           <span style={{ fontSize: "14px", fontWeight: "600", color: GREEN_DARK }}>{cat}</span>
                           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <span style={{ fontSize: "12px", color: "#888" }}>
-                              {stats.correct}/{stats.total} correct
-                            </span>
-                            <span style={{ fontSize: "13px", fontWeight: "700", color, minWidth: "40px", textAlign: "right" }}>
-                              {catPct}%
-                            </span>
+                            <span style={{ fontSize: "12px", color: "#888" }}>{stats.correct}/{stats.total} correct</span>
+                            <span style={{ fontSize: "13px", fontWeight: "700", color, minWidth: "40px", textAlign: "right" }}>{catPct}%</span>
                           </div>
                         </div>
-                        {/* Progress bar */}
                         <div style={{ height: "8px", background: "#f0f0ea", borderRadius: "999px", overflow: "hidden" }}>
-                          <div style={{
-                            height: "100%",
-                            width: `${catPct}%`,
-                            background: color,
-                            borderRadius: "999px",
-                            transition: "width 0.6s ease",
-                          }} />
+                          <div style={{ height: "100%", width: `${catPct}%`, background: color, borderRadius: "999px", transition: "width 0.6s ease" }} />
                         </div>
-                        {/* Marks */}
-                        <div style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>
-                          {stats.earnedMarks} / {stats.marks} marks
-                        </div>
+                        <div style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>{stats.earnedMarks} / {stats.marks} marks</div>
                       </div>
                     );
                   })}
@@ -212,42 +239,21 @@ export default function CandidateTest() {
             </div>
           )}
 
-          {/* ── Per-question review tab ── */}
           {activeTab === "review" && (
             <div style={{ background: WHITE, borderRadius: "16px", padding: "20px 24px", boxShadow: "0 4px 16px rgba(0,0,0,0.06)", marginBottom: "16px" }}>
-              <p style={{ fontSize: "11px", fontWeight: "700", color: "#8A8A7E", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 14px" }}>
-                Question Review
-              </p>
+              <p style={{ fontSize: "11px", fontWeight: "700", color: "#8A8A7E", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 14px" }}>Question Review</p>
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {questions.map((q, i) => {
                   const selected = answers[q._id] ?? -1;
                   const isRight  = selected === q.correctAnswer;
                   return (
                     <div key={q._id} style={{ background: isRight ? "#f0fdf4" : "#fff5f5", border: `1px solid ${isRight ? "#bbf7d0" : "#fecaca"}`, borderRadius: "12px", padding: "12px 16px" }}>
-                      <p style={{ fontSize: "13px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 6px" }}>
-                        {isRight ? "✅" : "❌"} Q{i + 1}. {q.questionText}
-                      </p>
-                      {q.category && (
-                        <span style={{ fontSize: "11px", background: "#E8F2EC", color: GREEN, padding: "2px 8px", borderRadius: "999px", fontWeight: "600", display: "inline-block", marginBottom: "6px" }}>
-                          {q.category}
-                        </span>
-                      )}
-                      {!isRight && selected !== -1 && (
-                        <p style={{ fontSize: "12px", color: "#dc2626", margin: "0 0 2px" }}>
-                          Your answer: {q.options[selected]}
-                        </p>
-                      )}
-                      {!isRight && selected === -1 && (
-                        <p style={{ fontSize: "12px", color: "#f59e0b", margin: "0 0 2px" }}>Not answered</p>
-                      )}
-                      <p style={{ fontSize: "12px", color: "#166534", margin: 0 }}>
-                        ✓ Correct: {q.options[q.correctAnswer]}
-                      </p>
-                      {q.explanation && (
-                        <p style={{ fontSize: "12px", color: "#555", margin: "6px 0 0", fontStyle: "italic", borderTop: "1px solid rgba(0,0,0,0.06)", paddingTop: "6px" }}>
-                          💡 {q.explanation}
-                        </p>
-                      )}
+                      <p style={{ fontSize: "13px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 6px" }}>{isRight ? "✅" : "❌"} Q{i + 1}. {q.questionText}</p>
+                      {q.category && <span style={{ fontSize: "11px", background: "#E8F2EC", color: GREEN, padding: "2px 8px", borderRadius: "999px", fontWeight: "600", display: "inline-block", marginBottom: "6px" }}>{q.category}</span>}
+                      {!isRight && selected !== -1 && <p style={{ fontSize: "12px", color: "#dc2626", margin: "0 0 2px" }}>Your answer: {q.options[selected]}</p>}
+                      {!isRight && selected === -1 && <p style={{ fontSize: "12px", color: "#f59e0b", margin: "0 0 2px" }}>Not answered</p>}
+                      <p style={{ fontSize: "12px", color: "#166534", margin: 0 }}>✓ Correct: {q.options[q.correctAnswer]}</p>
+                      {q.explanation && <p style={{ fontSize: "12px", color: "#555", margin: "6px 0 0", fontStyle: "italic", borderTop: "1px solid rgba(0,0,0,0.06)", paddingTop: "6px" }}>💡 {q.explanation}</p>}
                     </div>
                   );
                 })}
@@ -255,46 +261,52 @@ export default function CandidateTest() {
             </div>
           )}
 
-          {/* ── Back button ── */}
-          <button
-            onClick={() => navigate("/Candidate")}
-            style={{ width: "100%", padding: "14px", fontSize: "15px", fontWeight: "600", background: GREEN, color: WHITE, border: "none", borderRadius: "14px", cursor: "pointer" }}
+          <button onClick={() => navigate("/Candidate")} style={{ width: "100%", padding: "14px", fontSize: "15px", fontWeight: "600", background: GREEN, color: WHITE, border: "none", borderRadius: "14px", cursor: "pointer" }}
             onMouseEnter={e => e.currentTarget.style.background = GREEN_DARK}
             onMouseLeave={e => e.currentTarget.style.background = GREEN}
-          >
-            Back to Tests
-          </button>
-
+          >Back to Tests</button>
         </div>
       </div>
     );
   }
 
-  // ── Loading / error states ──
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif", color: "#aaa" }}>
-      Loading test…
-    </div>
+    <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif", color: "#aaa" }}>Loading test…</div>
   );
 
   if (error) return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
       <div style={{ background: WHITE, borderRadius: "16px", padding: "32px", maxWidth: "360px", textAlign: "center" }}>
         <p style={{ color: "#dc2626", fontSize: "15px" }}>{error}</p>
-        <button onClick={() => navigate("/Candidate")} style={{ padding: "10px 24px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-          Go Back
-        </button>
+        <button onClick={() => navigate("/Candidate")} style={{ padding: "10px 24px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>Go Back</button>
       </div>
     </div>
   );
 
   const answeredCount = Object.keys(answers).length;
+  const isLowTime     = timeLeft !== null && timeLeft <= 60;
 
-  // ── Test taking screen ──
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "'Segoe UI', sans-serif" }}>
 
-      {/* Top bar */}
+      {/* ── 60-second warning modal ── */}
+      {showWarning && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: WHITE, borderRadius: "20px", padding: "32px 28px", maxWidth: "340px", width: "90%", textAlign: "center", boxShadow: "0 16px 48px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontSize: "40px", marginBottom: "12px" }}>⏰</div>
+            <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#dc2626", margin: "0 0 8px" }}>1 minute left!</h2>
+            <p style={{ color: "#666", fontSize: "14px", margin: "0 0 20px" }}>Your test will be automatically submitted when the timer runs out.</p>
+            <button
+              onClick={() => setShowWarning(false)}
+              style={{ padding: "10px 28px", background: GREEN, color: WHITE, border: "none", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
+            >
+              OK, got it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Top bar ── */}
       <div style={{ padding: "16px 28px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
           <div style={{ width: "44px", height: "44px", borderRadius: "50%", background: WHITE, border: "0.5px solid rgba(0,0,0,0.1)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -305,18 +317,29 @@ export default function CandidateTest() {
             {suite?.description && <div style={{ fontSize: "12px", color: "#6B6B5E" }}>{suite.description}</div>}
           </div>
         </div>
-        <div style={{ fontSize: "13px", color: "#888" }}>
-          {answeredCount} / {questions.length} answered
-        </div>
+
+        {/* ── Timer display ── */}
+        {timeLeft !== null && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: "6px",
+            background: isLowTime ? "#fee2e2" : "#f0faf5",
+            border: `1.5px solid ${isLowTime ? "#dc2626" : GREEN}`,
+            borderRadius: "999px", padding: "6px 16px",
+          }}>
+            <span style={{ fontSize: "16px" }}>{isLowTime ? "⏰" : "⏱"}</span>
+            <span style={{ fontSize: "16px", fontWeight: "700", color: isLowTime ? "#dc2626" : GREEN_DARK, fontVariantNumeric: "tabular-nums" }}>
+              {formatTime(timeLeft)}
+            </span>
+          </div>
+        )}
       </div>
 
       <div style={{ borderBottom: "0.5px solid rgba(0,0,0,0.09)", margin: "12px 0 0" }} />
-
       <div style={{ padding: "10px 28px" }}>
         <span onClick={() => navigate("/Candidate")} style={{ fontSize: "13px", color: "#4A7A5C", fontWeight: "500", cursor: "pointer" }}>← Back to tests</span>
       </div>
 
-      {/* Questions */}
+      {/* ── Questions ── */}
       <div style={{ padding: "8px 28px 100px", maxWidth: "720px" }}>
         {questions.length === 0 ? (
           <div style={{ background: WHITE, borderRadius: "16px", padding: "48px", textAlign: "center" }}>
@@ -327,9 +350,7 @@ export default function CandidateTest() {
             {questions.map((q, idx) => (
               <div key={q._id} style={{ background: WHITE, border: `1px solid ${answers[q._id] !== undefined ? GREEN : "#e5e7eb"}`, borderRadius: "14px", padding: "20px", transition: "border-color 0.2s" }}>
                 {q.category && (
-                  <span style={{ fontSize: "11px", background: "#E8F2EC", color: GREEN, padding: "2px 8px", borderRadius: "999px", fontWeight: "600", display: "inline-block", marginBottom: "8px" }}>
-                    {q.category}
-                  </span>
+                  <span style={{ fontSize: "11px", background: "#E8F2EC", color: GREEN, padding: "2px 8px", borderRadius: "999px", fontWeight: "600", display: "inline-block", marginBottom: "8px" }}>{q.category}</span>
                 )}
                 <p style={{ fontSize: "15px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 14px" }}>
                   <span style={{ color: "#aaa", marginRight: "6px" }}>Q{idx + 1}.</span>{q.questionText}
@@ -339,22 +360,8 @@ export default function CandidateTest() {
                   {q.options.map((opt, i) => {
                     const selected = answers[q._id] === i;
                     return (
-                      <button
-                        key={i}
-                        onClick={() => handleSelect(q._id, i)}
-                        style={{
-                          textAlign: "left", padding: "10px 14px", borderRadius: "10px", fontSize: "14px",
-                          cursor: "pointer", fontFamily: "inherit",
-                          border:      selected ? `2px solid ${GREEN}` : "1px solid #e5e7eb",
-                          background:  selected ? "#E8F2EC" : WHITE,
-                          color:       selected ? GREEN_DARK : "#333",
-                          fontWeight:  selected ? "600" : "400",
-                          transition:  "all 0.15s",
-                        }}
-                      >
-                        <span style={{ marginRight: "8px", color: selected ? GREEN : "#aaa", fontWeight: "700" }}>
-                          {String.fromCharCode(65 + i)}.
-                        </span>
+                      <button key={i} onClick={() => handleSelect(q._id, i)} style={{ textAlign: "left", padding: "10px 14px", borderRadius: "10px", fontSize: "14px", cursor: "pointer", fontFamily: "inherit", border: selected ? `2px solid ${GREEN}` : "1px solid #e5e7eb", background: selected ? "#E8F2EC" : WHITE, color: selected ? GREEN_DARK : "#333", fontWeight: selected ? "600" : "400", transition: "all 0.15s" }}>
+                        <span style={{ marginRight: "8px", color: selected ? GREEN : "#aaa", fontWeight: "700" }}>{String.fromCharCode(65 + i)}.</span>
                         {opt}
                       </button>
                     );
@@ -366,17 +373,14 @@ export default function CandidateTest() {
         )}
       </div>
 
-      {/* Sticky submit bar */}
+      {/* ── Sticky submit bar ── */}
       {questions.length > 0 && (
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: WHITE, borderTop: "1px solid #e5e7eb", padding: "14px 28px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: "13px", color: "#888" }}>
             <span style={{ fontWeight: "700", color: answeredCount === questions.length ? GREEN : "#f59e0b" }}>{answeredCount}</span>
             /{questions.length} answered
           </div>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            style={{ padding: "12px 28px", fontSize: "15px", fontWeight: "600", background: GREEN, color: WHITE, border: "none", borderRadius: "12px", cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}
+          <button onClick={handleSubmit} disabled={submitting} style={{ padding: "12px 28px", fontSize: "15px", fontWeight: "600", background: GREEN, color: WHITE, border: "none", borderRadius: "12px", cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}
             onMouseEnter={e => { if (!submitting) e.currentTarget.style.background = GREEN_DARK; }}
             onMouseLeave={e => { if (!submitting) e.currentTarget.style.background = GREEN; }}
           >

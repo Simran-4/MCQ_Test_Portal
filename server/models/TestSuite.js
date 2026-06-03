@@ -1,4 +1,3 @@
-// models/TestSuite.js
 const mongoose = require("mongoose");
 
 const testSuiteSchema = new mongoose.Schema(
@@ -21,6 +20,10 @@ const testSuiteSchema = new mongoose.Schema(
     scheduledAt: {
       type: Date,
       default: null,
+    },
+    duration: {
+      type: Number,  // in minutes
+      default: 30,
     },
   },
   { timestamps: true }

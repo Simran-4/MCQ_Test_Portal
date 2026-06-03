@@ -31,6 +31,11 @@ export default function TestSuiteDetail() {
   const [error, setError]         = useState("");
   const [editingQ, setEditingQ]   = useState(null);
 
+  // ── Duration editor state ──
+  const [showDuration, setShowDuration]   = useState(false);
+  const [durationVal, setDurationVal]     = useState(30);
+  const [savingDur, setSavingDur]         = useState(false);
+
   // ── Category manager state ──
   const [categories, setCategories]       = useState(() => {
     try {
@@ -41,7 +46,6 @@ export default function TestSuiteDetail() {
   const [newCatInput, setNewCatInput]       = useState("");
   const [catError, setCatError]             = useState("");
 
-  // Persist categories to localStorage per suite
   useEffect(() => {
     localStorage.setItem(`cats_${suiteId}`, JSON.stringify(categories));
   }, [categories, suiteId]);
@@ -55,18 +59,34 @@ export default function TestSuiteDetail() {
         axios.get(`${API}/api/test-suites/${suiteId}/questions`),
       ]);
       setSuite(suiteRes.data);
+      setDurationVal(suiteRes.data.duration || 30);
       setQuestions(qRes.data);
-
-      // Auto-import any categories already used in saved questions
       const existingCats = [...new Set(qRes.data.map(q => q.category).filter(Boolean))];
-      setCategories(prev => {
-        const merged = [...new Set([...prev, ...existingCats])];
-        return merged;
-      });
+      setCategories(prev => [...new Set([...prev, ...existingCats])]);
     } catch (err) {
       console.error("Failed to fetch suite data:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── Save duration ──
+  const handleSaveDuration = async () => {
+    if (!durationVal || durationVal < 1) return alert("Please enter a valid duration");
+    setSavingDur(true);
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(`${API}/api/test-suites/${suiteId}`,
+        { duration: Number(durationVal) },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSuite(prev => ({ ...prev, duration: Number(durationVal) }));
+      setShowDuration(false);
+      alert("Duration saved!");
+    } catch (err) {
+      alert("Failed to save duration");
+    } finally {
+      setSavingDur(false);
     }
   };
 
@@ -106,12 +126,12 @@ export default function TestSuiteDetail() {
     setForm({ ...form, options: opts, correctAnswer: correct });
   };
 
-  // ── Submit ──
+  // ── Submit question ──
   const handleSubmit = async () => {
     setError("");
     if (!form.questionText.trim()) { setError("Question text is required"); return; }
     const filledOptions = form.options.filter(o => o.trim());
-    if (filledOptions.length < 2)  { setError("At least 2 options are required"); return; }
+    if (filledOptions.length < 2) { setError("At least 2 options are required"); return; }
     if (!form.options[form.correctAnswer]?.trim()) { setError("Please select a valid correct answer"); return; }
 
     const trimmedOptions = form.options.map(o => o.trim()).filter(Boolean);
@@ -188,7 +208,6 @@ export default function TestSuiteDetail() {
     fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em",
   };
 
-  // Group questions by category
   const grouped = questions.reduce((acc, q) => {
     const cat = q.category || "Uncategorized";
     if (!acc[cat]) acc[cat] = [];
@@ -210,7 +229,7 @@ export default function TestSuiteDetail() {
       <div style={{ padding: "16px 28px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
           <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: WHITE, border: "0.5px solid rgba(0,0,0,0.1)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <img src={`${import.meta.env.BASE_URL}Logo.png`} alt="Snehalaya" style={{ width: "48px", height: "48px", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; }} />
+            <img src={`${import.meta.env.BASE_URL}Logo.png`} alt="Logo" style={{ width: "48px", height: "48px", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; }} />
           </div>
           <div>
             <div style={{ fontSize: "20px", fontWeight: "700", color: GREEN_DARK, lineHeight: 1.2 }}>{suite.name}</div>
@@ -224,6 +243,7 @@ export default function TestSuiteDetail() {
       <div style={{ padding: "12px 28px", display: "flex", gap: "24px", alignItems: "center", borderBottom: "0.5px solid rgba(0,0,0,0.09)", marginTop: "4px" }}>
         <span onClick={() => navigate("/dashboard")} style={{ fontSize: "14px", color: "#4A7A5C", fontWeight: "500", cursor: "pointer" }}>← Back to dashboard</span>
         <span style={{ fontSize: "13px", color: "#aaa" }}>{questions.length} question{questions.length !== 1 ? "s" : ""}</span>
+        <span style={{ fontSize: "13px", color: "#aaa" }}>⏱ {suite.duration || 30} min</span>
         <span onClick={() => { localStorage.removeItem("token"); navigate("/"); }} style={{ fontSize: "14px", color: "#C0392B", fontWeight: "500", cursor: "pointer", marginLeft: "auto" }}>Logout</span>
       </div>
 
@@ -239,10 +259,17 @@ export default function TestSuiteDetail() {
             {showForm && !editingQ ? "Cancel" : "+ Add question"}
           </button>
           <button
-            onClick={() => { setShowCatManager(s => !s); }}
+            onClick={() => setShowCatManager(s => !s)}
             style={{ padding: "10px 20px", background: WHITE, color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
           >
             🏷️ Manage categories {categories.length > 0 ? `(${categories.length})` : ""}
+          </button>
+          {/* ── Duration button ── */}
+          <button
+            onClick={() => setShowDuration(s => !s)}
+            style={{ padding: "10px 20px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
+          >
+            ⏱ Set duration ({suite.duration || 30} min)
           </button>
           <button
             onClick={() => navigate(`/admin/results?suite=${suiteId}`)}
@@ -252,12 +279,41 @@ export default function TestSuiteDetail() {
           </button>
         </div>
 
+        {/* ── Duration Panel ── */}
+        {showDuration && (
+          <div style={{ background: WHITE, border: "1px solid #e5e7eb", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: "700", color: GREEN_DARK, marginTop: 0, marginBottom: "14px" }}>⏱ Test Duration</h2>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <input
+                type="number"
+                min={1}
+                max={300}
+                value={durationVal}
+                onChange={e => setDurationVal(e.target.value)}
+                style={{ ...inputStyle, width: "120px" }}
+              />
+              <span style={{ fontSize: "14px", color: "#666" }}>minutes</span>
+              <button
+                onClick={handleSaveDuration}
+                disabled={savingDur}
+                style={{ padding: "10px 20px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: savingDur ? 0.6 : 1 }}
+              >
+                {savingDur ? "Saving…" : "Save"}
+              </button>
+              <button
+                onClick={() => setShowDuration(false)}
+                style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Category Manager Panel ── */}
         {showCatManager && (
           <div style={{ background: WHITE, border: "1px solid #e5e7eb", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
             <h2 style={{ fontSize: "15px", fontWeight: "700", color: GREEN_DARK, marginTop: 0, marginBottom: "14px" }}>🏷️ Your Categories</h2>
-
-            {/* Add new */}
             <div style={{ display: "flex", gap: "8px", marginBottom: "6px" }}>
               <input
                 style={{ ...inputStyle, flex: 1 }}
@@ -266,30 +322,19 @@ export default function TestSuiteDetail() {
                 onChange={e => { setNewCatInput(e.target.value); setCatError(""); }}
                 onKeyDown={e => e.key === "Enter" && handleAddCategory()}
               />
-              <button
-                onClick={handleAddCategory}
-                style={{ padding: "10px 20px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}
-              >
+              <button onClick={handleAddCategory} style={{ padding: "10px 20px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>
                 + Add
               </button>
             </div>
             {catError && <p style={{ color: "#dc2626", fontSize: "12px", margin: "0 0 10px" }}>{catError}</p>}
-
-            {/* Category chips */}
             {categories.length === 0 ? (
-              <p style={{ color: "#aaa", fontSize: "13px", margin: "12px 0 0" }}>No categories yet. Add your first one above.</p>
+              <p style={{ color: "#aaa", fontSize: "13px", margin: "12px 0 0" }}>No categories yet.</p>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px" }}>
                 {categories.map(cat => (
                   <div key={cat} style={{ display: "flex", alignItems: "center", gap: "6px", background: "#E8F2EC", borderRadius: "999px", padding: "5px 12px" }}>
                     <span style={{ fontSize: "13px", color: GREEN_DARK, fontWeight: "600" }}>{cat}</span>
-                    <button
-                      onClick={() => handleDeleteCategory(cat)}
-                      style={{ background: "none", border: "none", color: "#999", fontSize: "16px", cursor: "pointer", padding: 0, lineHeight: 1, display: "flex", alignItems: "center" }}
-                      title="Remove category"
-                    >
-                      ×
-                    </button>
+                    <button onClick={() => handleDeleteCategory(cat)} style={{ background: "none", border: "none", color: "#999", fontSize: "16px", cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
                   </div>
                 ))}
               </div>
@@ -304,24 +349,17 @@ export default function TestSuiteDetail() {
               {editingQ ? "✏️ Edit question" : "New question"}
             </h2>
             {error && <p style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>{error}</p>}
-
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-
-              {/* Question text */}
               <div>
                 <label style={labelStyle}>Question *</label>
                 <textarea rows={3} style={{ ...inputStyle, resize: "vertical" }} placeholder="Enter the question text here…" value={form.questionText} onChange={e => setForm({ ...form, questionText: e.target.value })} />
               </div>
-
-              {/* Category picker */}
               <div>
                 <label style={labelStyle}>Category</label>
                 {categories.length === 0 ? (
                   <p style={{ fontSize: "13px", color: "#aaa", margin: 0 }}>
                     No categories yet.{" "}
-                    <span onClick={() => setShowCatManager(true)} style={{ color: GREEN, cursor: "pointer", fontWeight: "600", textDecoration: "underline" }}>
-                      Add categories first →
-                    </span>
+                    <span onClick={() => setShowCatManager(true)} style={{ color: GREEN, cursor: "pointer", fontWeight: "600", textDecoration: "underline" }}>Add categories first →</span>
                   </p>
                 ) : (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -331,9 +369,9 @@ export default function TestSuiteDetail() {
                         onClick={() => setForm(f => ({ ...f, category: f.category === cat ? "" : cat }))}
                         style={{
                           padding: "6px 14px", borderRadius: "999px", fontSize: "13px", fontWeight: "600", cursor: "pointer", border: "1.5px solid",
-                          background:   form.category === cat ? GREEN      : WHITE,
-                          color:        form.category === cat ? WHITE      : GREEN,
-                          borderColor:  form.category === cat ? GREEN      : "#c8dfd0",
+                          background:  form.category === cat ? GREEN : WHITE,
+                          color:       form.category === cat ? WHITE : GREEN,
+                          borderColor: form.category === cat ? GREEN : "#c8dfd0",
                         }}
                       >
                         {cat}
@@ -342,8 +380,6 @@ export default function TestSuiteDetail() {
                   </div>
                 )}
               </div>
-
-              {/* Options */}
               <div>
                 <label style={labelStyle}>Options * — select the correct answer</label>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -364,8 +400,6 @@ export default function TestSuiteDetail() {
                   </button>
                 )}
               </div>
-
-              {/* Explanation + Marks */}
               <div style={{ display: "flex", gap: "12px" }}>
                 <div style={{ flex: 1 }}>
                   <label style={labelStyle}>Explanation (optional)</label>
@@ -376,8 +410,6 @@ export default function TestSuiteDetail() {
                   <input type="number" min={1} style={inputStyle} value={form.marks} onChange={e => setForm({ ...form, marks: Number(e.target.value) })} />
                 </div>
               </div>
-
-              {/* Form buttons */}
               <div style={{ display: "flex", gap: "10px" }}>
                 <button onClick={handleSubmit} disabled={saving} style={{ padding: "10px 24px", background: GREEN, color: WHITE, border: "none", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
                   {saving ? "Saving…" : editingQ ? "Save changes" : "Save question"}
