@@ -7,5 +7,5 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  base: "/MCQ_TEST_PORTAL/",
+  base: "/",   // ← change this from "/MCQ_TEST_PORTAL/" to "/"
 });
