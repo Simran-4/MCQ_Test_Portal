@@ -9,6 +9,7 @@ import Register from "./pages/register";
 import ViewResults from "./pages/ViewResults";
 import AdminSettings from "./pages/AdminSettings";
 import SuperAdmin from "./pages/SuperAdmin";
+import TestSuiteDetail from "./pages/TestSuiteDetail";
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
         <Route path="/view-results" element={<ViewResults />} />
         <Route path="/settings" element={<AdminSettings />} />
         <Route path="/superadmin" element={<SuperAdmin />} />
+        <Route path="/admin/test-suites/:suiteId" element={<TestSuiteDetail />} />
 
         {/* Catch all - redirect unknown routes to login */}
         <Route path="*" element={<Login />} />

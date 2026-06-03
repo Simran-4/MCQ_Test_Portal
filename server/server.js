@@ -6,6 +6,7 @@ const authRoutes = require("./authRoutes");
 const authMiddleware = require("./middleware/authMiddleware");
 const questionRoutes = require("./routes/questionsR");
 const resultRoutes = require("./routes/resultRoutes");
+const testSuitesRouter = require("./routes/testSuites");
 
 require("dotenv").config();
 
@@ -26,6 +27,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/questions", questionRoutes);
 app.use("/api/results", resultRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/test-suites", testSuitesRouter);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI)
