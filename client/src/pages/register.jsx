@@ -14,21 +14,17 @@ function Register() {
 
   const handleRegister = async () => {
 
-    // ✅ VALIDATION
     if (!name || name.trim().length < 2) {
       return alert("Please enter a valid full name (at least 2 characters)");
     }
-
     if (!email || !email.includes("@") || !email.includes(".")) {
       return alert("Please enter a valid email address");
     }
-
     if (!password || password.length < 6) {
       return alert("Password must be at least 6 characters");
     }
 
     try {
-
       await axios.post(
         "https://mcqtestportal-production.up.railway.app/api/auth/register",
         {
@@ -40,38 +36,26 @@ function Register() {
       );
 
       alert("Registration Successful");
-
       navigate("/");
 
     } catch (err) {
-
       if (err.response && err.response.data && err.response.data.message) {
-        alert(err.response.data.message); // ✅ shows "User already exists" etc.
+        alert(err.response.data.message);
       } else {
         alert("Registration Failed. Please try again.");
       }
-
       console.log(err);
     }
   };
 
   return (
-
     <div className="auth-page">
-
       <div className="auth-overlay">
-
         <div className="auth-card">
 
-          <img
-            src="/Logo.png"
-            alt="logo"
-            className="auth-logo"
-          />
+          <img src="/Logo.png" alt="logo" className="auth-logo" />
 
-          <h1 className="auth-title">
-            Register
-          </h1>
+          <h1 className="auth-title">Register</h1>
 
           <input
             type="text"
@@ -103,13 +87,11 @@ function Register() {
             onChange={(e) => setRole(e.target.value)}
           >
             <option value="student">Student</option>
-            <option value="teacher">Teacher</option>
+            {/* ✅ changed "teacher" to "admin" */}
+            <option value="admin">Admin</option>
           </select>
 
-          <button
-            className="auth-button"
-            onClick={handleRegister}
-          >
+          <button className="auth-button" onClick={handleRegister}>
             Register
           </button>
 
@@ -119,9 +101,7 @@ function Register() {
           </p>
 
         </div>
-
       </div>
-
     </div>
   );
 }

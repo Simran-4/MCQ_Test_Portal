@@ -31,9 +31,8 @@ function Login() {
         JSON.stringify(res.data.user)
       );
 
-      // Role Based Navigation
-
-      if (res.data.user.role === "teacher") {
+      // ✅ Role Based Navigation — changed "teacher" to "admin"
+      if (res.data.user.role === "admin") {
 
         navigate("/dashboard");
 
@@ -51,7 +50,11 @@ function Login() {
 
     } catch (err) {
 
-      alert("Login Failed");
+      if (err.response && err.response.data && err.response.data.message) {
+        alert(err.response.data.message); // ✅ shows real error e.g. "Account disabled"
+      } else {
+        alert("Login Failed");
+      }
 
       console.log(err);
 
@@ -96,7 +99,7 @@ function Login() {
           className="register-link"
           onClick={() => navigate("/register")}
         >
-          Don’t have an account? Register
+          Don't have an account? Register
         </p>
 
       </div>

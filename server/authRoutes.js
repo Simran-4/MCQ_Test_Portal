@@ -13,14 +13,12 @@ const requireSuperAdmin = (req, res, next) => {
             message: "Super admin access required"
         });
     }
-
     next();
 };
 
-// REGISTER ROUTE
+// REGISTER
 router.post("/register", async (req, res) => {
     try {
-
         const { name, email, password, role } = req.body;
 
         if (role === "superadmin") {
@@ -29,82 +27,52 @@ router.post("/register", async (req, res) => {
             });
         }
 
-        // Check existing user
         const existingUser = await User.findOne({ email });
-
         if (existingUser) {
-            return res.status(400).json({
-                message: "User already exists"
-            });
+            return res.status(400).json({ message: "User already exists" });
         }
 
-        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create user
-       const newUser = new User({
-  name,
-  email,
-  password: hashedPassword,
-  role,
-});
+        const newUser = new User({
+            name,
+            email,
+            password: hashedPassword,
+            role,
+        });
 
         await newUser.save();
 
-        res.json({
-            message: "User Registered Successfully"
-        });
+        res.json({ message: "User Registered Successfully" });
 
     } catch (err) {
-        res.status(500).json({
-            error: err.message
-        });
+        res.status(500).json({ error: err.message });
     }
 });
 
-// LOGIN ROUTE
+// LOGIN
 router.post("/login", async (req, res) => {
     try {
-
         const { email, password } = req.body;
 
-        // Find user
         const user = await User.findOne({ email });
-
         if (!user) {
-            return res.status(400).json({
-                message: "User not found"
-            });
+            return res.status(400).json({ message: "User not found" });
         }
 
         if (user.isActive === false) {
-            return res.status(403).json({
-                message: "Your account has been disabled"
-            });
+            return res.status(403).json({ message: "Your account has been disabled" });
         }
 
-        // Compare password
-        const isMatch = await bcrypt.compare(
-            password,
-            user.password
-        );
-
+        const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(400).json({
-                message: "Invalid credentials"
-            });
+            return res.status(400).json({ message: "Invalid credentials" });
         }
 
-        // Generate token
         const token = jwt.sign(
-            {
-                id: user._id,
-                role: user.role
-            },
+            { id: user._id, role: user.role },
             "secretkey",
-            {
-                expiresIn: "1d"
-            }
+            { expiresIn: "1d" }
         );
 
         res.json({
@@ -118,9 +86,7 @@ router.post("/login", async (req, res) => {
         });
 
     } catch (err) {
-        res.status(500).json({
-            error: err.message
-        });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -140,18 +106,18 @@ router.get("/superadmin/overview", authMiddleware, requireSuperAdmin, async (req
         res.json({
             stats: {
                 totalUsers: normalizedUsers.length,
-                activeUsers: normalizedUsers.filter((user) => user.isActive).length,
+                activeUsers: normalizedUsers.filter((u) => u.isActive).length,
+                // ✅ changed "teacher" to "admin"
                 administrators: normalizedUsers.filter(
-                    (user) => user.role === "teacher" || user.role === "superadmin"
+                    (u) => u.role === "admin" || u.role === "superadmin"
                 ).length,
                 assessments
             },
             users: normalizedUsers
         });
+
     } catch (err) {
-        res.status(500).json({
-            message: "Error fetching super admin overview"
-        });
+        res.status(500).json({ message: "Error fetching super admin overview" });
     }
 });
 
@@ -161,15 +127,11 @@ router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, as
         const { isActive } = req.body;
 
         if (typeof isActive !== "boolean") {
-            return res.status(400).json({
-                message: "isActive must be a boolean"
-            });
+            return res.status(400).json({ message: "isActive must be a boolean" });
         }
 
         if (req.user.id === req.params.id && !isActive) {
-            return res.status(400).json({
-                message: "You cannot disable your own account"
-            });
+            return res.status(400).json({ message: "You cannot disable your own account" });
         }
 
         const user = await User.findByIdAndUpdate(
@@ -179,16 +141,13 @@ router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, as
         ).select("_id name email role isActive");
 
         if (!user) {
-            return res.status(404).json({
-                message: "User not found"
-            });
+            return res.status(404).json({ message: "User not found" });
         }
 
         res.json(user);
+
     } catch (err) {
-        res.status(500).json({
-            message: "Error updating user access"
-        });
+        res.status(500).json({ message: "Error updating user access" });
     }
 });
 

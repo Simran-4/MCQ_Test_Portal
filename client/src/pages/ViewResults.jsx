@@ -17,8 +17,11 @@ function ViewResults() {
   const fetchResults = async (storedUser) => {
     try {
       let res;
-      if (storedUser.role === "admin") {
-        res = await axios.get("https://mcqtestportal-production.up.railway.app/api/results/all");
+      // ✅ admin and superadmin see all results
+      if (storedUser.role === "admin" || storedUser.role === "superadmin") {
+        res = await axios.get(
+          "https://mcqtestportal-production.up.railway.app/api/results/all"
+        );
       } else {
         res = await axios.get(
           `https://mcqtestportal-production.up.railway.app/api/results/my/${storedUser.email}`
@@ -70,9 +73,17 @@ function ViewResults() {
           Here is what we found
         </h1>
 
-        {user && user.role !== "admin" && (
+        {/* ✅ Student sees their own name */}
+        {user && user.role === "student" && (
           <p style={{ color: "#888", fontSize: "16px", marginBottom: "30px" }}>
             Results for <strong>{user.name}</strong> ({user.email})
+          </p>
+        )}
+
+        {/* ✅ Admin/superadmin sees a general heading */}
+        {user && (user.role === "admin" || user.role === "superadmin") && (
+          <p style={{ color: "#888", fontSize: "16px", marginBottom: "30px" }}>
+            Showing all student results
           </p>
         )}
 
@@ -88,8 +99,8 @@ function ViewResults() {
                 paddingBottom: "40px",
               }}
             >
-              {/* Teacher sees student name */}
-              {user && user.role === "admin" && (
+              {/* ✅ Admin/superadmin sees student name + score */}
+              {user && (user.role === "admin" || user.role === "superadmin") && (
                 <div style={{ marginBottom: "20px" }}>
                   <h3 style={{ fontSize: "22px", color: "#333", margin: 0 }}>
                     {result.userName}
@@ -100,8 +111,8 @@ function ViewResults() {
                 </div>
               )}
 
-              {/* Student sees overall score */}
-              {user && user.role !== "teacher" && (
+              {/* ✅ Only students see overall score block */}
+              {user && user.role === "student" && (
                 <div
                   style={{
                     display: "inline-block",
