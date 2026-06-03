@@ -50,6 +50,22 @@ router.post("/", async (req, res) => {
     res.status(500).json({ message: "Error submitting result" });
   }
 });
+// ─────────────────────────────────────────────────────────────
+//  ADD THIS to server/routes/resultRoutes.js
+//  (paste it right after the existing  router.post("/")  block)
+// ─────────────────────────────────────────────────────────────
+ 
+// GET /api/results/suite/:suiteId  — admin fetches all results for one suite
+router.get("/suite/:suiteId", async (req, res) => {
+  try {
+    const results = await Result.find({ suiteId: req.params.suiteId })
+      .sort({ submittedAt: -1 });
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error fetching suite results" });
+  }
+});
 
 // ADD RESULT
 router.post("/add", async (req, res) => {

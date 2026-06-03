@@ -11,6 +11,7 @@ import ViewResults    from "./pages/ViewResults";
 import AdminSettings  from "./pages/AdminSettings";
 import SuperAdmin     from "./pages/SuperAdmin";
 import TestSuiteDetail from "./pages/TestSuiteDetail";
+import AdminSuiteResults from "./pages/AdminSuiteResults";
 
 // ── NEW student pages ──
 import StudentDashboard from "./pages/StudentDashboard";
@@ -34,6 +35,11 @@ function App() {
         <Route path="/settings"                       element={<AdminSettings />} />
         <Route path="/superadmin"                     element={<SuperAdmin />} />
         <Route path="/admin/test-suites/:suiteId"     element={<TestSuiteDetail />} />
+        <Route path="/admin/results" element={<AdminSuiteResults />} />
+        <Route
+  path="/admin-results/:suiteId"
+  element={<AdminSuiteResults />}
+/>
 
         {/* ── Student ── */}
         <Route path="/student"              element={<StudentDashboard />} />
