@@ -1,4 +1,4 @@
-// src/pages/StudentTest.jsx
+// src/pages/CandidateTest.jsx
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -36,7 +36,7 @@ function pctColor(pct) {
   return "#dc2626";
 }
 
-export default function StudentTest() {
+export default function CandidateTest() {
   const { suiteId } = useParams();
   const navigate    = useNavigate();
 
@@ -91,8 +91,8 @@ export default function StudentTest() {
       const token = localStorage.getItem("token");
       const payload = {
         suiteId,
-        studentName:  user.name  || "Student",
-        studentEmail: user.email || "",
+        CandidateName:  user.name  || "Candidate",
+        CandidateEmail: user.email || "",
         answers: questions.map(q => ({
           questionId:     q._id,
           selectedOption: answers[q._id] ?? -1,
@@ -257,7 +257,7 @@ export default function StudentTest() {
 
           {/* ── Back button ── */}
           <button
-            onClick={() => navigate("/student")}
+            onClick={() => navigate("/Candidate")}
             style={{ width: "100%", padding: "14px", fontSize: "15px", fontWeight: "600", background: GREEN, color: WHITE, border: "none", borderRadius: "14px", cursor: "pointer" }}
             onMouseEnter={e => e.currentTarget.style.background = GREEN_DARK}
             onMouseLeave={e => e.currentTarget.style.background = GREEN}
@@ -281,7 +281,7 @@ export default function StudentTest() {
     <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
       <div style={{ background: WHITE, borderRadius: "16px", padding: "32px", maxWidth: "360px", textAlign: "center" }}>
         <p style={{ color: "#dc2626", fontSize: "15px" }}>{error}</p>
-        <button onClick={() => navigate("/student")} style={{ padding: "10px 24px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+        <button onClick={() => navigate("/Candidate")} style={{ padding: "10px 24px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
           Go Back
         </button>
       </div>
@@ -313,7 +313,7 @@ export default function StudentTest() {
       <div style={{ borderBottom: "0.5px solid rgba(0,0,0,0.09)", margin: "12px 0 0" }} />
 
       <div style={{ padding: "10px 28px" }}>
-        <span onClick={() => navigate("/student")} style={{ fontSize: "13px", color: "#4A7A5C", fontWeight: "500", cursor: "pointer" }}>← Back to tests</span>
+        <span onClick={() => navigate("/Candidate")} style={{ fontSize: "13px", color: "#4A7A5C", fontWeight: "500", cursor: "pointer" }}>← Back to tests</span>
       </div>
 
       {/* Questions */}

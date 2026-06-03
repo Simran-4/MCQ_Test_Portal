@@ -1,4 +1,4 @@
-// src/pages/StudentDashboard.jsx
+// src/pages/CandidateDashboard.jsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -16,13 +16,13 @@ const STATUS_COLOR = {
   scheduled: { background: "#fef3c7", color: "#92400e" },
 };
 
-export default function StudentDashboard() {
+export default function CandidateDashboard() {
   const navigate = useNavigate();
   const [suites, setSuites]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
 
-  // Get student name from token stored at login
+  // Get Candidate name from token stored at login
   const user = (() => {
     try { return JSON.parse(localStorage.getItem("user")) || {}; }
     catch { return {}; }

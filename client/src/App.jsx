@@ -13,9 +13,9 @@ import SuperAdmin     from "./pages/SuperAdmin";
 import TestSuiteDetail from "./pages/TestSuiteDetail";
 import AdminSuiteResults from "./pages/AdminSuiteResults";
 
-// ── NEW student pages ──
-import StudentDashboard from "./pages/StudentDashboard";
-import StudentTest      from "./pages/StudentTest";
+// ── NEW Candidate pages ──
+import CandidateDashboard from "./pages/CandidateDashboard";
+import CandidateTest      from "./pages/CandidateTest";
 
 function App() {
   return (
@@ -41,9 +41,9 @@ function App() {
   element={<AdminSuiteResults />}
 />
 
-        {/* ── Student ── */}
-        <Route path="/student"              element={<StudentDashboard />} />
-        <Route path="/test/:suiteId"        element={<StudentTest />} />
+        {/* ── Candidate ── */}
+        <Route path="/Candidate"              element={<CandidateDashboard />} />
+        <Route path="/test/:suiteId"        element={<CandidateTest />} />
 
         {/* ── Catch all ── */}
         <Route path="*" element={<Login />} />

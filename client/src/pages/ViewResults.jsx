@@ -73,8 +73,8 @@ function ViewResults() {
           Here is what we found
         </h1>
 
-        {/* ✅ Student sees their own name */}
-        {user && user.role === "student" && (
+        {/* ✅ Candidate sees their own name */}
+        {user && user.role === "Candidate" && (
           <p style={{ color: "#888", fontSize: "16px", marginBottom: "30px" }}>
             Results for <strong>{user.name}</strong> ({user.email})
           </p>
@@ -83,7 +83,7 @@ function ViewResults() {
         {/* ✅ Admin/superadmin sees a general heading */}
         {user && (user.role === "admin" || user.role === "superadmin") && (
           <p style={{ color: "#888", fontSize: "16px", marginBottom: "30px" }}>
-            Showing all student results
+            Showing all Candidate results
           </p>
         )}
 
@@ -99,7 +99,7 @@ function ViewResults() {
                 paddingBottom: "40px",
               }}
             >
-              {/* ✅ Admin/superadmin sees student name + score */}
+              {/* ✅ Admin/superadmin sees Candidate name + score */}
               {user && (user.role === "admin" || user.role === "superadmin") && (
                 <div style={{ marginBottom: "20px" }}>
                   <h3 style={{ fontSize: "22px", color: "#333", margin: 0 }}>
@@ -111,8 +111,8 @@ function ViewResults() {
                 </div>
               )}
 
-              {/* ✅ Only students see overall score block */}
-              {user && user.role === "student" && (
+              {/* ✅ Only Candidates see overall score block */}
+              {user && user.role === "Candidate" && (
                 <div
                   style={{
                     display: "inline-block",

@@ -76,7 +76,7 @@ function SuperAdmin() {
   // ✅ Filter based on active nav
   const getFilteredUsers = () => {
     let base = users;
-    if (activeNav === "students") base = users.filter(u => u.role === "student");
+    if (activeNav === "Candidates") base = users.filter(u => u.role === "Candidate");
     if (activeNav === "administrators") base = users.filter(u => u.role === "admin" || u.role === "superadmin");
     return base.filter(u =>
       `${u.name} ${u.email} ${u.role}`.toLowerCase().includes(search.toLowerCase())
@@ -87,7 +87,7 @@ function SuperAdmin() {
 
   // ✅ Section title based on nav
   const getSectionTitle = () => {
-    if (activeNav === "students") return "Students";
+    if (activeNav === "Candidates") return "Candidates";
     if (activeNav === "administrators") return "Administrators";
     if (activeNav === "reports") return "Reports";
     if (activeNav === "settings") return "Settings";
@@ -117,10 +117,10 @@ function SuperAdmin() {
 
           <button
             type="button"
-            className={activeNav === "students" ? "active" : ""}
-            onClick={() => { setActiveNav("students"); setSearch(""); }}
+            className={activeNav === "Candidates" ? "active" : ""}
+            onClick={() => { setActiveNav("Candidates"); setSearch(""); }}
           >
-            🎓 Students
+            🎓 Candidates
           </button>
 
           <button
@@ -168,12 +168,12 @@ function SuperAdmin() {
         {/* STATS - only on dashboard */}
         {activeNav === "dashboard" && (
           <section className="stats-grid">
-            <div className="stat-card" onClick={() => setActiveNav("students")} style={{ cursor: "pointer" }}>
+            <div className="stat-card" onClick={() => setActiveNav("Candidates")} style={{ cursor: "pointer" }}>
               <h3>Total Users</h3>
               <h2>{stats.totalUsers}</h2>
               <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
             </div>
-            <div className="stat-card" onClick={() => setActiveNav("students")} style={{ cursor: "pointer" }}>
+            <div className="stat-card" onClick={() => setActiveNav("Candidates")} style={{ cursor: "pointer" }}>
               <h3>Active Users</h3>
               <h2>{stats.activeUsers}</h2>
               <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
@@ -262,8 +262,8 @@ function SuperAdmin() {
           </section>
         )}
 
-        {/* USER TABLE - dashboard, students, administrators */}
-        {(activeNav === "dashboard" || activeNav === "students" || activeNav === "administrators") && (
+        {/* USER TABLE - dashboard, Candidates, administrators */}
+        {(activeNav === "dashboard" || activeNav === "Candidates" || activeNav === "administrators") && (
           <section className="card" id="users">
             <div className="section-header">
               <h2>{getSectionTitle()}</h2>
@@ -294,7 +294,7 @@ function SuperAdmin() {
                       <td>{user.name}</td>
                       <td>{user.email}</td>
                       <td>
-                        <span className={`badge ${user.role === "student" ? "student" : "admin"}`}>
+                        <span className={`badge ${user.role === "Candidate" ? "Candidate" : "admin"}`}>
                           {user.role}
                         </span>
                       </td>

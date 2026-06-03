@@ -9,8 +9,8 @@ const answerSchema = new mongoose.Schema({
 const resultSchema = new mongoose.Schema({
   // ── New suite-based fields ──
   suiteId:        { type: mongoose.Schema.Types.ObjectId, ref: "TestSuite" },
-  studentName:    { type: String, default: "" },
-  studentEmail:   { type: String, default: "" },
+  CandidateName:    { type: String, default: "" },
+  CandidateEmail:   { type: String, default: "" },
   answers:        [answerSchema],
   score:          { type: Number, default: 0 },
   totalMarks:     { type: Number, default: 0 },

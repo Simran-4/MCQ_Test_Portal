@@ -52,7 +52,7 @@ router.post("/", async (req, res) => {
   }
 });
 // GET /api/test-suites/active
-// Returns only active suites for students
+// Returns only active suites for Candidates
 router.get("/active", async (req, res) => {
   try {
     const suites = await TestSuite.find({ status: "active" }).sort({ createdAt: -1 });

@@ -163,7 +163,7 @@ export default function AdminSuiteResults() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
                 <tr style={{ background: GREEN_DARK }}>
-                  {["#", "Student", "Email", "Score", "%", "Result", ...allCats].map((h, i) => (
+                  {["#", "Candidate", "Email", "Score", "%", "Result", ...allCats].map((h, i) => (
                     <th key={i} style={{ padding: "12px 14px", color: WHITE, fontWeight: "700", textAlign: i >= 3 ? "center" : "left", whiteSpace: "nowrap", fontSize: "12px" }}>
                       {h}
                     </th>
@@ -176,8 +176,8 @@ export default function AdminSuiteResults() {
                   return (
                     <tr key={r._id} style={{ borderBottom: "1px solid #f0f0ea", background: i % 2 === 0 ? WHITE : "#fafaf8" }}>
                       <td style={{ padding: "12px 14px", color: "#aaa", textAlign: "center" }}>{i + 1}</td>
-                      <td style={{ padding: "12px 14px", fontWeight: "600", color: GREEN_DARK }}>{r.studentName || "—"}</td>
-                      <td style={{ padding: "12px 14px", color: "#888" }}>{r.studentEmail || "—"}</td>
+                      <td style={{ padding: "12px 14px", fontWeight: "600", color: GREEN_DARK }}>{r.CandidateName || "—"}</td>
+                      <td style={{ padding: "12px 14px", color: "#888" }}>{r.CandidateEmail || "—"}</td>
                       <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: "600" }}>{r.score}/{r.totalMarks}</td>
                       <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: "700", color: pctColor(r.pct) }}>{r.pct}%</td>
                       <td style={{ padding: "12px 14px", textAlign: "center" }}>

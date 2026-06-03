@@ -96,7 +96,7 @@ export async function downloadResultsPDF(suite, questions, results) {
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...GREEN_DARK);
-  doc.text("Summary â€” All Students", 14, y);
+  doc.text("Summary â€” All Candidates", 14, y);
 
   // Suite info chips
   y += 7;
@@ -104,7 +104,7 @@ export async function downloadResultsPDF(suite, questions, results) {
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...GREY_TEXT);
   doc.text(
-    `${results.length} student${results.length !== 1 ? "s" : ""}   Â·   ${questions.length} question${questions.length !== 1 ? "s" : ""}   Â·   ${questions.reduce((a, q) => a + (q.marks ?? 1), 0)} total marks`,
+    `${results.length} Candidate${results.length !== 1 ? "s" : ""}   Â·   ${questions.length} question${questions.length !== 1 ? "s" : ""}   Â·   ${questions.reduce((a, q) => a + (q.marks ?? 1), 0)} total marks`,
     14, y
   );
 
@@ -112,7 +112,7 @@ export async function downloadResultsPDF(suite, questions, results) {
 
   // Summary table columns: Name | Email | Score | % | Pass/Fail | one col per category
   const summaryHead = [
-    ["#", "Student Name", "Email", "Score", "%", "Result", ...allCats.map(c => c.length > 12 ? c.slice(0, 11) + "â€¦" : c)],
+    ["#", "Candidate Name", "Email", "Score", "%", "Result", ...allCats.map(c => c.length > 12 ? c.slice(0, 11) + "â€¦" : c)],
   ];
 
   const summaryBody = statsPerResult.map((r, i) => {
@@ -124,8 +124,8 @@ export async function downloadResultsPDF(suite, questions, results) {
     });
     return [
       i + 1,
-      r.studentName || "â€”",
-      r.studentEmail || "â€”",
+      r.CandidateName || "â€”",
+      r.CandidateEmail || "â€”",
       `${r.score ?? 0}/${r.totalMarks ?? 0}`,
       `${r.pct}%`,
       r.pct >= 50 ? "Pass" : "Fail",
@@ -184,7 +184,7 @@ export async function downloadResultsPDF(suite, questions, results) {
   });
 
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  //  PAGE(S) 2+  â€”  DETAIL SHEET (one section per student)
+  //  PAGE(S) 2+  â€”  DETAIL SHEET (one section per Candidate)
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   doc.addPage();
   drawHeader(doc, suite, pageWidth);
@@ -193,24 +193,24 @@ export async function downloadResultsPDF(suite, questions, results) {
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...GREEN_DARK);
-  doc.text("Detailed Results â€” Per Student", 14, y);
+  doc.text("Detailed Results â€” Per Candidate", 14, y);
   y += 10;
 
   statsPerResult.forEach((r, idx) => {
-    // Check if we need a new page (leave 60mm for at least one student block)
+    // Check if we need a new page (leave 60mm for at least one Candidate block)
     if (y > pageHeight - 70) {
       doc.addPage();
       drawHeader(doc, suite, pageWidth);
       y = 30;
     }
 
-    // Student header bar
+    // Candidate header bar
     doc.setFillColor(...GREEN_LIGHT);
     doc.roundedRect(14, y, pageWidth - 28, 10, 2, 2, "F");
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...GREEN_DARK);
-    doc.text(`${idx + 1}. ${r.studentName || "Unknown"}`, 18, y + 6.5);
+    doc.text(`${idx + 1}. ${r.CandidateName || "Unknown"}`, 18, y + 6.5);
 
     // Score + % on right
     doc.setFont("helvetica", "normal");
@@ -218,7 +218,7 @@ export async function downloadResultsPDF(suite, questions, results) {
     doc.text(`${r.pct}%  (${r.score}/${r.totalMarks} marks)  â€”  ${r.pct >= 50 ? "PASS âœ“" : "FAIL âœ—"}`, pageWidth - 18, y + 6.5, { align: "right" });
     y += 14;
 
-    // Category breakdown mini-table for this student
+    // Category breakdown mini-table for this Candidate
     const catRows = allCats.map(cat => {
       const s = r.catMap[cat] || { correct: 0, total: 0, marks: 0, earned: 0 };
       const p = s.marks > 0 ? Math.round((s.earned / s.marks) * 100) : 0;

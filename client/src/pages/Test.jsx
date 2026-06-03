@@ -104,7 +104,7 @@ function Test() {
       await axios.post(
         "https://mcqtestportal-production.up.railway.app/api/results/add",
         {
-          userName: user.name || "Student",
+          userName: user.name || "Candidate",
           userEmail: user.email || "No Email",
           score: finalScore,
           totalQuestions: questions.length,

@@ -4,10 +4,10 @@ const Result = require("../models/Result");
 
 const Question = require("../models/Question");
 
-// POST /api/results  — students submit a completed test
+// POST /api/results  — Candidates submit a completed test
 router.post("/", async (req, res) => {
   try {
-    const { suiteId, studentName, studentEmail, answers } = req.body;
+    const { suiteId, CandidateName, CandidateEmail, answers } = req.body;
 
     const questions = await Question.find({ testSuite: suiteId });
 
@@ -27,8 +27,8 @@ router.post("/", async (req, res) => {
 
     const result = new Result({
       suiteId,
-      studentName,
-      studentEmail,
+      CandidateName,
+      CandidateEmail,
       answers:        gradedAnswers,
       score,
       totalMarks,
@@ -96,7 +96,7 @@ router.post("/add", async (req, res) => {
   }
 });
 
-// ✅ GET RESULTS BY EMAIL — students see only their own
+// ✅ GET RESULTS BY EMAIL — Candidates see only their own
 router.get("/my/:email", async (req, res) => {
   try {
     const results = await Result.find({
