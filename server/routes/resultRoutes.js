@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const Result = require("../models/Result");
 
-
 // ADD RESULT
 router.post("/add", async (req, res) => {
   try {
@@ -32,8 +31,7 @@ router.post("/add", async (req, res) => {
   }
 });
 
-
-// GET RESULTS BY EMAIL â€” for students (their own results only)
+// ✅ GET RESULTS BY EMAIL — students see only their own
 router.get("/my/:email", async (req, res) => {
   try {
     const results = await Result.find({
@@ -48,24 +46,10 @@ router.get("/my/:email", async (req, res) => {
   }
 });
 
-
-// GET ALL RESULTS â€” for teachers/admin only
+// ✅ GET ALL RESULTS — for admin/teacher
 router.get("/all", async (req, res) => {
   try {
     const results = await Result.find().sort({ createdAt: -1 });
-    res.json(results);
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ message: "Error Fetching Results" });
-  }
-});
-
-// GET RESULTS BY EMAIL — students only see their own
-router.get("/my/:email", async (req, res) => {
-  try {
-    const results = await Result.find({
-      userEmail: req.params.email
-    }).sort({ createdAt: -1 });
     res.json(results);
   } catch (err) {
     console.log(err);

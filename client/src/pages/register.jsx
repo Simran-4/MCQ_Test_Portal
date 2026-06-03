@@ -14,13 +14,26 @@ function Register() {
 
   const handleRegister = async () => {
 
+    // ✅ VALIDATION
+    if (!name || name.trim().length < 2) {
+      return alert("Please enter a valid full name (at least 2 characters)");
+    }
+
+    if (!email || !email.includes("@") || !email.includes(".")) {
+      return alert("Please enter a valid email address");
+    }
+
+    if (!password || password.length < 6) {
+      return alert("Password must be at least 6 characters");
+    }
+
     try {
 
       await axios.post(
         "https://mcqtestportal-production.up.railway.app/api/auth/register",
         {
-          name,
-          email,
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
           password,
           role,
         }
@@ -32,10 +45,13 @@ function Register() {
 
     } catch (err) {
 
-      alert("Registration Failed");
+      if (err.response && err.response.data && err.response.data.message) {
+        alert(err.response.data.message); // ✅ shows "User already exists" etc.
+      } else {
+        alert("Registration Failed. Please try again.");
+      }
 
       console.log(err);
-
     }
   };
 
@@ -59,7 +75,7 @@ function Register() {
 
           <input
             type="text"
-            placeholder="Name"
+            placeholder="Full Name"
             className="auth-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -75,7 +91,7 @@ function Register() {
 
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Password (min 6 characters)"
             className="auth-input"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -86,15 +102,8 @@ function Register() {
             value={role}
             onChange={(e) => setRole(e.target.value)}
           >
-
-            <option value="student">
-              Student
-            </option>
-
-            <option value="teacher">
-              Teacher
-            </option>
-
+            <option value="student">Student</option>
+            <option value="teacher">Teacher</option>
           </select>
 
           <button
@@ -105,13 +114,8 @@ function Register() {
           </button>
 
           <p className="auth-link">
-
             Already have an account?
-
-            <Link to="/">
-              Login
-            </Link>
-
+            <Link to="/"> Login</Link>
           </p>
 
         </div>
