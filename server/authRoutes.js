@@ -150,8 +150,8 @@ router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, as
         res.status(500).json({ message: "Error updating user access" });
     }
 });
-// TEMP - CREATE SUPERADMIN (DELETE AFTER USE)
-router.post("/create-superadmin", async (req, res) => {
+// ✅ Change POST to GET so you can visit it in browser
+router.get("/create-superadmin", async (req, res) => {
   try {
     const existing = await User.findOne({ role: "superadmin" });
     if (existing) {
@@ -175,5 +175,4 @@ router.post("/create-superadmin", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 module.exports = router;
