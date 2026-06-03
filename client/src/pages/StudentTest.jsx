@@ -31,7 +31,6 @@ function pctColor(pct) {
   return "#dc2626";
 }
 
-// Format seconds → MM:SS
 function formatTime(secs) {
   const m = Math.floor(secs / 60).toString().padStart(2, "0");
   const s = (secs % 60).toString().padStart(2, "0");
@@ -52,13 +51,12 @@ export default function CandidateTest() {
   const [error, setError]           = useState("");
   const [activeTab, setActiveTab]   = useState("summary");
 
-  // ── Timer state ──
-  const [timeLeft, setTimeLeft]         = useState(null);   // seconds
-  const [showWarning, setShowWarning]   = useState(false);  // 60-sec warning modal
-  const timerRef                        = useRef(null);
-  const answersRef                      = useRef(answers);  // keep latest answers in ref for auto-submit
+  // ── Timer ──
+  const [timeLeft, setTimeLeft]       = useState(null);
+  const [showWarning, setShowWarning] = useState(false);
+  const timerRef                      = useRef(null);
+  const answersRef                    = useRef(answers);
 
-  // Keep answersRef in sync
   useEffect(() => { answersRef.current = answers; }, [answers]);
 
   const user = (() => {
@@ -71,15 +69,20 @@ export default function CandidateTest() {
       try {
         const token = localStorage.getItem("token");
         const headers = { Authorization: `Bearer ${token}` };
-        const [suiteRes, qRes] = await Promise.all([
+
+        const [suiteRes, qRes, settingsRes] = await Promise.all([
           axios.get(`${API}/api/test-suites/${suiteId}`, { headers }),
           axios.get(`${API}/api/test-suites/${suiteId}/questions`, { headers }),
+          axios.get(`${API}/api/settings`),  // ✅ fetch global settings
         ]);
+
         setSuite(suiteRes.data);
         setQuestions(qRes.data);
-        // Set timer from suite duration (default 30 min)
-        const durationSecs = (suiteRes.data.duration || 30) * 60;
-        setTimeLeft(durationSecs);
+
+        // ✅ Use examDuration from global settings (fallback 30)
+        const durationMins = settingsRes.data?.examDuration || 30;
+        setTimeLeft(durationMins * 60);
+
       } catch (err) {
         console.error("Failed to load test:", err);
         setError("Could not load this test. Please go back and try again.");
@@ -90,7 +93,7 @@ export default function CandidateTest() {
     fetchData();
   }, [suiteId]);
 
-  // ── Start countdown once timeLeft is set and test not submitted ──
+  // ── Countdown ──
   useEffect(() => {
     if (timeLeft === null || submitted) return;
 
@@ -98,18 +101,16 @@ export default function CandidateTest() {
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
-          // Auto-submit with current answers
           autoSubmit();
           return 0;
         }
-        // Show warning at 60 seconds
         if (prev === 61) setShowWarning(true);
         return prev - 1;
       });
     }, 1000);
 
     return () => clearInterval(timerRef.current);
-  }, [timeLeft === null, submitted]); // only re-run when these change
+  }, [timeLeft === null, submitted]);
 
   const autoSubmit = async () => {
     setShowWarning(false);
@@ -296,10 +297,7 @@ export default function CandidateTest() {
             <div style={{ fontSize: "40px", marginBottom: "12px" }}>⏰</div>
             <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#dc2626", margin: "0 0 8px" }}>1 minute left!</h2>
             <p style={{ color: "#666", fontSize: "14px", margin: "0 0 20px" }}>Your test will be automatically submitted when the timer runs out.</p>
-            <button
-              onClick={() => setShowWarning(false)}
-              style={{ padding: "10px 28px", background: GREEN, color: WHITE, border: "none", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
-            >
+            <button onClick={() => setShowWarning(false)} style={{ padding: "10px 28px", background: GREEN, color: WHITE, border: "none", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
               OK, got it
             </button>
           </div>
