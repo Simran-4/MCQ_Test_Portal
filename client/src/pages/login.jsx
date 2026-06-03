@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
-const BG         = "#EEE9E0";
 const WHITE      = "#ffffff";
 
 function Login() {
@@ -24,32 +23,60 @@ function Login() {
       if (res.data.user.role === "admin")           navigate("/dashboard");
       else if (res.data.user.role === "superadmin") navigate("/superadmin");
       else                                          navigate("/test");
-
     } catch (err) {
       alert(err.response?.data?.message || "Login Failed");
-      console.log(err);
     }
   };
 
   const inputStyle = {
-    width: "100%",
-    border: "1px solid #ddd",
-    borderRadius: "10px",
-    padding: "10px 12px",
-    fontSize: "14px",
-    outline: "none",
-    boxSizing: "border-box",
-    fontFamily: "inherit",
-    background: WHITE,
+    width: "100%", border: "1px solid rgba(255,255,255,0.4)", borderRadius: "10px",
+    padding: "10px 12px", fontSize: "14px", outline: "none",
+    boxSizing: "border-box", fontFamily: "inherit",
+    background: "rgba(255,255,255,0.2)", color: WHITE,
+    backdropFilter: "blur(4px)",
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
-      <div style={{ background: WHITE, borderRadius: "20px", padding: "36px 32px", width: "100%", maxWidth: "380px", margin: "0 16px", boxShadow: "0 20px 60px rgba(0,0,0,0.1)" }}>
+   <div style={{
+  minHeight: "100vh",
+  backgroundImage: `url(${import.meta.env.BASE_URL}background.png)`,
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundRepeat: "no-repeat",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontFamily: "'Segoe UI', sans-serif",
+}}>
+      {/* Dark overlay */}
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "rgba(0,0,0,0.35)",
+      }} />
 
-        {/* ── Logo ── */}
+      {/* Card */}
+      <div style={{
+        position: "relative", zIndex: 1,
+        background: "rgba(255,255,255,0.15)",
+        backdropFilter: "blur(18px)",
+        WebkitBackdropFilter: "blur(18px)",
+        border: "1px solid rgba(255,255,255,0.3)",
+        borderRadius: "24px",
+        padding: "40px 36px",
+        width: "100%", maxWidth: "380px",
+        margin: "0 16px",
+        boxShadow: "0 24px 64px rgba(0,0,0,0.3)",
+      }}>
+
+        {/* Logo */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "28px" }}>
-          <div style={{ width: "72px", height: "72px", borderRadius: "50%", background: BG, border: "0.5px solid rgba(0,0,0,0.1)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "12px" }}>
+          <div style={{
+            width: "72px", height: "72px", borderRadius: "50%",
+            background: WHITE,
+            border: "0.5px solid rgba(255,255,255,0.4)",
+            overflow: "hidden", display: "flex", alignItems: "center",
+            justifyContent: "center", marginBottom: "12px",
+          }}>
             <img
               src={`${import.meta.env.BASE_URL}Logo.png`}
               alt="Snehalaya"
@@ -57,33 +84,56 @@ function Login() {
               onError={e => { e.target.style.display = "none"; }}
             />
           </div>
-          <h1 style={{ fontSize: "20px", fontWeight: "700", color: GREEN_DARK, margin: 0 }}>Welcome back</h1>
-          <p style={{ fontSize: "13px", color: "#6B6B5E", margin: "4px 0 0" }}>Sign in to your account</p>
+          <h1 style={{ fontSize: "22px", fontWeight: "700", color: WHITE, margin: 0, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Welcome back</h1>
+          <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.75)", margin: "4px 0 0" }}>Sign in to your account</p>
         </div>
 
-        {/* ── Fields ── */}
+        {/* Fields */}
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <div>
-            <label style={{ fontSize: "12px", color: "#666", display: "block", marginBottom: "5px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Email</label>
-            <input type="email" placeholder="you@example.com" style={inputStyle} value={email} onChange={e => setEmail(e.target.value)} />
+            <label style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)", display: "block", marginBottom: "5px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Email</label>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              style={inputStyle}
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+            />
           </div>
           <div>
-            <label style={{ fontSize: "12px", color: "#666", display: "block", marginBottom: "5px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Password</label>
-            <input type="password" placeholder="••••••••" style={inputStyle} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} />
+            <label style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)", display: "block", marginBottom: "5px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Password</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              style={inputStyle}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleLogin()}
+            />
           </div>
         </div>
 
         <button
           onClick={handleLogin}
-          style={{ width: "100%", marginTop: "20px", padding: "11px", fontSize: "15px", fontWeight: "600", background: GREEN, color: WHITE, border: "none", borderRadius: "22px", cursor: "pointer" }}
+          style={{
+            width: "100%", marginTop: "20px", padding: "12px",
+            fontSize: "15px", fontWeight: "700",
+            background: GREEN, color: WHITE,
+            border: "none", borderRadius: "22px", cursor: "pointer",
+            boxShadow: "0 4px 16px rgba(45,95,63,0.4)",
+          }}
           onMouseEnter={e => e.currentTarget.style.background = GREEN_DARK}
           onMouseLeave={e => e.currentTarget.style.background = GREEN}
         >
           Login
         </button>
 
-        <p style={{ textAlign: "center", fontSize: "13px", color: "#888", marginTop: "16px", cursor: "pointer" }} onClick={() => navigate("/register")}>
-          Don't have an account? <span style={{ color: GREEN, fontWeight: "600" }}>Register</span>
+        <p
+          style={{ textAlign: "center", fontSize: "13px", color: "rgba(255,255,255,0.75)", marginTop: "16px", cursor: "pointer" }}
+          onClick={() => navigate("/register")}
+        >
+          Don't have an account?{" "}
+          <span style={{ color: WHITE, fontWeight: "700", textDecoration: "underline" }}>Register</span>
         </p>
       </div>
     </div>
