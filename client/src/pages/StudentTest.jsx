@@ -347,9 +347,7 @@ export default function CandidateTest() {
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {questions.map((q, idx) => (
               <div key={q._id} style={{ background: WHITE, border: `1px solid ${answers[q._id] !== undefined ? GREEN : "#e5e7eb"}`, borderRadius: "14px", padding: "20px", transition: "border-color 0.2s" }}>
-                {q.category && (
-                  <span style={{ fontSize: "11px", background: "#E8F2EC", color: GREEN, padding: "2px 8px", borderRadius: "999px", fontWeight: "600", display: "inline-block", marginBottom: "8px" }}>{q.category}</span>
-                )}
+                
                 <p style={{ fontSize: "15px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 14px" }}>
                   <span style={{ color: "#aaa", marginRight: "6px" }}>Q{idx + 1}.</span>{q.questionText}
                   <span style={{ fontSize: "11px", color: "#aaa", fontWeight: "400", marginLeft: "8px" }}>({q.marks ?? 1} mark{(q.marks ?? 1) !== 1 ? "s" : ""})</span>
