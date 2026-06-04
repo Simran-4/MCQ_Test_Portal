@@ -37,17 +37,18 @@ function Login() {
   };
 
   return (
-   <div style={{
-  minHeight: "100vh",
-  backgroundImage: `url(${import.meta.env.BASE_URL}background.png)`,
-  backgroundSize: "cover",
-  backgroundPosition: "center",
-  backgroundRepeat: "no-repeat",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontFamily: "'Segoe UI', sans-serif",
-}}>
+    <div style={{
+      minHeight: "100vh",
+      backgroundImage: `url(${import.meta.env.BASE_URL}background.png)`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontFamily: "'Segoe UI', sans-serif",
+      position: "relative",
+    }}>
       {/* Dark overlay */}
       <div style={{
         position: "absolute", inset: 0,
@@ -136,6 +137,22 @@ function Login() {
           <span style={{ color: WHITE, fontWeight: "700", textDecoration: "underline" }}>Register</span>
         </p>
       </div>
+
+      {/* ── Contact footer ── */}
+      <div style={{
+        position: "absolute", bottom: "16px", right: "20px", zIndex: 2,
+        textAlign: "right",
+      }}>
+        <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)", margin: 0, lineHeight: 1.6 }}>
+          For Queries Please Contact — IT Department
+        </p>
+        <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)", margin: 0, lineHeight: 1.6 }}>
+          📞 <a href="tel:9011020190" style={{ color: "rgba(255,255,255,0.9)", textDecoration: "none", fontWeight: "600" }}>9011020190</a>
+          {" · "}
+          <a href="mailto:crm@snehalaya.org" style={{ color: "rgba(255,255,255,0.9)", textDecoration: "none", fontWeight: "600" }}>crm@snehalaya.org</a>
+        </p>
+      </div>
+
     </div>
   );
 }
