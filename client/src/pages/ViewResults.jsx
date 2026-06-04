@@ -3,6 +3,44 @@ import axios from "axios";
 
 const API = "https://mcqtestportal-production.up.railway.app";
 
+const GREEN      = "#2D5F3F";
+const GREEN_DARK = "#1A3D28";
+const BG         = "#f5f1eb";
+const WHITE      = "#ffffff";
+
+// ── Group duplicate categories and sum their marks ──
+function groupCategories(categoryResults) {
+  const map = {};
+  categoryResults.forEach(item => {
+    const key = item.category;
+    if (!map[key]) {
+      map[key] = { category: key, score: 0, total: 0, earnedMarks: 0, totalMarks: 0 };
+    }
+    map[key].score       += item.score       ?? 0;
+    map[key].total       += item.total       ?? 0;
+    map[key].earnedMarks += item.earnedMarks ?? item.score ?? 0;
+    map[key].totalMarks  += item.total       ?? 0;
+  });
+  return Object.values(map).map(item => ({
+    ...item,
+    percentage: item.totalMarks > 0
+      ? Math.round((item.earnedMarks / item.totalMarks) * 100)
+      : 0,
+  }));
+}
+
+function pctColor(pct) {
+  if (pct >= 70) return "#16a34a";
+  if (pct >= 40) return "#d97706";
+  return "#dc2626";
+}
+
+function pctLabel(pct) {
+  if (pct >= 70) return "High";
+  if (pct >= 40) return "Moderate";
+  return "Low";
+}
+
 function ViewResults() {
   const [results, setResults] = useState([]);
   const [user, setUser]       = useState(null);
@@ -27,36 +65,38 @@ function ViewResults() {
     }
   };
 
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
+
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f1eb", padding: "40px" }}>
+    <div style={{ minHeight: "100vh", background: BG, padding: "40px", fontFamily: "'Segoe UI', sans-serif" }}>
 
       <img src="/Logo.png" alt="logo" style={{
         position: "fixed", top: "25px", right: "25px",
         width: "80px", height: "80px", objectFit: "contain",
-        borderRadius: "50%", background: "white", padding: "8px",
+        borderRadius: "50%", background: WHITE, padding: "8px",
         boxShadow: "0 4px 15px rgba(0,0,0,0.12)", zIndex: 100,
       }} />
 
       <div style={{
-        maxWidth: "850px", margin: "auto", background: "white",
+        maxWidth: "850px", margin: "auto", background: WHITE,
         padding: "40px", borderRadius: "25px",
         boxShadow: "0 4px 15px rgba(0,0,0,0.08)",
       }}>
-        <p style={{ color: "#2d5d50", letterSpacing: "2px", fontSize: "13px" }}>
-          YOUR PROFILE
+        <p style={{ color: GREEN, letterSpacing: "2px", fontSize: "13px", fontWeight: "700", textTransform: "uppercase" }}>
+          {isAdmin ? "Admin View" : "Your Profile"}
         </p>
-        <h1 style={{ fontSize: "52px", marginBottom: "8px" }}>
-          Here is what we found
+        <h1 style={{ fontSize: "40px", marginBottom: "8px", color: GREEN_DARK }}>
+          {isAdmin ? "All Candidate Results" : "Here is what we found"}
         </h1>
 
-        {user?.role === "Candidate" && (
-          <p style={{ color: "#888", fontSize: "16px", marginBottom: "30px" }}>
+        {!isAdmin && user && (
+          <p style={{ color: "#888", fontSize: "15px", marginBottom: "30px" }}>
             Results for <strong>{user.name}</strong> ({user.email})
           </p>
         )}
-        {(user?.role === "admin" || user?.role === "superadmin") && (
-          <p style={{ color: "#888", fontSize: "16px", marginBottom: "30px" }}>
-            Showing all Candidate results
+        {isAdmin && (
+          <p style={{ color: "#888", fontSize: "15px", marginBottom: "30px" }}>
+            Showing all candidate results · {results.length} submission{results.length !== 1 ? "s" : ""}
           </p>
         )}
 
@@ -65,10 +105,15 @@ function ViewResults() {
         ) : (
           results.map((result, index) => {
 
-            // Support both new categoryResults and legacy formats
-            const categories = result.categoryResults && result.categoryResults.length > 0
-              ? result.categoryResults
-              : [];
+            // ── Group & deduplicate categories ──
+            const raw        = result.categoryResults && result.categoryResults.length > 0 ? result.categoryResults : [];
+            const categories = groupCategories(raw);
+
+            // ── Correct total marks ──
+            const totalMarks = result.totalMarks || result.totalQuestions || 0;
+            const score      = result.score ?? 0;
+            const pct        = totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
+            const passed     = pct >= 50;
 
             return (
               <div key={index} style={{
@@ -77,82 +122,80 @@ function ViewResults() {
                 paddingBottom: "40px",
               }}>
 
-                {/* Admin view */}
-                {(user?.role === "admin" || user?.role === "superadmin") && (
-                  <div style={{ marginBottom: "20px" }}>
-                    <h3 style={{ fontSize: "22px", color: "#333", margin: 0 }}>
-                      {result.CandidateName || result.userName}
-                    </h3>
-                    <p style={{ color: "#888", fontSize: "15px", marginTop: "4px" }}>
-                      {result.CandidateEmail || result.userEmail}
-                      &nbsp;|&nbsp;
-                      Score: {result.score} / {result.totalMarks || result.totalQuestions}
-                    </p>
+                {/* ── Admin candidate header ── */}
+                {isAdmin && (
+                  <div style={{ background: BG, borderRadius: "14px", padding: "16px 20px", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+                    <div>
+                      <h3 style={{ fontSize: "18px", color: GREEN_DARK, margin: "0 0 3px" }}>
+                        {result.CandidateName || result.userName}
+                      </h3>
+                      <p style={{ color: "#888", fontSize: "13px", margin: 0 }}>
+                        {result.CandidateEmail || result.userEmail}
+                      </p>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: "22px", fontWeight: "800", color: pctColor(pct) }}>{pct}%</div>
+                      <div style={{ fontSize: "12px", color: "#aaa" }}>{score} / {totalMarks} marks</div>
+                      <span style={{
+                        fontSize: "11px", padding: "3px 10px", borderRadius: "999px", fontWeight: "700",
+                        background: passed ? "#dcfce7" : "#fee2e2",
+                        color: passed ? "#166534" : "#dc2626",
+                      }}>{passed ? "PASS" : "FAIL"}</span>
+                    </div>
                   </div>
                 )}
 
-                {/* Candidate overall score */}
-                {user?.role === "Candidate" && (
+                {/* ── Candidate overall score ── */}
+                {!isAdmin && (
                   <div style={{
                     display: "inline-block", background: "#f0faf5",
-                    border: "2px solid #2d5d50", borderRadius: "16px",
+                    border: `2px solid ${GREEN}`, borderRadius: "16px",
                     padding: "10px 24px", marginBottom: "28px",
-                    color: "#2d5d50", fontWeight: "700", fontSize: "16px",
+                    color: GREEN_DARK, fontWeight: "700", fontSize: "16px",
                   }}>
-                    Overall Score: {result.score} / {result.totalMarks || result.totalQuestions}
+                    Overall Score: {score} / {totalMarks} &nbsp;·&nbsp; {pct}%
+                    &nbsp;·&nbsp;
+                    <span style={{ color: passed ? "#16a34a" : "#dc2626" }}>{passed ? "PASS" : "FAIL"}</span>
                   </div>
                 )}
 
-                {/* Category breakdown */}
+                {/* ── Category breakdown ── */}
                 {categories.length > 0 ? (
-                  categories.map((item, i) => {
-                    const percentage = item.percentage;
-                    const level = percentage >= 70 ? "High" : percentage >= 40 ? "Moderate" : "Low";
-                    const levelColor = level === "High" ? "#16a34a" : level === "Moderate" ? "#d97706" : "#dc2626";
+                  <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
+                    {categories.map((item, i) => {
+                      const level = pctLabel(item.percentage);
+                      const color = pctColor(item.percentage);
+                      return (
+                        <div key={i}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h2 style={{ fontSize: "22px", margin: 0, color: "#111", fontWeight: "700" }}>{item.category}</h2>
+                            <span style={{ fontSize: "18px", fontWeight: "800", color }}>{item.percentage}%</span>
+                          </div>
 
-                    return (
-                      <div key={i} style={{ marginBottom: "40px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <h2 style={{ fontSize: "34px", margin: 0, color: "#111" }}>{item.category}</h2>
-                          <h3 style={{ color: "#777", margin: 0 }}>{percentage}%</h3>
+                          <div style={{ width: "100%", height: "8px", background: "#e5e5e0", borderRadius: "10px", overflow: "hidden", marginTop: "10px" }}>
+                            <div style={{ width: `${item.percentage}%`, height: "100%", background: color, borderRadius: "10px", transition: "width 0.5s ease" }} />
+                          </div>
+
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px" }}>
+                            <span style={{ background: "#eee5d0", padding: "4px 14px", borderRadius: "20px", fontWeight: "700", fontSize: "13px", color }}>{level}</span>
+                            <span style={{ color: "#999", fontSize: "13px" }}>
+                              {item.earnedMarks} / {item.totalMarks} marks &nbsp;·&nbsp; {item.score}/{item.total} correct
+                            </span>
+                          </div>
+
+                          <p style={{ marginTop: "10px", color: "#666", lineHeight: "1.7", fontSize: "14px" }}>
+                            {level === "High"
+                              ? `Excellent performance in ${item.category}. Keep it up!`
+                              : level === "Moderate"
+                              ? `Average performance in ${item.category}. There is room to improve.`
+                              : `Needs improvement in ${item.category}. Focus on this area.`}
+                          </p>
                         </div>
-
-                        <div style={{
-                          width: "100%", height: "10px", background: "#ddd",
-                          borderRadius: "10px", overflow: "hidden", marginTop: "12px"
-                        }}>
-                          <div style={{
-                            width: `${percentage}%`, height: "100%",
-                            background: "#2d5d50", borderRadius: "10px",
-                            transition: "width 0.5s ease",
-                          }} />
-                        </div>
-
-                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "14px" }}>
-                          <span style={{
-                            background: "#eee5d0", padding: "6px 16px",
-                            borderRadius: "20px", fontWeight: "700",
-                            fontSize: "14px", color: levelColor,
-                          }}>{level}</span>
-                          <span style={{ color: "#666", fontSize: "14px" }}>
-                            Raw Score: {item.score}/{item.total}
-                          </span>
-                        </div>
-
-                        <p style={{ marginTop: "16px", color: "#666", lineHeight: "1.7", fontSize: "15px" }}>
-                          {level === "High"
-                            ? `Excellent performance in ${item.category}. Keep it up!`
-                            : level === "Moderate"
-                            ? `Average performance in ${item.category}. There is room to improve.`
-                            : `Needs improvement in ${item.category}. Focus on this area.`}
-                        </p>
-                      </div>
-                    );
-                  })
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <p style={{ color: "#aaa", fontStyle: "italic" }}>
-                    No category breakdown available for this result.
-                  </p>
+                  <p style={{ color: "#aaa", fontStyle: "italic" }}>No category breakdown available for this result.</p>
                 )}
 
               </div>
