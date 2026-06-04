@@ -10,17 +10,28 @@ const GREEN_DARK = "#1A3D28";
 const BG         = "#EEE9E0";
 const WHITE      = "#ffffff";
 
+// ── Scoring helpers ──
+function scoreQuestion(q, selectedArr) {
+  const correctArr   = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
+  const totalCorrect = correctArr.length;
+  const hits         = selectedArr.filter(i => correctArr.includes(i)).length;
+  const wrongs       = selectedArr.filter(i => !correctArr.includes(i)).length;
+  const earnedFrac   = Math.max(0, (hits - wrongs) / totalCorrect);
+  return { earnedFrac, isRight: earnedFrac === 1, correctArr };
+}
+
 function buildCategoryStats(questions, answers) {
   const cats = {};
   questions.forEach(q => {
     const cat = q.category || "Uncategorized";
     if (!cats[cat]) cats[cat] = { total: 0, correct: 0, marks: 0, earnedMarks: 0 };
-    const marks    = q.marks ?? 1;
-    const selected = answers[q._id] ?? -1;
-    const isRight  = selected === q.correctAnswer;
-    cats[cat].total   += 1;
-    cats[cat].marks   += marks;
-    if (isRight) { cats[cat].correct += 1; cats[cat].earnedMarks += marks; }
+    const marks       = q.marks ?? 1;
+    const selectedArr = Array.isArray(answers[q._id]) ? answers[q._id] : [];
+    const { earnedFrac, isRight } = scoreQuestion(q, selectedArr);
+    cats[cat].total      += 1;
+    cats[cat].marks      += marks;
+    cats[cat].earnedMarks += earnedFrac * marks;
+    if (isRight) cats[cat].correct += 1;
   });
   return cats;
 }
@@ -73,13 +84,12 @@ export default function CandidateTest() {
         const [suiteRes, qRes, settingsRes] = await Promise.all([
           axios.get(`${API}/api/test-suites/${suiteId}`, { headers }),
           axios.get(`${API}/api/test-suites/${suiteId}/questions`, { headers }),
-          axios.get(`${API}/api/settings`),  // ✅ fetch global settings
+          axios.get(`${API}/api/settings`),
         ]);
 
         setSuite(suiteRes.data);
         setQuestions(qRes.data);
 
-        // ✅ Use examDuration from global settings (fallback 30)
         const durationMins = settingsRes.data?.examDuration || 30;
         setTimeLeft(durationMins * 60);
 
@@ -124,7 +134,7 @@ export default function CandidateTest() {
         CandidateEmail: user.email || "",
         answers: questions.map(q => ({
           questionId:     q._id,
-          selectedOption: currentAnswers[q._id] ?? -1,
+          selectedOptions: currentAnswers[q._id] ?? [],
         })),
       };
       const res = await axios.post(`${API}/api/results`, payload, {
@@ -140,13 +150,26 @@ export default function CandidateTest() {
     }
   };
 
+  // ── CHANGED: toggle multi-select ──
   const handleSelect = (questionId, optionIndex) => {
     if (submitted) return;
-    setAnswers(prev => ({ ...prev, [questionId]: optionIndex }));
+    setAnswers(prev => {
+      const current = Array.isArray(prev[questionId]) ? prev[questionId] : [];
+      const already = current.includes(optionIndex);
+      const updated  = already
+        ? current.filter(i => i !== optionIndex)
+        : [...current, optionIndex];
+      if (updated.length === 0) {
+        const copy = { ...prev };
+        delete copy[questionId];
+        return copy;
+      }
+      return { ...prev, [questionId]: updated };
+    });
   };
 
   const handleSubmit = async () => {
-    const unanswered = questions.filter(q => answers[q._id] === undefined);
+    const unanswered = questions.filter(q => !answers[q._id] || answers[q._id].length === 0);
     if (unanswered.length > 0) {
       if (!window.confirm(`You have ${unanswered.length} unanswered question(s). Submit anyway?`)) return;
     }
@@ -160,7 +183,7 @@ export default function CandidateTest() {
         CandidateEmail: user.email || "",
         answers: questions.map(q => ({
           questionId:     q._id,
-          selectedOption: answers[q._id] ?? -1,
+          selectedOptions: answers[q._id] ?? [],
         })),
       };
       const res = await axios.post(`${API}/api/results`, payload, {
@@ -231,7 +254,7 @@ export default function CandidateTest() {
                         <div style={{ height: "8px", background: "#f0f0ea", borderRadius: "999px", overflow: "hidden" }}>
                           <div style={{ height: "100%", width: `${catPct}%`, background: color, borderRadius: "999px", transition: "width 0.6s ease" }} />
                         </div>
-                        <div style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>{stats.earnedMarks} / {stats.marks} marks</div>
+                        <div style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>{Math.round(stats.earnedMarks * 10) / 10} / {stats.marks} marks</div>
                       </div>
                     );
                   })}
@@ -245,16 +268,36 @@ export default function CandidateTest() {
               <p style={{ fontSize: "11px", fontWeight: "700", color: "#8A8A7E", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 14px" }}>Question Review</p>
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {questions.map((q, i) => {
-                  const selected = answers[q._id] ?? -1;
-                  const isRight  = selected === q.correctAnswer;
+                  // ── CHANGED: multi-select review scoring ──
+                  const selectedArr              = Array.isArray(answers[q._id]) ? answers[q._id] : [];
+                  const { earnedFrac, isRight, correctArr } = scoreQuestion(q, selectedArr);
+                  const partialCredit            = !isRight && earnedFrac > 0;
+                  const bgColor  = isRight ? "#f0fdf4" : partialCredit ? "#fffbeb" : "#fff5f5";
+                  const bdColor  = isRight ? "#bbf7d0" : partialCredit ? "#fde68a" : "#fecaca";
+
                   return (
-                    <div key={q._id} style={{ background: isRight ? "#f0fdf4" : "#fff5f5", border: `1px solid ${isRight ? "#bbf7d0" : "#fecaca"}`, borderRadius: "12px", padding: "12px 16px" }}>
-                      <p style={{ fontSize: "13px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 6px" }}>{isRight ? "✅" : "❌"} Q{i + 1}. {q.questionText}</p>
-                      {q.category && <span style={{ fontSize: "11px", background: "#E8F2EC", color: GREEN, padding: "2px 8px", borderRadius: "999px", fontWeight: "600", display: "inline-block", marginBottom: "6px" }}>{q.category}</span>}
-                      {!isRight && selected !== -1 && <p style={{ fontSize: "12px", color: "#dc2626", margin: "0 0 2px" }}>Your answer: {q.options[selected]}</p>}
-                      {!isRight && selected === -1 && <p style={{ fontSize: "12px", color: "#f59e0b", margin: "0 0 2px" }}>Not answered</p>}
-                      <p style={{ fontSize: "12px", color: "#166534", margin: 0 }}>✓ Correct: {q.options[q.correctAnswer]}</p>
-                      {q.explanation && <p style={{ fontSize: "12px", color: "#555", margin: "6px 0 0", fontStyle: "italic", borderTop: "1px solid rgba(0,0,0,0.06)", paddingTop: "6px" }}>💡 {q.explanation}</p>}
+                    <div key={q._id} style={{ background: bgColor, border: `1px solid ${bdColor}`, borderRadius: "12px", padding: "12px 16px" }}>
+                      <p style={{ fontSize: "13px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 6px" }}>
+                        {isRight ? "✅" : partialCredit ? "🟡" : "❌"} Q{i + 1}. {q.questionText}
+                      </p>
+                      {q.category && (
+                        <span style={{ fontSize: "11px", background: "#E8F2EC", color: GREEN, padding: "2px 8px", borderRadius: "999px", fontWeight: "600", display: "inline-block", marginBottom: "6px" }}>{q.category}</span>
+                      )}
+                      {selectedArr.length > 0 && !isRight && (
+                        <p style={{ fontSize: "12px", color: partialCredit ? "#92400e" : "#dc2626", margin: "0 0 2px" }}>
+                          Your answer: {selectedArr.map(i => q.options[i]).join(", ")}
+                          {partialCredit && <span style={{ marginLeft: "6px", fontWeight: "600" }}>(partial credit)</span>}
+                        </p>
+                      )}
+                      {selectedArr.length === 0 && (
+                        <p style={{ fontSize: "12px", color: "#f59e0b", margin: "0 0 2px" }}>Not answered</p>
+                      )}
+                      <p style={{ fontSize: "12px", color: "#166534", margin: 0 }}>
+                        ✓ Correct: {correctArr.map(i => q.options[i]).join(", ")}
+                      </p>
+                      {q.explanation && (
+                        <p style={{ fontSize: "12px", color: "#555", margin: "6px 0 0", fontStyle: "italic", borderTop: "1px solid rgba(0,0,0,0.06)", paddingTop: "6px" }}>💡 {q.explanation}</p>
+                      )}
                     </div>
                   );
                 })}
@@ -284,7 +327,8 @@ export default function CandidateTest() {
     </div>
   );
 
-  const answeredCount = Object.keys(answers).length;
+  // ── CHANGED: count questions with at least one selection ──
+  const answeredCount = Object.values(answers).filter(a => Array.isArray(a) && a.length > 0).length;
   const isLowTime     = timeLeft !== null && timeLeft <= 60;
 
   return (
@@ -345,26 +389,38 @@ export default function CandidateTest() {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            {questions.map((q, idx) => (
-              <div key={q._id} style={{ background: WHITE, border: `1px solid ${answers[q._id] !== undefined ? GREEN : "#e5e7eb"}`, borderRadius: "14px", padding: "20px", transition: "border-color 0.2s" }}>
-                
-                <p style={{ fontSize: "15px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 14px" }}>
-                  <span style={{ color: "#aaa", marginRight: "6px" }}>Q{idx + 1}.</span>{q.questionText}
-                  <span style={{ fontSize: "11px", color: "#aaa", fontWeight: "400", marginLeft: "8px" }}>({q.marks ?? 1} mark{(q.marks ?? 1) !== 1 ? "s" : ""})</span>
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {q.options.map((opt, i) => {
-                    const selected = answers[q._id] === i;
-                    return (
-                      <button key={i} onClick={() => handleSelect(q._id, i)} style={{ textAlign: "left", padding: "10px 14px", borderRadius: "10px", fontSize: "14px", cursor: "pointer", fontFamily: "inherit", border: selected ? `2px solid ${GREEN}` : "1px solid #e5e7eb", background: selected ? "#E8F2EC" : WHITE, color: selected ? GREEN_DARK : "#333", fontWeight: selected ? "600" : "400", transition: "all 0.15s" }}>
-                        <span style={{ marginRight: "8px", color: selected ? GREEN : "#aaa", fontWeight: "700" }}>{String.fromCharCode(65 + i)}.</span>
-                        {opt}
-                      </button>
-                    );
-                  })}
+            {questions.map((q, idx) => {
+              const selectedArr = Array.isArray(answers[q._id]) ? answers[q._id] : [];
+              const isAnswered  = selectedArr.length > 0;
+              return (
+                <div key={q._id} style={{ background: WHITE, border: `1px solid ${isAnswered ? GREEN : "#e5e7eb"}`, borderRadius: "14px", padding: "20px", transition: "border-color 0.2s" }}>
+                  <p style={{ fontSize: "15px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 6px" }}>
+                    <span style={{ color: "#aaa", marginRight: "6px" }}>Q{idx + 1}.</span>{q.questionText}
+                    <span style={{ fontSize: "11px", color: "#aaa", fontWeight: "400", marginLeft: "8px" }}>({q.marks ?? 1} mark{(q.marks ?? 1) !== 1 ? "s" : ""})</span>
+                  </p>
+                  {/* ── "select all that apply" hint ── */}
+                  <p style={{ fontSize: "11px", color: "#a0a0a0", margin: "0 0 12px", fontStyle: "italic" }}>Select all that apply</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {q.options.map((opt, i) => {
+                      // ── CHANGED: check array for selection ──
+                      const selected = selectedArr.includes(i);
+                      return (
+                        <button key={i} onClick={() => handleSelect(q._id, i)} style={{ textAlign: "left", padding: "10px 14px", borderRadius: "10px", fontSize: "14px", cursor: "pointer", fontFamily: "inherit", border: selected ? `2px solid ${GREEN}` : "1px solid #e5e7eb", background: selected ? "#E8F2EC" : WHITE, color: selected ? GREEN_DARK : "#333", fontWeight: selected ? "600" : "400", transition: "all 0.15s", display: "flex", alignItems: "center", gap: "10px" }}>
+                          {/* ── checkbox indicator ── */}
+                          <span style={{ width: "18px", height: "18px", borderRadius: "4px", border: `2px solid ${selected ? GREEN : "#ccc"}`, background: selected ? GREEN : WHITE, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                            {selected && <span style={{ color: WHITE, fontSize: "12px", fontWeight: "700", lineHeight: 1 }}>✓</span>}
+                          </span>
+                          <span>
+                            <span style={{ marginRight: "6px", color: selected ? GREEN : "#aaa", fontWeight: "700" }}>{String.fromCharCode(65 + i)}.</span>
+                            {opt}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
