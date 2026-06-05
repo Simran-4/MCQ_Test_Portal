@@ -69,10 +69,9 @@ app.get("/api/protected", authMiddleware, (req, res) => {
   res.json({ message: "Protected Route Accessed", user: req.user });
 });
 
-// ── Start ─────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
+// ── Start (disabled for Vercel serverless) ────────────────────
+// const PORT = process.env.PORT || 3000;
+// app.listen(PORT, () => {
+//   console.log(`Server running on port ${PORT}`);
+// });
 module.exports = app;
