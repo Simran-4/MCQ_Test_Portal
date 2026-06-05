@@ -7,6 +7,8 @@ const authMiddleware = require("./middleware/authMiddleware");
 const questionRoutes = require("./routes/questionsR");
 const resultRoutes = require("./routes/resultRoutes");
 const testSuitesRouter = require("./routes/testSuites");
+const questionsRoutes = require("./routes/questionsRoutes");
+app.use("/api", questionsRoutes);
 
 require("dotenv").config();
 
