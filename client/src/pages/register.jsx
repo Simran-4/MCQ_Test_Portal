@@ -20,7 +20,7 @@ function Register() {
 
     try {
       await axios.post(
-        "https://mcq-test-portal-lonw.vercel.app/api/auth/register",
+        "https://mcq-backend-zeta.vercel.app/api/auth/register",
         { name: name.trim(), email: email.trim().toLowerCase(), password, role }
       );
       alert("Registration Successful");

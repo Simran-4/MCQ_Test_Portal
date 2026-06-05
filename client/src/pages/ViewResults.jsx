@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-const API = "https://mcq-test-portal-lonw.vercel.app";
+const API = "https://mcq-backend-zeta.vercel.app";
 
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";

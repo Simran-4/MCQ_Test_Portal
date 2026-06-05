@@ -14,7 +14,7 @@ function Login() {
   const handleLogin = async () => {
     try {
       const res = await axios.post(
-        "https://mcq-test-portal-lonw.vercel.app/api/auth/login",
+        "https://mcq-test-portal-xvyk.vercel.app/api/auth/login",
         { email, password }
       );
       localStorage.setItem("token", res.data.token);
@@ -138,7 +138,7 @@ function Login() {
         </p>
       </div>
 
-      {/* ── Contact footer ── */}
+      {/* Contact footer */}
       <div style={{
         position: "absolute", bottom: "16px", right: "20px", zIndex: 2,
         textAlign: "right",

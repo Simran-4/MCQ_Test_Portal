@@ -1,5 +1,5 @@
 // src/pages/TestSuiteDetail.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -13,10 +13,10 @@ const WHITE      = "#ffffff";
 const emptyForm = {
   questionText:   "",
   options:        ["", "", "", ""],
-  correctAnswers: [],   // ✅ array of indices
+  correctAnswers: [],
   explanation:    "",
   marks:          1,
-  categories:     [],   // ✅ array of category strings
+  categories:     [],
 };
 
 export default function TestSuiteDetail() {
@@ -35,13 +35,17 @@ export default function TestSuiteDetail() {
   const [durationVal, setDurationVal]   = useState(30);
   const [savingDur, setSavingDur]       = useState(false);
 
-  const [categories, setCategories]         = useState(() => {
+  const [categories, setCategories] = useState(() => {
     try { return JSON.parse(localStorage.getItem(`cats_${suiteId}`)) || []; }
     catch { return []; }
   });
   const [showCatManager, setShowCatManager] = useState(false);
   const [newCatInput, setNewCatInput]       = useState("");
   const [catError, setCatError]             = useState("");
+
+  // Import
+  const fileInputRef = useRef(null);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(`cats_${suiteId}`, JSON.stringify(categories));
@@ -66,6 +70,29 @@ export default function TestSuiteDetail() {
       console.error("Failed to fetch suite data:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleImportClick = () => fileInputRef.current?.click();
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("file", file);
+      await axios.post(`${API}/api/test-suites/${suiteId}/import`, formData, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" },
+      });
+      await fetchData();
+      alert("Questions imported successfully!");
+    } catch (err) {
+      alert(err.response?.data?.message || "Import failed");
+    } finally {
+      setImporting(false);
+      e.target.value = "";
     }
   };
 
@@ -101,7 +128,6 @@ export default function TestSuiteDetail() {
     setForm(f => ({ ...f, categories: f.categories.filter(c => c !== cat) }));
   };
 
-  // ── Toggle category on question form ──
   const toggleCategory = (cat) => {
     setForm(f => ({
       ...f,
@@ -111,7 +137,6 @@ export default function TestSuiteDetail() {
     }));
   };
 
-  // ── Toggle correct answer checkbox ──
   const toggleCorrectAnswer = (index) => {
     setForm(f => ({
       ...f,
@@ -153,8 +178,6 @@ export default function TestSuiteDetail() {
     if (form.categories.length === 0) { setError("Please select at least one category"); return; }
 
     const trimmedOptions = form.options.map(o => o.trim()).filter(Boolean);
-
-    // Remap correctAnswers indices after filtering empty options
     const oldToNew = {};
     let newIdx = 0;
     form.options.forEach((opt, oldIdx) => {
@@ -167,10 +190,10 @@ export default function TestSuiteDetail() {
     const payload = {
       questionText:  form.questionText.trim(),
       options:       trimmedOptions,
-      correctAnswer: remappedCorrect,   // backend field name kept same
+      correctAnswer: remappedCorrect,
       explanation:   form.explanation,
       marks:         form.marks,
-      category:      form.categories,   // backend field name kept same
+      category:      form.categories,
     };
 
     setSaving(true);
@@ -234,7 +257,6 @@ export default function TestSuiteDetail() {
     fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em",
   };
 
-  // Group by first category or Uncategorized
   const grouped = questions.reduce((acc, q) => {
     const cats = Array.isArray(q.category) && q.category.length > 0 ? q.category : ["Uncategorized"];
     const key = cats[0];
@@ -248,6 +270,9 @@ export default function TestSuiteDetail() {
 
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "'Segoe UI', sans-serif" }}>
+
+      {/* Hidden file input for import */}
+      <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={handleFileChange} />
 
       {/* ── Top bar ── */}
       <div style={{ padding: "16px 28px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -278,6 +303,10 @@ export default function TestSuiteDetail() {
           <button onClick={() => { setEditingQ(null); setForm(emptyForm); setError(""); setShowForm(s => !s); }}
             style={{ padding: "10px 20px", background: showForm && !editingQ ? "#555" : GREEN, color: WHITE, border: "none", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
             {showForm && !editingQ ? "Cancel" : "+ Add question"}
+          </button>
+          <button onClick={handleImportClick} disabled={importing}
+            style={{ padding: "10px 20px", background: WHITE, color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: importing ? 0.6 : 1 }}>
+            {importing ? "Importing…" : "⬆️ Import Questions"}
           </button>
           <button onClick={() => setShowCatManager(s => !s)}
             style={{ padding: "10px 20px", background: WHITE, color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
@@ -343,15 +372,12 @@ export default function TestSuiteDetail() {
             {error && <p style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>{error}</p>}
 
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-
-              {/* Question text */}
               <div>
                 <label style={labelStyle}>Question *</label>
                 <textarea rows={3} style={{ ...inputStyle, resize: "vertical" }} placeholder="Enter the question text here…"
                   value={form.questionText} onChange={e => setForm({ ...form, questionText: e.target.value })} />
               </div>
 
-              {/* ── Multi-category picker ── */}
               <div>
                 <label style={labelStyle}>Categories * (select all that apply)</label>
                 {categories.length === 0 ? (
@@ -385,7 +411,6 @@ export default function TestSuiteDetail() {
                 )}
               </div>
 
-              {/* ── Options with multi-correct checkboxes ── */}
               <div>
                 <label style={labelStyle}>Options * — check all correct answers</label>
                 <div style={{ fontSize: "12px", color: "#888", marginBottom: "10px" }}>
@@ -396,27 +421,11 @@ export default function TestSuiteDetail() {
                     const isCorrect = form.correctAnswers.includes(i);
                     return (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        {/* ── Checkbox for correct answer ── */}
-                        <input
-                          type="checkbox"
-                          checked={isCorrect}
-                          onChange={() => toggleCorrectAnswer(i)}
-                          disabled={!opt.trim()}
-                          style={{ accentColor: GREEN, width: "16px", height: "16px", flexShrink: 0, cursor: opt.trim() ? "pointer" : "not-allowed" }}
-                        />
-                        <input
-                          style={{
-                            ...inputStyle, flex: 1, width: "auto",
-                            border: isCorrect ? `2px solid ${GREEN}` : "1px solid #ddd",
-                            background: isCorrect ? "#f0faf5" : WHITE,
-                          }}
-                          placeholder={`Option ${i + 1}${i >= 2 ? " (optional)" : ""}`}
-                          value={opt}
-                          onChange={e => handleOptionChange(i, e.target.value)}
-                        />
-                        {isCorrect && (
-                          <span style={{ fontSize: "12px", color: GREEN, fontWeight: "600", whiteSpace: "nowrap", minWidth: "60px" }}>✓ Correct</span>
-                        )}
+                        <input type="checkbox" checked={isCorrect} onChange={() => toggleCorrectAnswer(i)} disabled={!opt.trim()}
+                          style={{ accentColor: GREEN, width: "16px", height: "16px", flexShrink: 0, cursor: opt.trim() ? "pointer" : "not-allowed" }} />
+                        <input style={{ ...inputStyle, flex: 1, width: "auto", border: isCorrect ? `2px solid ${GREEN}` : "1px solid #ddd", background: isCorrect ? "#f0faf5" : WHITE }}
+                          placeholder={`Option ${i + 1}${i >= 2 ? " (optional)" : ""}`} value={opt} onChange={e => handleOptionChange(i, e.target.value)} />
+                        {isCorrect && <span style={{ fontSize: "12px", color: GREEN, fontWeight: "600", whiteSpace: "nowrap", minWidth: "60px" }}>✓ Correct</span>}
                         {form.options.length > 2 && (
                           <button onClick={() => removeOption(i)} style={{ background: "none", border: "none", color: "#dc2626", fontSize: "20px", cursor: "pointer", padding: "0 4px", flexShrink: 0, lineHeight: 1 }}>×</button>
                         )}
@@ -436,7 +445,6 @@ export default function TestSuiteDetail() {
                 )}
               </div>
 
-              {/* Explanation + Marks */}
               <div style={{ display: "flex", gap: "12px" }}>
                 <div style={{ flex: 1 }}>
                   <label style={labelStyle}>Explanation (optional)</label>
@@ -486,7 +494,6 @@ export default function TestSuiteDetail() {
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
                           <div style={{ flex: 1 }}>
-                            {/* Category chips */}
                             {catArr.length > 0 && (
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "8px" }}>
                                 {catArr.map(c => (

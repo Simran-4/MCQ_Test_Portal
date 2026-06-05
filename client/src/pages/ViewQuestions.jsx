@@ -14,7 +14,7 @@ function ViewQuestions() {
   const fetchQuestions = async () => {
     try {
       const res = await axios.get(
-        "https://mcq-test-portal-lonw.vercel.app/api/questions/all"
+        "https://mcq-backend-zeta.vercel.app/api/questions/all"
       );
       setQuestions(res.data);
     } catch (err) {
@@ -26,7 +26,7 @@ function ViewQuestions() {
     if (!window.confirm("Delete this question?")) return;
     try {
       await axios.delete(
-        `https://mcq-test-portal-lonw.vercel.app/api/questions/${id}`
+        `https://mcq-backend-zeta.vercel.app/api/questions/${id}`
       );
       setQuestions(questions.filter(q => q._id !== id));
     } catch (err) {
