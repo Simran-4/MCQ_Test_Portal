@@ -9,7 +9,7 @@ const app = express();  // ✅ app defined FIRST
 app.use(cors({
   origin: function(origin, callback) {
     // Allow all vercel.app previews, localhost, and no-origin (mobile/Postman)
-    if (!origin || origin.includes("vercel.app") || origin.includes("localhost")) {
+    if (!origin || origin.includes("vercel.app") || origin.includes("localhost") || origin.includes("web.app")) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -29,7 +29,7 @@ const questionRoutes   = require("./routes/questionsR");
 const resultRoutes     = require("./routes/resultRoutes");
 const settingsRoutes   = require("./routes/settings");
 const testSuitesRouter = require("./routes/testSuites");
-const questionsRoutes  = require("./routes/questionsRoutes");
+const questionsRoutes  = require("./routes/questionsR");
 
 app.use("/api/auth",        authRoutes);
 app.use("/api/questions",   questionRoutes);

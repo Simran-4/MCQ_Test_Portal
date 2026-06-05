@@ -14,7 +14,7 @@ function Login() {
   const handleLogin = async () => {
     try {
       const res = await axios.post(
-        "https://mcqtestportal-production.up.railway.app/api/auth/login",
+        "https://mcq-test-portal-lonw.vercel.app/api/auth/login",
         { email, password }
       );
       localStorage.setItem("token", res.data.token);

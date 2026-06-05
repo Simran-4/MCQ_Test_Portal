@@ -20,7 +20,7 @@ function Register() {
 
     try {
       await axios.post(
-        "https://mcqtestportal-production.up.railway.app/api/auth/register",
+        "https://mcq-test-portal-lonw.vercel.app/api/auth/register",
         { name: name.trim(), email: email.trim().toLowerCase(), password, role }
       );
       alert("Registration Successful");

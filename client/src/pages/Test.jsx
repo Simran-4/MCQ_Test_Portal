@@ -37,7 +37,7 @@ function Test() {
   const fetchSettings = async () => {
     try {
       const res = await axios.get(
-        "https://mcqtestportal-production.up.railway.app/api/settings"
+        "https://mcq-test-portal-lonw.vercel.app/api/settings"
       );
       if (res.data && res.data.examDuration) {
         setTimeLeft(parseInt(res.data.examDuration) * 60);
@@ -50,7 +50,7 @@ function Test() {
   const fetchQuestions = async () => {
     try {
       const res = await axios.get(
-        "https://mcqtestportal-production.up.railway.app/api/questions/all"
+        "https://mcq-test-portal-lonw.vercel.app/api/questions/all"
       );
       const fetchedQuestions = res.data;
       setQuestions(fetchedQuestions);
@@ -118,7 +118,7 @@ function Test() {
       const user = JSON.parse(localStorage.getItem("user")) || {};
 
       await axios.post(
-        "https://mcqtestportal-production.up.railway.app/api/results/add",
+        "https://mcq-test-portal-lonw.vercel.app/api/results/add",
         {
           userName:       user.name  || "Candidate",
           userEmail:      user.email || "No Email",
