@@ -7,19 +7,18 @@ function Test() {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(null); // ✅ null = not loaded yet
-  const timerStarted = useRef(false); // ✅ prevents multiple timers
+  const [timeLeft, setTimeLeft] = useState(null);
+  const timerStarted = useRef(false);
 
   useEffect(() => {
     fetchQuestions();
     fetchSettings();
   }, []);
 
-  // ✅ FIXED: Timer only starts ONCE when both questions and timeLeft are ready
   useEffect(() => {
     if (questions.length === 0 || timeLeft === null || timerStarted.current) return;
 
-    timerStarted.current = true; // ✅ mark timer as started
+    timerStarted.current = true;
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -35,7 +34,6 @@ function Test() {
     return () => clearInterval(timer);
   }, [questions, timeLeft]);
 
-  // ✅ FIXED: parseInt to ensure number not string
   const fetchSettings = async () => {
     try {
       const res = await axios.get(
@@ -71,32 +69,50 @@ function Test() {
   const handleSubmit = async () => {
     try {
       let finalScore = 0;
+      let totalMarksCount = 0;
       const categoryMap = {};
 
       questions.forEach((q, index) => {
-        const category = q.category || "General";
+        // ✅ Support both single-category string and multi-category array
+        const rawCategory = q.category;
+        const categoryKey = Array.isArray(rawCategory)
+          ? rawCategory.join(",")
+          : rawCategory || "General";
 
-        if (!categoryMap[category]) {
-          categoryMap[category] = {
-            category: category,
-            score: 0,
-            total: 0,
+        const questionMarks = q.marks ?? q.totalMarks ?? 1; // ✅ use question's marks, default 1
+
+        if (!categoryMap[categoryKey]) {
+          categoryMap[categoryKey] = {
+            category: categoryKey,
+            score: 0,       // correct count
+            total: 0,       // total questions in category
+            earnedMarks: 0, // ✅ marks actually earned
+            totalMarks: 0,  // ✅ total marks available in category
           };
         }
 
-        categoryMap[category].total += 1;
+        categoryMap[categoryKey].total      += 1;
+        categoryMap[categoryKey].totalMarks += questionMarks;
+        totalMarksCount                     += questionMarks;
 
-        if (answers[index] === q.correctAnswer) {
+        const isCorrect = answers[index] === q.correctAnswer;
+        if (isCorrect) {
           finalScore++;
-          categoryMap[category].score += 1;
+          categoryMap[categoryKey].score       += 1;
+          categoryMap[categoryKey].earnedMarks += questionMarks; // ✅ add earned marks
         }
       });
 
+      // ✅ Build categoryResults with all fields ViewResults.jsx needs
       const categoryResults = Object.values(categoryMap).map((item) => ({
-        category: item.category,
-        score: item.score,
-        total: item.total,
-        percentage: Math.round((item.score / item.total) * 100),
+        category:    item.category,
+        score:       item.score,
+        total:       item.total,
+        earnedMarks: item.earnedMarks,  // ✅ NEW
+        totalMarks:  item.totalMarks,   // ✅ NEW (used as "total" field in schema)
+        percentage:  item.totalMarks > 0
+          ? Math.round((item.earnedMarks / item.totalMarks) * 100)
+          : 0,
       }));
 
       const user = JSON.parse(localStorage.getItem("user")) || {};
@@ -104,9 +120,10 @@ function Test() {
       await axios.post(
         "https://mcqtestportal-production.up.railway.app/api/results/add",
         {
-          userName: user.name || "Candidate",
-          userEmail: user.email || "No Email",
-          score: finalScore,
+          userName:       user.name  || "Candidate",
+          userEmail:      user.email || "No Email",
+          score:          finalScore,
+          totalMarks:     totalMarksCount,  // ✅ send totalMarks not totalQuestions
           totalQuestions: questions.length,
           categoryResults,
         }
@@ -120,7 +137,6 @@ function Test() {
     }
   };
 
-  // ✅ Show loading until settings are fetched
   if (timeLeft === null) {
     return (
       <div style={{
