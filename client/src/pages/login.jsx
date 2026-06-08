@@ -14,7 +14,7 @@ function Login() {
   const handleLogin = async () => {
     try {
       const res = await axios.post(
-        "https://mcq-test-portal-xvyk.vercel.app/api/auth/login",
+        "https://mcq-backend-zeta.vercel.app/api/auth/login",
         { email, password }
       );
       localStorage.setItem("token", res.data.token);
