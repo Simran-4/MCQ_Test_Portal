@@ -1,7 +1,12 @@
 const mongoose = require("mongoose");
 
 const examSettingsSchema = new mongoose.Schema({
-
+  // Feature 8: Global Passing Threshold
+  passingPercentage: {
+    type: Number,
+    default: 50,
+  },
+  
   totalQuestions: {
     type: Number,
     default: 20,
@@ -41,10 +46,6 @@ const examSettingsSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
-
 });
 
-module.exports = mongoose.model(
-  "ExamSettings",
-  examSettingsSchema
-);
+module.exports = mongoose.model("ExamSettings", examSettingsSchema);

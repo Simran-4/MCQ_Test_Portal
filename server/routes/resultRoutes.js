@@ -2,7 +2,7 @@ const express = require("express");
 const router  = express.Router();
 const Result   = require("../models/Result");
 const Question = require("../models/Question");
-const Settings = require("../models/Settings"); 
+const Settings = require("../models/ExamSettings"); 
 
 // ══════════════════════════════════════════════════════════════
 // POST /api/results
