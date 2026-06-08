@@ -10,6 +10,7 @@ const GREEN_DARK = "#1A3D28";
 const BG         = "#EEE9E0";
 const WHITE      = "#ffffff";
 
+// --- MODAL COMPONENT ---
 function SuiteModal({ suite, onClose, onSave }) {
   const [name, setName]       = useState(suite?.name || "");
   const [description, setDesc]= useState(suite?.description || "");
@@ -20,31 +21,38 @@ function SuiteModal({ suite, onClose, onSave }) {
   const handleSubmit = async () => {
     if (!name.trim()) { setError("Name is required"); return; }
     setLoading(true);
+    setError("");
+
     try {
+      const token = localStorage.getItem("token");
+      const config = {
+        headers: { Authorization: `Bearer ${token}` }
+      };
+
+      const payload = { name, description, status };
+
       if (suite) {
-        const res = await axios.put(`${API}/api/test-suites/${suite._id}`, { name, description, status });
+        // Update Existing
+        const res = await axios.put(`${API}/api/test-suites/${suite._id}`, payload, config);
         onSave(res.data, "edit");
       } else {
-        const res = await axios.post(`${API}/api/test-suites`, { name, description, status });
+        // Create New
+        const res = await axios.post(`${API}/api/test-suites`, payload, config);
         onSave(res.data, "create");
       }
       onClose();
     } catch (err) {
-      setError(err.response?.data?.message || "Something went wrong");
+      // Improved error reporting to catch backend crashes/auth issues
+      setError(err.response?.data?.message || "Server connection failed. Check Railway logs.");
     } finally {
       setLoading(false);
     }
   };
 
   const inputStyle = {
-    width: "100%",
-    border: "1px solid #ddd",
-    borderRadius: "10px",
-    padding: "10px 12px",
-    fontSize: "14px",
-    outline: "none",
-    boxSizing: "border-box",
-    fontFamily: "inherit",
+    width: "100%", border: "1px solid #ddd", borderRadius: "10px",
+    padding: "10px 12px", fontSize: "14px", outline: "none",
+    boxSizing: "border-box", fontFamily: "inherit",
   };
 
   return (
@@ -53,7 +61,9 @@ function SuiteModal({ suite, onClose, onSave }) {
         <h2 style={{ fontSize:"17px", fontWeight:"700", color: GREEN_DARK, marginBottom:"18px" }}>
           {suite ? "Edit Test Suite" : "New Test Suite"}
         </h2>
-        {error && <p style={{ color:"#dc2626", fontSize:"13px", marginBottom:"12px" }}>{error}</p>}
+        
+        {error && <p style={{ color:"#dc2626", fontSize:"13px", marginBottom:"12px", background: "#fee2e2", padding: "8px", borderRadius: "6px" }}>{error}</p>}
+        
         <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
           <div>
             <label style={{ fontSize:"12px", color:"#666", display:"block", marginBottom:"5px", fontWeight:"600", textTransform:"uppercase", letterSpacing:"0.05em" }}>Name *</label>
@@ -85,12 +95,7 @@ function SuiteModal({ suite, onClose, onSave }) {
   );
 }
 
-const STATUS_COLOR = {
-  active:    { background:"#dcfce7", color:"#166534" },
-  draft:     { background:"#f3f4f6", color:"#4b5563" },
-  scheduled: { background:"#fef3c7", color:"#92400e" },
-};
-
+// --- MAIN DASHBOARD COMPONENT ---
 export default function Dashboard() {
   const navigate = useNavigate();
   const [suites, setSuites]       = useState([]);
@@ -102,7 +107,10 @@ export default function Dashboard() {
 
   const fetchSuites = async () => {
     try {
-      const res = await axios.get(`${API}/api/test-suites`);
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${API}/api/test-suites`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setSuites(res.data);
     } catch (err) {
       console.error("Failed to fetch test suites:", err);
@@ -117,290 +125,138 @@ export default function Dashboard() {
     } else {
       setSuites(prev => prev.map(s => s._id === suite._id ? { ...s, ...suite } : s));
     }
+    fetchSuites(); // Refresh to ensure data is synced
   };
 
   const handleDelete = async (suiteId, suiteName, e) => {
     e.stopPropagation();
     if (!window.confirm(`Delete "${suiteName}" and all its questions?`)) return;
     try {
-      await axios.delete(`${API}/api/test-suites/${suiteId}`);
+      const token = localStorage.getItem("token");
+      await axios.delete(`${API}/api/test-suites/${suiteId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setSuites(prev => prev.filter(s => s._id !== suiteId));
-    } catch {
-      alert("Failed to delete.");
+    } catch (err) {
+      alert("Delete failed: " + (err.response?.data?.message || "Check your permissions."));
     }
   };
 
   return (
-  <div className="dashboard-page">
-
-    {/* HEADER */}
-    <div className="topbar">
-
-      <div className="topbar-left">
-        <div className="logo-circle">
-          📋
-        </div>
-
-        <div>
-          <div className="dashboard-title">
-            Admin Dashboard
-          </div>
-
-          <div className="dashboard-subtitle">
-            Manage test suites and questions.
+    <div className="dashboard-page" style={{ minHeight: "100vh", background: BG }}>
+      {/* HEADER */}
+      <div className="topbar">
+        <div className="topbar-left">
+          <div className="logo-circle">📋</div>
+          <div>
+            <div className="dashboard-title">Admin Dashboard</div>
+            <div className="dashboard-subtitle">Manage test suites and questions.</div>
           </div>
         </div>
+        <div className="admin-section">
+          <div className="admin-profile">
+            <div className="admin-icon">👤</div>
+            <span>Admin</span>
+          </div>
+          <button className="logout-btn" onClick={() => { localStorage.removeItem("token"); navigate("/"); }}>
+            Logout
+          </button>
+        </div>
       </div>
 
-      <div className="admin-section">
+      {/* NAVBAR */}
+      <div className="dashboard-nav">
+        <div className="nav-item nav-active">Dashboard</div>
+        <div className="nav-item" onClick={() => navigate("/view-results")}>View results</div>
+        <div className="nav-item" onClick={() => navigate("/settings")}>Exam settings</div>
+      </div>
 
-        <div className="admin-profile">
-          <div className="admin-icon">👤</div>
-          <span>Admin</span>
+      {/* CONTENT */}
+      <div className="dashboard-content">
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-icon">📦</div>
+            <div className="stat-title">TEST SUITES</div>
+            <div className="stat-value">{suites.length}</div>
+            <div className="stat-sub">Total suites</div>
+            <div className="progress-track"><div className="progress-fill" style={{ width: "35%" }} /></div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">❓</div>
+            <div className="stat-title">TOTAL QUESTIONS</div>
+            <div className="stat-value">{suites.reduce((a, s) => a + (s.questionCount ?? 0), 0)}</div>
+            <div className="stat-sub">Across all suites</div>
+            <div className="progress-track"><div className="progress-fill" style={{ width: "15%" }} /></div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">📡</div>
+            <div className="stat-title">ACTIVE SUITES</div>
+            <div className="stat-value">{suites.filter(s => s.status === "active").length}</div>
+            <div className="stat-sub">Live right now</div>
+            <div className="progress-track"><div className="progress-fill" style={{ width: "100%" }} /></div>
+          </div>
         </div>
 
-        <button
-          className="logout-btn"
-          onClick={() => {
-            localStorage.removeItem("token");
-            navigate("/");
-          }}
-        >
-          Logout
-        </button>
-
-      </div>
-
-    </div>
-
-    {/* NAVBAR */}
-    <div className="dashboard-nav">
-
-      <div className="nav-item nav-active">
-        Dashboard
-      </div>
-
-      <div
-        className="nav-item"
-        onClick={() => navigate("/view-results")}
-      >
-        View results
-      </div>
-
-      <div
-        className="nav-item"
-        onClick={() => navigate("/settings")}
-      >
-        Exam settings
-      </div>
-
-    </div>
-
-    {/* CONTENT */}
-    <div className="dashboard-content">
-
-      {/* STATS */}
-      <div className="stats-grid">
-
-        <div className="stat-card">
-          <div className="stat-icon">📦</div>
-
-          <div className="stat-title">
+        <div className="section-header">
+          <div className="section-title">
             TEST SUITES
+            <div className="section-line"></div>
           </div>
-
-          <div className="stat-value">
-            {suites.length}
-          </div>
-
-          <div className="stat-sub">
-            Total suites
-          </div>
-
-          <div className="progress-track">
-            <div
-              className="progress-fill"
-              style={{ width: "35%" }}
-            />
-          </div>
+          <button className="new-suite-btn" onClick={() => { setEditing(null); setShowModal(true); }}>
+            + New test suite
+          </button>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon">❓</div>
-
-          <div className="stat-title">
-            TOTAL QUESTIONS
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "40px", color: "#666" }}>Loading your suites...</div>
+        ) : suites.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px", background: WHITE, borderRadius: "16px", border: "2px dashed #ccc" }}>
+             <p style={{ color: "#999" }}>No suites available. Create your first one above!</p>
           </div>
-
-          <div className="stat-value">
-            {suites.reduce(
-              (a, s) => a + (s.questionCount ?? 0),
-              0
-            )}
+        ) : (
+          <div className="suite-list">
+            {suites.map((suite) => (
+              <div key={suite._id} className="suite-card">
+                <div className="suite-left">
+                  <div className="suite-icon">📄</div>
+                  <div>
+                    <div className="suite-name">{suite.name}</div>
+                    <div className="suite-info">{suite.questionCount ?? 0} questions</div>
+                  </div>
+                </div>
+                <div className="suite-right">
+                  <div className="status-pill" style={{ 
+                    background: suite.status === "active" ? "#dcfce7" : "#f3f4f6",
+                    color: suite.status === "active" ? "#166534" : "#4b5563",
+                    padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: "600"
+                  }}>
+                    {suite.status}
+                  </div>
+                  <button className="action-btn open-btn" onClick={() => navigate(`/admin/test-suites/${suite._id}`)}>
+                    Open
+                  </button>
+                  <button className="action-btn" onClick={() => { setEditing(suite); setShowModal(true); }}>
+                    Edit
+                  </button>
+                  <button className="action-btn delete-btn" onClick={(e) => handleDelete(suite._id, suite.name, e)}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-
-          <div className="stat-sub">
-            Across all suites
-          </div>
-
-          <div className="progress-track">
-            <div
-              className="progress-fill"
-              style={{ width: "15%" }}
-            />
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon">📡</div>
-
-          <div className="stat-title">
-            ACTIVE SUITES
-          </div>
-
-          <div className="stat-value">
-            {
-              suites.filter(
-                s => s.status === "active"
-              ).length
-            }
-          </div>
-
-          <div className="stat-sub">
-            Live right now
-          </div>
-
-          <div className="progress-track">
-            <div
-              className="progress-fill"
-              style={{ width: "100%" }}
-            />
-          </div>
-        </div>
-
+        )}
       </div>
 
-      {/* SECTION HEADER */}
-      <div className="section-header">
-
-        <div className="section-title">
-          TEST SUITES
-          <div className="section-line"></div>
-        </div>
-
-        <button
-          className="new-suite-btn"
-          onClick={() => {
-            setEditing(null);
-            setShowModal(true);
-          }}
-        >
-          + New test suite
-        </button>
-
-      </div>
-
-      {/* SUITE LIST */}
-      {loading ? (
-
-        <p>Loading...</p>
-
-      ) : suites.length === 0 ? (
-
-        <p>No suites available.</p>
-
-      ) : (
-
-        <div className="suite-list">
-
-          {suites.map((suite) => (
-
-            <div
-              key={suite._id}
-              className="suite-card"
-            >
-
-              <div className="suite-left">
-
-                <div className="suite-icon">
-                  📄
-                </div>
-
-                <div>
-
-                  <div className="suite-name">
-                    {suite.name}
-                  </div>
-
-                  <div className="suite-info">
-                    {suite.questionCount ?? 0} questions
-                  </div>
-
-                </div>
-
-              </div>
-
-              <div className="suite-right">
-
-                <div className="status-pill">
-                  {suite.status}
-                </div>
-
-                <button
-                  className="action-btn open-btn"
-                  onClick={() =>
-                    navigate(
-                      `/admin/test-suites/${suite._id}`
-                    )
-                  }
-                >
-                  Open
-                </button>
-
-                <button
-                  className="action-btn"
-                  onClick={() => {
-                    setEditing(suite);
-                    setShowModal(true);
-                  }}
-                >
-                  Edit
-                </button>
-
-                <button
-                  className="action-btn delete-btn"
-                  onClick={(e) =>
-                    handleDelete(
-                      suite._id,
-                      suite.name,
-                      e
-                    )
-                  }
-                >
-                  Delete
-                </button>
-
-              </div>
-
-            </div>
-
-          ))}
-
-        </div>
-
+      {showModal && (
+        <SuiteModal
+          suite={editingSuite}
+          onClose={() => setShowModal(false)}
+          onSave={handleModalSave}
+        />
       )}
-
     </div>
-
-    {/* MODAL */}
-    {showModal && (
-      <SuiteModal
-        suite={editingSuite}
-        onClose={() => setShowModal(false)}
-        onSave={handleModalSave}
-      />
-    )}
-
-  </div>
-);
+  );
 }
