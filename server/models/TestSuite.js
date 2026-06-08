@@ -14,7 +14,7 @@ const testSuiteSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["draft", "active", "scheduled"],
+      enum: ["draft", "active", "scheduled", "inactive"],
       default: "draft",
     },
     scheduledAt: {
@@ -22,9 +22,35 @@ const testSuiteSchema = new mongoose.Schema(
       default: null,
     },
     duration: {
-      type: Number,  // in minutes
+      type: Number,
       default: 30,
     },
+
+    // ── Feature 5 & 15: Random question pool ─────────────────
+    questionsToServe: {
+      type: Number,
+      default: null, // null = serve all questions
+    },
+
+    // ── Feature 9: Test availability window ──────────────────
+    startDate: {
+      type: Date,
+      default: null,
+    },
+    endDate: {
+      type: Date,
+      default: null,
+    },
+
+    // ── Feature 13: Assign to specific users ─────────────────
+    isPublic: {
+      type: Boolean,
+      default: true,
+    },
+    assignedUsers: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    }],
   },
   { timestamps: true }
 );

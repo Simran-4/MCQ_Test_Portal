@@ -29,6 +29,13 @@ const resultSchema = new mongoose.Schema({
   totalQuestions: { type: Number, default: 0 },
   categoryResults:{ type: [categoryResultSchema], default: [] },
   submittedAt:    { type: Date, default: Date.now },
+
+  // ── NEW FIELDS ────────────────────────────────────
+  project:        { type: String, default: "General" },
+  designation:    { type: String, default: "" },
+  passed:         { type: Boolean, default: false },
+  // ─────────────────────────────────────────────────
+
 }, { timestamps: true });
 
 module.exports = mongoose.model("Result", resultSchema);

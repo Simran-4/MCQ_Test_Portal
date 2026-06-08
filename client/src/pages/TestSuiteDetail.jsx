@@ -3,8 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
+const API        = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
 const BG         = "#EEE9E0";
@@ -35,6 +34,17 @@ export default function TestSuiteDetail() {
   const [durationVal, setDurationVal]   = useState(30);
   const [savingDur, setSavingDur]       = useState(false);
 
+  // Feature 5: Questions to serve
+  const [showQtsServe, setShowQtsServe]   = useState(false);
+  const [qtsServeVal, setQtsServeVal]     = useState("");
+  const [savingQts, setSavingQts]         = useState(false);
+
+  // Feature 9: Date window
+  const [showDateWindow, setShowDateWindow] = useState(false);
+  const [startDate, setStartDate]           = useState("");
+  const [endDate, setEndDate]               = useState("");
+  const [savingDates, setSavingDates]       = useState(false);
+
   const [categories, setCategories] = useState(() => {
     try { return JSON.parse(localStorage.getItem(`cats_${suiteId}`)) || []; }
     catch { return []; }
@@ -43,7 +53,6 @@ export default function TestSuiteDetail() {
   const [newCatInput, setNewCatInput]       = useState("");
   const [catError, setCatError]             = useState("");
 
-  // Import
   const fileInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
 
@@ -61,6 +70,12 @@ export default function TestSuiteDetail() {
       ]);
       setSuite(suiteRes.data);
       setDurationVal(suiteRes.data.duration || 30);
+      setQtsServeVal(suiteRes.data.questionsToServe || "");
+      // Format dates for datetime-local input
+      setStartDate(suiteRes.data.startDate
+        ? new Date(suiteRes.data.startDate).toISOString().slice(0, 16) : "");
+      setEndDate(suiteRes.data.endDate
+        ? new Date(suiteRes.data.endDate).toISOString().slice(0, 16) : "");
       setQuestions(qRes.data);
       const existingCats = [...new Set(qRes.data.flatMap(q =>
         Array.isArray(q.category) ? q.category : (q.category ? [q.category] : [])
@@ -110,6 +125,45 @@ export default function TestSuiteDetail() {
       alert("Duration saved!");
     } catch { alert("Failed to save duration"); }
     finally { setSavingDur(false); }
+  };
+
+  // Feature 5: Save questionsToServe
+  const handleSaveQtsServe = async () => {
+    setSavingQts(true);
+    try {
+      const token = localStorage.getItem("token");
+      const value = qtsServeVal ? Number(qtsServeVal) : null;
+      await axios.put(`${API}/api/test-suites/${suiteId}`,
+        { questionsToServe: value },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSuite(prev => ({ ...prev, questionsToServe: value }));
+      setShowQtsServe(false);
+      alert(value ? `Set to serve ${value} random questions!` : "Serving all questions.");
+    } catch { alert("Failed to save."); }
+    finally { setSavingQts(false); }
+  };
+
+  // Feature 9: Save date window
+  const handleSaveDates = async () => {
+    if (startDate && endDate && new Date(startDate) >= new Date(endDate)) {
+      return alert("End date must be after start date.");
+    }
+    setSavingDates(true);
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(`${API}/api/test-suites/${suiteId}`,
+        {
+          startDate: startDate || null,
+          endDate:   endDate   || null,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSuite(prev => ({ ...prev, startDate, endDate }));
+      setShowDateWindow(false);
+      alert("Availability window saved!");
+    } catch { alert("Failed to save dates."); }
+    finally { setSavingDates(false); }
   };
 
   const handleAddCategory = () => {
@@ -170,59 +224,50 @@ export default function TestSuiteDetail() {
   };
 
   const handleSubmit = async () => {
-  setError("");
-  
-  // 1. Validations
-  if (!form.questionText.trim()) return setError("Question text is required");
-  const trimmedOptions = form.options.map(o => o.trim()).filter(Boolean);
-  if (trimmedOptions.length < 2) return setError("At least 2 options are required");
-  if (form.correctAnswers.length === 0) return setError("Select at least one correct answer");
-  if (form.categories.length === 0) return setError("Please select at least one category");
+    setError("");
+    if (!form.questionText.trim()) return setError("Question text is required");
+    const trimmedOptions = form.options.map(o => o.trim()).filter(Boolean);
+    if (trimmedOptions.length < 2) return setError("At least 2 options are required");
+    if (form.correctAnswers.length === 0) return setError("Select at least one correct answer");
+    if (form.categories.length === 0) return setError("Please select at least one category");
 
-  // 2. Remap Correct Answer Indices 
-  // (In case user typed in Option 1 and 4 but left 2 and 3 empty)
-  const remappedCorrect = [];
-  let currentNewIdx = 0;
-  form.options.forEach((opt, oldIdx) => {
-    if (opt.trim()) {
-      if (form.correctAnswers.includes(oldIdx)) {
-        remappedCorrect.push(currentNewIdx);
+    const remappedCorrect = [];
+    let currentNewIdx = 0;
+    form.options.forEach((opt, oldIdx) => {
+      if (opt.trim()) {
+        if (form.correctAnswers.includes(oldIdx)) remappedCorrect.push(currentNewIdx);
+        currentNewIdx++;
       }
-      currentNewIdx++;
-    }
-  });
+    });
 
-  const payload = {
-    questionText: form.questionText.trim(),
-    options: trimmedOptions,
-    correctAnswer: remappedCorrect, // Sends array for Multi-correct support
-    explanation: form.explanation.trim(),
-    marks: Number(form.marks) || 1,
-    category: form.categories, // Consistent Array
-    testSuite: suiteId, // Ensure relation is saved
+    const payload = {
+      questionText:  form.questionText.trim(),
+      options:       trimmedOptions,
+      correctAnswer: remappedCorrect,
+      explanation:   form.explanation.trim(),
+      marks:         Number(form.marks) || 1,
+      category:      form.categories,
+      testSuite:     suiteId,
+    };
+
+    setSaving(true);
+    try {
+      const token  = localStorage.getItem("token");
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      if (editingQ) {
+        const res = await axios.put(`${API}/api/questions/${editingQ}`, payload, config);
+        setQuestions(prev => prev.map(q => q._id === editingQ ? res.data : q));
+      } else {
+        const res = await axios.post(`${API}/api/test-suites/${suiteId}/questions`, payload, config);
+        setQuestions(prev => [...prev, res.data]);
+      }
+      handleCancelForm();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to save question");
+    } finally {
+      setSaving(false);
+    }
   };
-
-  setSaving(true);
-  try {
-    const token = localStorage.getItem("token");
-    const config = { headers: { Authorization: `Bearer ${token}` } };
-
-    if (editingQ) {
-      const res = await axios.put(`${API}/api/questions/${editingQ}`, payload, config);
-      setQuestions(prev => prev.map(q => q._id === editingQ ? res.data : q));
-    } else {
-      const res = await axios.post(`${API}/api/test-suites/${suiteId}/questions`, payload, config);
-      setQuestions(prev => [...prev, res.data]);
-    }
-    
-    // Reset and Close
-    handleCancelForm();
-  } catch (err) {
-    setError(err.response?.data?.message || "Failed to save question");
-  } finally {
-    setSaving(false);
-  }
-};
 
   const handleEdit = (q) => {
     const opts = q.options.length < 4
@@ -268,19 +313,18 @@ export default function TestSuiteDetail() {
 
   const grouped = questions.reduce((acc, q) => {
     const cats = Array.isArray(q.category) && q.category.length > 0 ? q.category : ["Uncategorized"];
-    const key = cats[0];
+    const key  = cats[0];
     if (!acc[key]) acc[key] = [];
     acc[key].push(q);
     return acc;
   }, {});
 
-  if (loading) return <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif", color: "#aaa" }}>Loading…</div>;
-  if (!suite)  return <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif", color: "#dc2626" }}>Test suite not found.</div>;
+  if (loading) return <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: "#aaa" }}>Loading…</div>;
+  if (!suite)  return <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626" }}>Test suite not found.</div>;
 
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "'Segoe UI', sans-serif" }}>
 
-      {/* Hidden file input for import */}
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={handleFileChange} />
 
       {/* ── Top bar ── */}
@@ -302,6 +346,14 @@ export default function TestSuiteDetail() {
         <span onClick={() => navigate("/dashboard")} style={{ fontSize: "14px", color: "#4A7A5C", fontWeight: "500", cursor: "pointer" }}>← Back to dashboard</span>
         <span style={{ fontSize: "13px", color: "#aaa" }}>{questions.length} question{questions.length !== 1 ? "s" : ""}</span>
         <span style={{ fontSize: "13px", color: "#aaa" }}>⏱ {suite.duration || 30} min</span>
+        {suite.questionsToServe && (
+          <span style={{ fontSize: "13px", color: "#f59e0b" }}>🎲 {suite.questionsToServe} random</span>
+        )}
+        {suite.startDate && (
+          <span style={{ fontSize: "13px", color: "#6366f1" }}>
+            📅 {new Date(suite.startDate).toLocaleDateString()} – {suite.endDate ? new Date(suite.endDate).toLocaleDateString() : "∞"}
+          </span>
+        )}
         <span onClick={() => { localStorage.removeItem("token"); navigate("/"); }} style={{ fontSize: "14px", color: "#C0392B", fontWeight: "500", cursor: "pointer", marginLeft: "auto" }}>Logout</span>
       </div>
 
@@ -325,6 +377,16 @@ export default function TestSuiteDetail() {
             style={{ padding: "10px 20px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
             ⏱ Set duration ({suite.duration || 30} min)
           </button>
+          {/* Feature 5 */}
+          <button onClick={() => setShowQtsServe(s => !s)}
+            style={{ padding: "10px 20px", background: WHITE, color: "#f59e0b", border: "1px solid #fcd34d", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+            🎲 Random questions {suite.questionsToServe ? `(${suite.questionsToServe})` : "(all)"}
+          </button>
+          {/* Feature 9 */}
+          <button onClick={() => setShowDateWindow(s => !s)}
+            style={{ padding: "10px 20px", background: WHITE, color: "#6366f1", border: "1px solid #c7d2fe", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+            📅 Availability window
+          </button>
           <button onClick={() => navigate(`/admin/results?suite=${suiteId}`)}
             style={{ padding: "10px 20px", background: WHITE, color: "#333", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
             View results
@@ -343,6 +405,59 @@ export default function TestSuiteDetail() {
               </button>
               <button onClick={() => setShowDuration(false)} style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}>Cancel</button>
             </div>
+          </div>
+        )}
+
+        {/* ── Feature 5: Questions to Serve Panel ── */}
+        {showQtsServe && (
+          <div style={{ background: WHITE, border: "1px solid #fcd34d", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: "700", color: "#92400e", marginTop: 0, marginBottom: "6px" }}>🎲 Random Questions per Candidate</h2>
+            <p style={{ fontSize: "13px", color: "#888", marginBottom: "14px" }}>
+              You have {questions.length} questions. Set how many each candidate gets randomly. Leave blank to serve all.
+            </p>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <input
+                type="number" min={1} max={questions.length}
+                placeholder={`Max ${questions.length}`}
+                value={qtsServeVal}
+                onChange={e => setQtsServeVal(e.target.value)}
+                style={{ ...inputStyle, width: "140px" }}
+              />
+              <span style={{ fontSize: "14px", color: "#666" }}>questions per candidate</span>
+              <button onClick={handleSaveQtsServe} disabled={savingQts} style={{ padding: "10px 20px", background: "#f59e0b", color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: savingQts ? 0.6 : 1 }}>
+                {savingQts ? "Saving…" : "Save"}
+              </button>
+              <button onClick={() => setShowQtsServe(false)} style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Feature 9: Date Window Panel ── */}
+        {showDateWindow && (
+          <div style={{ background: WHITE, border: "1px solid #c7d2fe", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: "700", color: "#3730a3", marginTop: 0, marginBottom: "6px" }}>📅 Test Availability Window</h2>
+            <p style={{ fontSize: "13px", color: "#888", marginBottom: "14px" }}>
+              Candidates can only start this test within this window. Leave blank for no restriction.
+            </p>
+            <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div>
+                <label style={{ ...labelStyle, color: "#6366f1" }}>Start Date & Time</label>
+                <input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inputStyle, width: "220px" }} />
+              </div>
+              <div>
+                <label style={{ ...labelStyle, color: "#6366f1" }}>End Date & Time</label>
+                <input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ ...inputStyle, width: "220px" }} />
+              </div>
+              <button onClick={handleSaveDates} disabled={savingDates} style={{ padding: "10px 20px", background: "#6366f1", color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: savingDates ? 0.6 : 1 }}>
+                {savingDates ? "Saving…" : "Save"}
+              </button>
+              <button onClick={() => setShowDateWindow(false)} style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}>Cancel</button>
+            </div>
+            {startDate && endDate && (
+              <p style={{ fontSize: "12px", color: "#6366f1", marginTop: "10px", marginBottom: 0 }}>
+                ✓ Window: {new Date(startDate).toLocaleString()} → {new Date(endDate).toLocaleString()}
+              </p>
+            )}
           </div>
         )}
 
@@ -379,14 +494,12 @@ export default function TestSuiteDetail() {
               {editingQ ? "✏️ Edit question" : "New question"}
             </h2>
             {error && <p style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>{error}</p>}
-
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div>
                 <label style={labelStyle}>Question *</label>
                 <textarea rows={3} style={{ ...inputStyle, resize: "vertical" }} placeholder="Enter the question text here…"
                   value={form.questionText} onChange={e => setForm({ ...form, questionText: e.target.value })} />
               </div>
-
               <div>
                 <label style={labelStyle}>Categories * (select all that apply)</label>
                 {categories.length === 0 ? (
@@ -400,13 +513,7 @@ export default function TestSuiteDetail() {
                       const selected = form.categories.includes(cat);
                       return (
                         <button key={cat} onClick={() => toggleCategory(cat)}
-                          style={{
-                            padding: "6px 14px", borderRadius: "999px", fontSize: "13px", fontWeight: "600",
-                            cursor: "pointer", border: "1.5px solid",
-                            background:  selected ? GREEN : WHITE,
-                            color:       selected ? WHITE : GREEN,
-                            borderColor: selected ? GREEN : "#c8dfd0",
-                          }}>
+                          style={{ padding: "6px 14px", borderRadius: "999px", fontSize: "13px", fontWeight: "600", cursor: "pointer", border: "1.5px solid", background: selected ? GREEN : WHITE, color: selected ? WHITE : GREEN, borderColor: selected ? GREEN : "#c8dfd0" }}>
                           {selected ? "✓ " : ""}{cat}
                         </button>
                       );
@@ -414,17 +521,12 @@ export default function TestSuiteDetail() {
                   </div>
                 )}
                 {form.categories.length > 0 && (
-                  <p style={{ fontSize: "12px", color: "#888", margin: "6px 0 0" }}>
-                    Selected: {form.categories.join(", ")}
-                  </p>
+                  <p style={{ fontSize: "12px", color: "#888", margin: "6px 0 0" }}>Selected: {form.categories.join(", ")}</p>
                 )}
               </div>
-
               <div>
                 <label style={labelStyle}>Options * — check all correct answers</label>
-                <div style={{ fontSize: "12px", color: "#888", marginBottom: "10px" }}>
-                  Use checkboxes to mark one or more correct answers
-                </div>
+                <div style={{ fontSize: "12px", color: "#888", marginBottom: "10px" }}>Use checkboxes to mark one or more correct answers</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {form.options.map((opt, i) => {
                     const isCorrect = form.correctAnswers.includes(i);
@@ -453,7 +555,6 @@ export default function TestSuiteDetail() {
                   </div>
                 )}
               </div>
-
               <div style={{ display: "flex", gap: "12px" }}>
                 <div style={{ flex: 1 }}>
                   <label style={labelStyle}>Explanation (optional)</label>
@@ -464,7 +565,6 @@ export default function TestSuiteDetail() {
                   <input type="number" min={1} style={inputStyle} value={form.marks} onChange={e => setForm({ ...form, marks: Number(e.target.value) })} />
                 </div>
               </div>
-
               <div style={{ display: "flex", gap: "10px" }}>
                 <button onClick={handleSubmit} disabled={saving} style={{ padding: "10px 24px", background: GREEN, color: WHITE, border: "none", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
                   {saving ? "Saving…" : editingQ ? "Save changes" : "Save question"}
