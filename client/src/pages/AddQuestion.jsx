@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import "./dashboard.css";
 
-const API = "https://mcq-backend-zeta.vercel.app";
+const API = "https://charismatic-happiness-production-dc36.up.railway.app";
 
 function AddQuestion() {
   const [question, setQuestion]       = useState("");

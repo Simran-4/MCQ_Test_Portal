@@ -37,7 +37,7 @@ function Test() {
   const fetchSettings = async () => {
     try {
       const res = await axios.get(
-        "https://mcq-backend-zeta.vercel.app/api/settings"
+        "https://charismatic-happiness-production-dc36.up.railway.app/api/settings"
       );
       if (res.data && res.data.examDuration) {
         setTimeLeft(parseInt(res.data.examDuration) * 60);
@@ -50,7 +50,7 @@ function Test() {
   const fetchQuestions = async () => {
     try {
       const res = await axios.get(
-        "https://mcq-backend-zeta.vercel.app/api/questions/all"
+        "https://charismatic-happiness-production-dc36.up.railway.app/api/questions/all"
       );
       const fetchedQuestions = res.data;
       setQuestions(fetchedQuestions);
@@ -118,7 +118,7 @@ function Test() {
       const user = JSON.parse(localStorage.getItem("user")) || {};
 
       await axios.post(
-        "https://mcq-backend-zeta.vercel.app/api/results/add",
+        "https://charismatic-happiness-production-dc36.up.railway.app/api/results/add",
         {
           userName:       user.name  || "Candidate",
           userEmail:      user.email || "No Email",

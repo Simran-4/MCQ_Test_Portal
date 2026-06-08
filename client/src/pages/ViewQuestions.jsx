@@ -14,7 +14,7 @@ function ViewQuestions() {
   const fetchQuestions = async () => {
     try {
       const res = await axios.get(
-        "https://mcq-backend-zeta.vercel.app/api/questions/all"
+        "https://charismatic-happiness-production-dc36.up.railway.app/api/questions/all"
       );
       setQuestions(res.data);
     } catch (err) {
@@ -26,7 +26,7 @@ function ViewQuestions() {
     if (!window.confirm("Delete this question?")) return;
     try {
       await axios.delete(
-        `https://mcq-backend-zeta.vercel.app/api/questions/${id}`
+        `https://charismatic-happiness-production-dc36.up.railway.app/api/questions/${id}`
       );
       setQuestions(questions.filter(q => q._id !== id));
     } catch (err) {

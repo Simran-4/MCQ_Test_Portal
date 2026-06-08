@@ -20,7 +20,7 @@ function Register() {
 
     try {
       await axios.post(
-        "https://mcq-backend-zeta.vercel.app/api/auth/register",
+        "https://charismatic-happiness-production-dc36.up.railway.app/api/auth/register",
         { name: name.trim(), email: email.trim().toLowerCase(), password, role }
       );
       alert("Registration Successful");

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./superadmin.css";
 
-const API_URL = "https://mcq-backend-zeta.vercel.app/api/auth";
+const API_URL = "https://charismatic-happiness-production-dc36.up.railway.app/api/auth";
 
 const emptyStats = {
   totalUsers: 0,

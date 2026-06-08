@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-const API = "https://mcq-backend-zeta.vercel.app";
+const API = "https://charismatic-happiness-production-dc36.up.railway.app";
 
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";

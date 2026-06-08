@@ -16,7 +16,7 @@ function AdminSettings() {
   const fetchSettings = async () => {
     try {
       const res = await axios.get(
-        "https://mcq-backend-zeta.vercel.app/api/settings"
+        "https://charismatic-happiness-production-dc36.up.railway.app/api/settings"
       );
       if (res.data) {
         setSettings({
@@ -42,7 +42,7 @@ function AdminSettings() {
 
     try {
       await axios.post(
-        "https://mcq-backend-zeta.vercel.app/api/settings/save",
+        "https://charismatic-happiness-production-dc36.up.railway.app/api/settings/save",
         {
           // ✅ Always save as numbers not strings
           totalQuestions: parseInt(settings.totalQuestions),
