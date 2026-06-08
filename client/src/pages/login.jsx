@@ -12,21 +12,23 @@ function Login() {
   const navigate = useNavigate();
 
   const handleLogin = async () => {
-    try {
-      const res = await axios.post(
-       "https://charismatic-happiness-production-dc36.up.railway.app/api/auth/login",
-        { email, password }
-      );
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+  try {
+    const res = await axios.post(
+      "https://charismatic-happiness-production-dc36.up.railway.app/api/auth/login",
+      { email, password }
+    );
 
-      if (res.data.user.role === "admin")           navigate("/dashboard");
-      else if (res.data.user.role === "superadmin") navigate("/superadmin");
-      else                                          navigate("/candidate");
-    } catch (err) {
-      alert(err.response?.data?.message || "Login Failed");
-    }
-  };
+    // ✅ Save token WITH Bearer prefix so all API calls work
+    localStorage.setItem("token", `Bearer ${res.data.token}`);
+    localStorage.setItem("user", JSON.stringify(res.data.user));
+
+    if (res.data.user.role === "admin")           navigate("/dashboard");
+    else if (res.data.user.role === "superadmin") navigate("/superadmin");
+    else                                          navigate("/candidate");
+  } catch (err) {
+    alert(err.response?.data?.message || "Login Failed");
+  }
+};
 
   const inputStyle = {
     width: "100%", border: "1px solid rgba(255,255,255,0.4)", borderRadius: "10px",

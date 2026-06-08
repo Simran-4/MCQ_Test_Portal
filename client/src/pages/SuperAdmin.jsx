@@ -9,11 +9,11 @@ const emptyStats = {
   totalUsers: 0,
   activeUsers: 0,
   administrators: 0,
-  assessments: 0,
+  totalAssessments: 0,
 };
 
 const getOverview = async () => {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token"); // already has "Bearer " prefix
   const res = await axios.get(`${API_URL}/superadmin/overview`, {
     headers: { Authorization: token },
   });
@@ -27,7 +27,7 @@ function SuperAdmin() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeNav, setActiveNav] = useState("dashboard"); // ✅ track active nav
+  const [activeNav, setActiveNav] = useState("dashboard");
 
   const setOverview = useCallback((overview) => {
     setUsers(overview.users);
@@ -56,7 +56,7 @@ function SuperAdmin() {
 
   const updateAccess = async (userId, isActive) => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("token"); // already has "Bearer " prefix
       await axios.put(
         `${API_URL}/superadmin/users/${userId}/access`,
         { isActive },
@@ -73,10 +73,9 @@ function SuperAdmin() {
     navigate("/");
   };
 
-  // ✅ Filter based on active nav
   const getFilteredUsers = () => {
     let base = users;
-    if (activeNav === "Candidates") base = users.filter(u => u.role === "Candidate");
+    if (activeNav === "Candidates") base = users.filter(u => u.role === "candidate");
     if (activeNav === "administrators") base = users.filter(u => u.role === "admin" || u.role === "superadmin");
     return base.filter(u =>
       `${u.name} ${u.email} ${u.role}`.toLowerCase().includes(search.toLowerCase())
@@ -85,7 +84,6 @@ function SuperAdmin() {
 
   const filteredUsers = getFilteredUsers();
 
-  // ✅ Section title based on nav
   const getSectionTitle = () => {
     if (activeNav === "Candidates") return "Candidates";
     if (activeNav === "administrators") return "Administrators";
@@ -106,7 +104,6 @@ function SuperAdmin() {
         </div>
 
         <nav>
-          {/* ✅ All nav buttons now work */}
           <button
             type="button"
             className={activeNav === "dashboard" ? "active" : ""}
@@ -114,7 +111,6 @@ function SuperAdmin() {
           >
             🏠 Dashboard
           </button>
-
           <button
             type="button"
             className={activeNav === "Candidates" ? "active" : ""}
@@ -122,7 +118,6 @@ function SuperAdmin() {
           >
             🎓 Candidates
           </button>
-
           <button
             type="button"
             className={activeNav === "administrators" ? "active" : ""}
@@ -130,7 +125,6 @@ function SuperAdmin() {
           >
             🛡️ Administrators
           </button>
-
           <button
             type="button"
             className={activeNav === "reports" ? "active" : ""}
@@ -138,7 +132,6 @@ function SuperAdmin() {
           >
             📊 Reports
           </button>
-
           <button
             type="button"
             className={activeNav === "settings" ? "active" : ""}
@@ -146,7 +139,6 @@ function SuperAdmin() {
           >
             ⚙️ Settings
           </button>
-
           <button type="button" onClick={logout}>
             🚪 Logout
           </button>
@@ -155,7 +147,6 @@ function SuperAdmin() {
 
       <main className="main-content">
 
-        {/* WELCOME CARD - only on dashboard */}
         {activeNav === "dashboard" && (
           <section className="welcome-card">
             <div>
@@ -165,7 +156,6 @@ function SuperAdmin() {
           </section>
         )}
 
-        {/* STATS - only on dashboard */}
         {activeNav === "dashboard" && (
           <section className="stats-grid">
             <div className="stat-card" onClick={() => setActiveNav("Candidates")} style={{ cursor: "pointer" }}>
@@ -185,13 +175,13 @@ function SuperAdmin() {
             </div>
             <div className="stat-card">
               <h3>Assessments</h3>
-              <h2>{stats.assessments}</h2>
+              {/* ✅ Fixed: backend returns totalAssessments not assessments */}
+              <h2>{stats.totalAssessments}</h2>
               <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Total submitted</p>
             </div>
           </section>
         )}
 
-        {/* REPORTS VIEW */}
         {activeNav === "reports" && (
           <section className="card">
             <div className="section-header">
@@ -202,26 +192,17 @@ function SuperAdmin() {
               <h3 style={{ fontSize: "22px", color: "#2d5d50", marginBottom: "10px" }}>
                 Total Assessments Submitted
               </h3>
-              <div style={{
-                fontSize: "64px",
-                fontWeight: "800",
-                color: "#1f5d42",
-                margin: "20px 0"
-              }}>
-                {stats.assessments}
+              <div style={{ fontSize: "64px", fontWeight: "800", color: "#1f5d42", margin: "20px 0" }}>
+                {stats.totalAssessments}
               </div>
               <p style={{ color: "#aaa" }}>View detailed results in the Admin Dashboard</p>
               <button
                 onClick={() => navigate("/view-results")}
                 style={{
-                  marginTop: "24px",
-                  padding: "12px 30px",
+                  marginTop: "24px", padding: "12px 30px",
                   background: "linear-gradient(135deg, #1f4037, #2c7744)",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "12px",
-                  fontSize: "16px",
-                  cursor: "pointer",
+                  color: "white", border: "none", borderRadius: "12px",
+                  fontSize: "16px", cursor: "pointer",
                 }}
               >
                 View All Results →
@@ -230,7 +211,6 @@ function SuperAdmin() {
           </section>
         )}
 
-        {/* SETTINGS VIEW */}
         {activeNav === "settings" && (
           <section className="card">
             <div className="section-header">
@@ -238,22 +218,15 @@ function SuperAdmin() {
             </div>
             <div style={{ textAlign: "center", padding: "60px 0", color: "#888" }}>
               <div style={{ fontSize: "60px", marginBottom: "20px" }}>⚙️</div>
-              <h3 style={{ fontSize: "22px", color: "#2d5d50", marginBottom: "10px" }}>
-                Exam Settings
-              </h3>
-              <p style={{ color: "#aaa", marginBottom: "24px" }}>
-                Configure exam duration and question limits
-              </p>
+              <h3 style={{ fontSize: "22px", color: "#2d5d50", marginBottom: "10px" }}>Exam Settings</h3>
+              <p style={{ color: "#aaa", marginBottom: "24px" }}>Configure exam duration and question limits</p>
               <button
                 onClick={() => navigate("/settings")}
                 style={{
                   padding: "12px 30px",
                   background: "linear-gradient(135deg, #1f4037, #2c7744)",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "12px",
-                  fontSize: "16px",
-                  cursor: "pointer",
+                  color: "white", border: "none", borderRadius: "12px",
+                  fontSize: "16px", cursor: "pointer",
                 }}
               >
                 Go to Exam Settings →
@@ -262,7 +235,6 @@ function SuperAdmin() {
           </section>
         )}
 
-        {/* USER TABLE - dashboard, Candidates, administrators */}
         {(activeNav === "dashboard" || activeNav === "Candidates" || activeNav === "administrators") && (
           <section className="card" id="users">
             <div className="section-header">
@@ -294,7 +266,7 @@ function SuperAdmin() {
                       <td>{user.name}</td>
                       <td>{user.email}</td>
                       <td>
-                        <span className={`badge ${user.role === "Candidate" ? "Candidate" : "admin"}`}>
+                        <span className={`badge ${user.role === "candidate" ? "Candidate" : "admin"}`}>
                           {user.role}
                         </span>
                       </td>

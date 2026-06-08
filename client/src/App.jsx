@@ -25,9 +25,11 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   if (!token) return <Navigate to="/" replace />;
+
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to={user.role === "candidate" ? "/candidate" : "/dashboard"} replace />;
+    return <Navigate to={user.role === "candidate" ? "/candidate" : "/"} replace />;
   }
+
   return children;
 };
 
@@ -57,17 +59,17 @@ function App() {
             <Dashboard />
           </ProtectedRoute>
         } />
-        
+
         {/* Management & Questions */}
         <Route path="/add-question"               element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><AddQuestion /></ProtectedRoute>} />
         <Route path="/view-questions"             element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><ViewQuestions /></ProtectedRoute>} />
         <Route path="/test"                       element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><Test /></ProtectedRoute>} />
         <Route path="/admin/test-suites/:suiteId" element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><TestSuiteDetail /></ProtectedRoute>} />
-        
+
         {/* Results & Stats */}
         <Route path="/view-results"               element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><ViewResults /></ProtectedRoute>} />
         <Route path="/admin-results/:suiteId"     element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><AdminSuiteResults /></ProtectedRoute>} />
-        
+
         {/* Settings & System */}
         <Route path="/settings"                   element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><AdminSettings /></ProtectedRoute>} />
         <Route path="/superadmin"                 element={<ProtectedRoute allowedRoles={["superadmin"]}><SuperAdmin /></ProtectedRoute>} />
