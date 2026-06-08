@@ -3,13 +3,36 @@ const router = express.Router();
 const TestSuite = require("../models/TestSuite");
 const Question = require("../models/Question");
 const authMiddleware = require("../middleware/authMiddleware");
-// ✅ FIX: Match the exact filename in your models folder
 const ExamSettings = require("../models/ExamSettings");
+
+// ── GET QUESTIONS FOR A SUITE ─────────────────────────────────
+router.get("/:id/questions", async (req, res) => {
+  try {
+    const questions = await Question.find({ testSuite: req.params.id });
+    res.json(questions);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching questions" });
+  }
+});
+
+// ── ADD QUESTION TO A SUITE ───────────────────────────────────
+router.post("/:id/questions", authMiddleware, async (req, res) => {
+  try {
+    const newQuestion = new Question({
+      ...req.body,
+      testSuite: req.params.id,
+    });
+    const saved = await newQuestion.save();
+    res.status(201).json(saved);
+  } catch (err) {
+    console.error("Add Question Error:", err);
+    res.status(500).json({ message: "Error adding question" });
+  }
+});
 
 // ── GET ALL SUITES ────────────────────────────────────────────
 router.get("/", async (req, res) => {
   try {
-    // Fetches suites and calculates question counts for the Dashboard stats
     const suites = await TestSuite.find().sort({ createdAt: -1 });
     const suitesWithCount = await Promise.all(
       suites.map(async (suite) => {
@@ -24,17 +47,14 @@ router.get("/", async (req, res) => {
 });
 
 // ── CREATE NEW SUITE ──────────────────────────────────────────
-// Added authMiddleware to ensure only logged-in admins can create
 router.post("/", authMiddleware, async (req, res) => {
   try {
     const { name, description, status } = req.body;
-    
     const newSuite = new TestSuite({
       name,
       description,
       status: status || "draft",
     });
-
     const savedSuite = await newSuite.save();
     res.status(201).json(savedSuite);
   } catch (err) {
@@ -60,7 +80,6 @@ router.put("/:id", authMiddleware, async (req, res) => {
 // ── DELETE SUITE ──────────────────────────────────────────────
 router.delete("/:id", authMiddleware, async (req, res) => {
   try {
-    // Delete the suite AND all questions associated with it
     await Question.deleteMany({ testSuite: req.params.id });
     await TestSuite.findByIdAndDelete(req.params.id);
     res.json({ message: "Suite and associated questions deleted" });
