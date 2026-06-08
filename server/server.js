@@ -59,7 +59,7 @@ app.use("/api/auth",        authRoutes);
 app.use("/api/questions",   questionRoutes);
 app.use("/api/results",     resultRoutes);
 app.use("/api/settings",    settingsRoutes);
-a// Add both to server.js to stop the 404s
+// Add both to server.js to stop the 404s
 app.use("/api/test-suites", testSuitesRouter);
 app.use("/api/test-suite",  testSuitesRouter);
 
