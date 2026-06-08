@@ -49,7 +49,7 @@ app.use(async (req, res, next) => {
 // 1. Import the Route Files
 const authRoutes       = require("./authRoutes");
 const authMiddleware   = require("./middleware/authMiddleware");
-const questionRoutes   = require("./routes/questionsRoutes");
+const questionRoutes   = require("./routes/questionsR");
 const resultRoutes     = require("./routes/resultRoutes"); // Was missing require
 const settingsRoutes   = require("./routes/settings");     // Was missing require
 const testSuitesRouter = require("./routes/testSuites");
