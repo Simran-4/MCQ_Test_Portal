@@ -8,6 +8,7 @@ const app = express();
 // ── CORS ──────────────────────────────────────────────────────
 app.use(cors({
   origin: function(origin, callback) {
+    // Allows Vercel, Firebase (web.app), and Localhost
     if (!origin || origin.includes("vercel.app") || origin.includes("localhost") || origin.includes("web.app")) {
       callback(null, true);
     } else {
@@ -26,6 +27,7 @@ let isConnected = false;
 
 const connectDB = async () => {
   if (isConnected) return;
+  // Make sure MONGO_URI is set in your Railway Variables!
   await mongoose.connect(process.env.MONGO_URI, {
     serverSelectionTimeoutMS: 30000,
     socketTimeoutMS: 30000,
@@ -34,7 +36,6 @@ const connectDB = async () => {
   console.log("MongoDB Connected");
 };
 
-// Ensure DB connected before every request
 app.use(async (req, res, next) => {
   try {
     await connectDB();
@@ -45,20 +46,22 @@ app.use(async (req, res, next) => {
 });
 
 // ── Routes ────────────────────────────────────────────────────
+// 1. Import the Route Files
 const authRoutes       = require("./authRoutes");
 const authMiddleware   = require("./middleware/authMiddleware");
 const questionRoutes   = require("./routes/questionsR");
-const resultRoutes     = require("./routes/resultRoutes");
-const settingsRoutes   = require("./routes/settings");
+const resultRoutes     = require("./routes/resultRoutes"); // Was missing require
+const settingsRoutes   = require("./routes/settings");     // Was missing require
 const testSuitesRouter = require("./routes/testSuites");
-const questionsRoutes  = require("./routes/questionsR");
 
+// 2. Use the Routes
 app.use("/api/auth",        authRoutes);
 app.use("/api/questions",   questionRoutes);
 app.use("/api/results",     resultRoutes);
 app.use("/api/settings",    settingsRoutes);
 app.use("/api/test-suites", testSuitesRouter);
-app.use("/api",             questionsRoutes);
+
+// IMPORTANT: Removed app.use("/api", questionsRoutes) to prevent 404 conflicts
 
 // ── Health check ──────────────────────────────────────────────
 app.get("/", (req, res) => {
@@ -69,9 +72,11 @@ app.get("/api/protected", authMiddleware, (req, res) => {
   res.json({ message: "Protected Route Accessed", user: req.user });
 });
 
-// ── Start (disabled for Vercel serverless) ────────────────────
+// ── Start ─────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+// Added '0.0.0.0' for better Railway networking compatibility
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
+
 module.exports = app;
