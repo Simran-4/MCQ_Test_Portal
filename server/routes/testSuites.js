@@ -1,160 +1,263 @@
-// routes/testSuites.js  â”€â”€ add this new file to your backend
 const express = require("express");
-const router = express.Router();
-const TestSuite = require("../models/TestSuite");
+const router  = express.Router();
+const Result   = require("../models/Result");
 const Question = require("../models/Question");
 
-// â”€â”€ Middleware: protect all routes (reuse your existing auth middleware) â”€â”€
-// const authMiddleware = require("../middleware/auth");
-// router.use(authMiddleware);
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// GET /api/test-suites
-// Returns all test suites with question counts
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-router.get("/", async (req, res) => {
-  try {
-    const suites = await TestSuite.find().sort({ createdAt: -1 });
-
-    // Attach question count to each suite
-    const suitesWithCount = await Promise.all(
-      suites.map(async (suite) => {
-        const count = await Question.countDocuments({ testSuite: suite._id });
-        return { ...suite.toObject(), questionCount: count };
-      })
-    );
-
-    res.json(suitesWithCount);
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// POST /api/test-suites
-// Create a new test suite
-// Body: { name, description?, status? }
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ══════════════════════════════════════════════════════════════
+// POST /api/results
+// Full graded submission (used by the suite-based test engine)
+// ══════════════════════════════════════════════════════════════
 router.post("/", async (req, res) => {
   try {
-    const { name, description, status, scheduledAt } = req.body;
+    const {
+      suiteId,
+      CandidateName,
+      CandidateEmail,
+      answers,
+      project,      // Feature 11 — NEW
+      designation,  // Feature 11 — NEW
+    } = req.body;
 
-    if (!name || name.trim() === "") {
-      return res.status(400).json({ message: "Test suite name is required" });
+    const questions = await Question.find({ testSuite: suiteId });
+
+    let score        = 0;
+    let totalMarks   = 0;
+    let correctCount = 0;
+
+    const gradedAnswers = answers.map(({ questionId, selectedOptions }) => {
+      const q = questions.find(q => q._id.toString() === questionId);
+      if (!q) return { questionId, selectedOptions: selectedOptions || [], isCorrect: false, category: [] };
+
+      const marks = q.marks ?? 1;
+      totalMarks += marks;
+
+      const correct  = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
+      const selected = Array.isArray(selectedOptions)
+        ? selectedOptions
+        : selectedOptions !== undefined ? [selectedOptions] : [];
+
+      const isCorrect =
+        correct.length === selected.length &&
+        correct.every(c => selected.includes(c)) &&
+        selected.every(s => correct.includes(s));
+
+      if (isCorrect) { score += marks; correctCount++; }
+
+      return {
+        questionId,
+        selectedOptions: selected,
+        isCorrect,
+        category: Array.isArray(q.category) ? q.category : (q.category ? [q.category] : []),
+      };
+    });
+
+    // Build categoryResults
+    const categoryMap = {};
+    gradedAnswers.forEach(({ category, isCorrect }) => {
+      const cats = Array.isArray(category) ? category : [category];
+      cats.forEach(cat => {
+        if (!cat) return;
+        if (!categoryMap[cat]) categoryMap[cat] = { score: 0, total: 0 };
+        categoryMap[cat].total++;
+        if (isCorrect) categoryMap[cat].score++;
+      });
+    });
+
+    const categoryResults = Object.entries(categoryMap).map(([category, data]) => ({
+      category,
+      score:      data.score,
+      total:      data.total,
+      percentage: Math.round((data.score / data.total) * 100),
+    }));
+
+    // Feature 8: compute passed flag at save time
+    const pct    = totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
+    const passed = pct >= 50; // default; overridden by settings if you want
+
+    const result = new Result({
+      suiteId,
+      CandidateName,
+      CandidateEmail,
+      answers:        gradedAnswers,
+      score,
+      totalMarks,
+      correctAnswers: correctCount,
+      submittedAt:    new Date(),
+      userName:       CandidateName,
+      userEmail:      CandidateEmail,
+      totalQuestions: questions.length,
+      categoryResults,
+      project:     project     || "General",  // Feature 11 — NEW
+      designation: designation || "",         // Feature 11 — NEW
+      passed,                                 // Feature 8  — NEW
+    });
+
+    await result.save();
+
+    res.status(201).json({
+      score,
+      totalMarks,
+      correctAnswers:  correctCount,
+      totalQuestions:  questions.length,
+      categoryResults,
+      passed,
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error submitting result" });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// GET /api/results/suite/:suiteId
+// All results for a specific test suite
+// ══════════════════════════════════════════════════════════════
+router.get("/suite/:suiteId", async (req, res) => {
+  try {
+    const results = await Result.find({ suiteId: req.params.suiteId }).sort({ submittedAt: -1 });
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error fetching suite results" });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// POST /api/results/add  — legacy route used by old Test.jsx
+// Now also accepts project + designation + totalMarks
+// ══════════════════════════════════════════════════════════════
+router.post("/add", async (req, res) => {
+  try {
+    const {
+      userName,
+      userEmail,
+      score,
+      totalMarks,
+      totalQuestions,
+      categoryResults,
+      project,      // Feature 11 — NEW
+      designation,  // Feature 11 — NEW
+    } = req.body;
+
+    // Feature 8: compute passed flag
+    const tm     = totalMarks || totalQuestions || 0;
+    const pct    = tm > 0 ? Math.round((score / tm) * 100) : 0;
+    const passed = pct >= 50;
+
+    const newResult = new Result({
+      userName,
+      userEmail,
+      score,
+      totalMarks:    totalMarks    || totalQuestions || 0,
+      totalQuestions: totalQuestions || 0,
+      categoryResults: categoryResults || [],
+      project:     project     || "General",  // Feature 11 — NEW
+      designation: designation || "",         // Feature 11 — NEW
+      passed,                                 // Feature 8  — NEW
+    });
+
+    await newResult.save();
+    res.json({ message: "Result Saved Successfully" });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Error Saving Result" });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// GET /api/results/my/:email
+// All results for a specific candidate (by email)
+// ══════════════════════════════════════════════════════════════
+router.get("/my/:email", async (req, res) => {
+  try {
+    const results = await Result.find({ userEmail: req.params.email }).sort({ createdAt: -1 });
+    res.json(results);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Error Fetching Results" });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// GET /api/results/all?search=&project=
+// All results — with optional search and project filter
+// Feature 11 + 12 — NEW query params
+// ══════════════════════════════════════════════════════════════
+router.get("/all", async (req, res) => {
+  try {
+    const { search, project } = req.query;
+
+    const query = {};
+
+    // Feature 11: filter by project
+    if (project && project.trim() !== "") {
+      query.project = project.trim();
     }
 
-    const suite = new TestSuite({ name, description, status, scheduledAt });
-    await suite.save();
+    // Feature 12: search across name + email
+    if (search && search.trim() !== "") {
+      const regex = new RegExp(search.trim(), "i");
+      query.$or = [
+        { userName:       regex },
+        { userEmail:      regex },
+        { CandidateName:  regex },
+        { CandidateEmail: regex },
+        { project:        regex },
+        { designation:    regex },
+      ];
+    }
 
-    res.status(201).json(suite);
+    const results = await Result.find(query).sort({ createdAt: -1 });
+    res.json(results);
   } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
-// GET /api/test-suites/active
-// Returns only active suites for Candidates
-router.get("/active", async (req, res) => {
-  try {
-    const suites = await TestSuite.find({ status: "active" }).sort({ createdAt: -1 });
-
-    const suitesWithCount = await Promise.all(
-      suites.map(async (suite) => {
-        const count = await Question.countDocuments({ testSuite: suite._id });
-        return { ...suite.toObject(), questionCount: count };
-      })
-    );
-
-    res.json(suitesWithCount);
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.log(err);
+    res.status(500).json({ message: "Error Fetching Results" });
   }
 });
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// GET /api/test-suites/:id
-// Get a single test suite by ID
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-router.get("/:id", async (req, res) => {
+// ══════════════════════════════════════════════════════════════
+// GET /api/results/projects
+// Returns distinct project names — used to populate filter dropdown
+// Feature 11 — NEW
+// ══════════════════════════════════════════════════════════════
+router.get("/projects", async (req, res) => {
   try {
-    const suite = await TestSuite.findById(req.params.id);
-    if (!suite) return res.status(404).json({ message: "Test suite not found" });
-
-    const questionCount = await Question.countDocuments({ testSuite: suite._id });
-    res.json({ ...suite.toObject(), questionCount });
+    const projects = await Result.distinct("project");
+    res.json(projects.filter(Boolean));
   } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.log(err);
+    res.status(500).json({ message: "Error Fetching Projects" });
   }
 });
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// PUT /api/test-suites/:id
-// Update a test suite name / status
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-router.put("/:id", async (req, res) => {
+// ══════════════════════════════════════════════════════════════
+// GET /api/results/by-project/:project
+// All results for a specific project name
+// Feature 11 — NEW
+// ══════════════════════════════════════════════════════════════
+router.get("/by-project/:project", async (req, res) => {
   try {
-    const suite = await TestSuite.findByIdAndUpdate(
-      req.params.id,
-      { $set: req.body },
-      { new: true, runValidators: true }
-    );
-    if (!suite) return res.status(404).json({ message: "Test suite not found" });
-    res.json(suite);
+    const results = await Result.find({
+      project: req.params.project,
+    }).sort({ createdAt: -1 });
+    res.json(results);
   } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.log(err);
+    res.status(500).json({ message: "Error Fetching Results" });
   }
 });
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// DELETE /api/test-suites/:id
-// Delete a test suite AND all its questions
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-router.delete("/:id", async (req, res) => {
+// ══════════════════════════════════════════════════════════════
+// GET /api/results/delete-all  (utility — keep as-is)
+// ══════════════════════════════════════════════════════════════
+router.get("/delete-all", async (req, res) => {
   try {
-    const suite = await TestSuite.findByIdAndDelete(req.params.id);
-    if (!suite) return res.status(404).json({ message: "Test suite not found" });
-
-    // Also delete all questions belonging to this suite
-    await Question.deleteMany({ testSuite: req.params.id });
-
-    res.json({ message: "Test suite and its questions deleted successfully" });
+    await Result.deleteMany({});
+    res.json({ message: "All Results Deleted Successfully" });
   } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// GET /api/test-suites/:id/questions
-// Get all questions for a specific test suite
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-router.get("/:id/questions", async (req, res) => {
-  try {
-    const questions = await Question.find({ testSuite: req.params.id }).sort({
-      createdAt: 1,
-    });
-    res.json(questions);
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// POST /api/test-suites/:id/questions
-// Add a question to a specific test suite
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-router.post("/:id/questions", async (req, res) => {
-  try {
-    const suite = await TestSuite.findById(req.params.id);
-    if (!suite) return res.status(404).json({ message: "Test suite not found" });
-
-    const question = new Question({
-      ...req.body,
-      testSuite: req.params.id,
-    });
-    await question.save();
-
-    res.status(201).json(question);
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.log(err);
+    res.status(500).json({ message: "Error Deleting Results" });
   }
 });
 

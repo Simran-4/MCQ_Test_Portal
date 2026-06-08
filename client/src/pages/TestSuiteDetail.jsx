@@ -170,50 +170,59 @@ export default function TestSuiteDetail() {
   };
 
   const handleSubmit = async () => {
-    setError("");
-    if (!form.questionText.trim()) { setError("Question text is required"); return; }
-    const filledOptions = form.options.filter(o => o.trim());
-    if (filledOptions.length < 2) { setError("At least 2 options are required"); return; }
-    if (form.correctAnswers.length === 0) { setError("Please select at least one correct answer"); return; }
-    if (form.categories.length === 0) { setError("Please select at least one category"); return; }
+  setError("");
+  
+  // 1. Validations
+  if (!form.questionText.trim()) return setError("Question text is required");
+  const trimmedOptions = form.options.map(o => o.trim()).filter(Boolean);
+  if (trimmedOptions.length < 2) return setError("At least 2 options are required");
+  if (form.correctAnswers.length === 0) return setError("Select at least one correct answer");
+  if (form.categories.length === 0) return setError("Please select at least one category");
 
-    const trimmedOptions = form.options.map(o => o.trim()).filter(Boolean);
-    const oldToNew = {};
-    let newIdx = 0;
-    form.options.forEach((opt, oldIdx) => {
-      if (opt.trim()) { oldToNew[oldIdx] = newIdx++; }
-    });
-    const remappedCorrect = form.correctAnswers
-      .filter(i => form.options[i]?.trim())
-      .map(i => oldToNew[i]);
-
-    const payload = {
-      questionText:  form.questionText.trim(),
-      options:       trimmedOptions,
-      correctAnswer: remappedCorrect,
-      explanation:   form.explanation,
-      marks:         form.marks,
-      category:      form.categories,
-    };
-
-    setSaving(true);
-    try {
-      if (editingQ) {
-        const res = await axios.put(`${API}/api/questions/${editingQ}`, payload);
-        setQuestions(prev => prev.map(q => q._id === editingQ ? res.data : q));
-        setEditingQ(null);
-      } else {
-        const res = await axios.post(`${API}/api/test-suites/${suiteId}/questions`, payload);
-        setQuestions(prev => [...prev, res.data]);
+  // 2. Remap Correct Answer Indices 
+  // (In case user typed in Option 1 and 4 but left 2 and 3 empty)
+  const remappedCorrect = [];
+  let currentNewIdx = 0;
+  form.options.forEach((opt, oldIdx) => {
+    if (opt.trim()) {
+      if (form.correctAnswers.includes(oldIdx)) {
+        remappedCorrect.push(currentNewIdx);
       }
-      setForm(emptyForm);
-      setShowForm(false);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to save question");
-    } finally {
-      setSaving(false);
+      currentNewIdx++;
     }
+  });
+
+  const payload = {
+    questionText: form.questionText.trim(),
+    options: trimmedOptions,
+    correctAnswer: remappedCorrect, // Sends array for Multi-correct support
+    explanation: form.explanation.trim(),
+    marks: Number(form.marks) || 1,
+    category: form.categories, // Consistent Array
+    testSuite: suiteId, // Ensure relation is saved
   };
+
+  setSaving(true);
+  try {
+    const token = localStorage.getItem("token");
+    const config = { headers: { Authorization: `Bearer ${token}` } };
+
+    if (editingQ) {
+      const res = await axios.put(`${API}/api/questions/${editingQ}`, payload, config);
+      setQuestions(prev => prev.map(q => q._id === editingQ ? res.data : q));
+    } else {
+      const res = await axios.post(`${API}/api/test-suites/${suiteId}/questions`, payload, config);
+      setQuestions(prev => [...prev, res.data]);
+    }
+    
+    // Reset and Close
+    handleCancelForm();
+  } catch (err) {
+    setError(err.response?.data?.message || "Failed to save question");
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleEdit = (q) => {
     const opts = q.options.length < 4

@@ -1,18 +1,58 @@
 const mongoose = require("mongoose");
 
-const userSchema = new mongoose.Schema({
-    name: String,
-    email: String,
-    password: String,
-    role: {
-        type: String,
-        enum: ["Candidate", "admin", "superadmin"],
-        default: "Candidate"
-    },
-    isActive: {
-        type: Boolean,
-        default: true
-    }
-});
+const UserSchema = new mongoose.Schema(
+    {
+        name: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        email: {
+            type: String,
+            required: true,
+            unique: true,
+            lowercase: true,
+            trim: true,
+        },
+        password: {
+            type: String,
+            required: true,
+        },
+        role: {
+            type: String,
+            // Normalizing to lowercase to match authRoutes logic
+            enum: ["candidate", "admin", "superadmin"],
+            default: "candidate",
+        },
+        isActive: {
+            type: Boolean,
+            default: true,
+        },
 
-module.exports = mongoose.model("User", userSchema);
+        // ── NEW FIELDS ────────────────────────────────────
+        age: {
+            type: Number,
+            default: null,
+        },
+        gender: {
+            type: String,
+            // Allowing empty string for optional/default cases
+            enum: ["Male", "Female", "Other", ""],
+            default: "",
+        },
+        project: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        designation: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        // ─────────────────────────────────────────────────
+    },
+    { timestamps: true }
+);
+
+module.exports = mongoose.model("User", UserSchema);

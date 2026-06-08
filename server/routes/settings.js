@@ -19,11 +19,13 @@ router.get("/", async (req, res) => {
   try {
     let settings = await ExamSettings.findOne();
 
-    // ✅ If no settings exist yet, create default ones
+    // If no settings exist yet, create default ones
     if (!settings) {
       settings = await ExamSettings.create({
         totalQuestions: 20,
         examDuration: 30,
+        passingPercentage: 50,   // NEW — default 50%
+        questionsToServe: 10,    // NEW — default 10 random questions
       });
     }
 

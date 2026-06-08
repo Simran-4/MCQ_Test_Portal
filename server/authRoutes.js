@@ -7,6 +7,7 @@ const authMiddleware = require("./middleware/authMiddleware");
 
 const router = express.Router();
 
+// Helper to restrict to Super Admin
 const requireSuperAdmin = (req, res, next) => {
     if (req.user.role !== "superadmin") {
         return res.status(403).json({
@@ -16,18 +17,22 @@ const requireSuperAdmin = (req, res, next) => {
     next();
 };
 
-// REGISTER
+// ── REGISTER ──────────────────────────────────────────────────
 router.post("/register", async (req, res) => {
     try {
-        const { name, email, password, role } = req.body;
+        const { name, email, password, role, age, gender, project, designation } = req.body;
 
-        if (role === "superadmin") {
+        // Normalize email and role to lowercase
+        const normalizedEmail = email.toLowerCase().trim();
+        const normalizedRole = role.toLowerCase().trim();
+
+        if (normalizedRole === "superadmin") {
             return res.status(403).json({
                 message: "Super admin accounts cannot be created publicly"
             });
         }
 
-        const existingUser = await User.findOne({ email });
+        const existingUser = await User.findOne({ email: normalizedEmail });
         if (existingUser) {
             return res.status(400).json({ message: "User already exists" });
         }
@@ -35,10 +40,14 @@ router.post("/register", async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newUser = new User({
-            name,
-            email,
+            name: name.trim(),
+            email: normalizedEmail,
             password: hashedPassword,
-            role,
+            role: normalizedRole,
+            age:         parseInt(age)   || null,
+            gender:      gender          || "",
+            project:     project.trim()  || "",
+            designation: designation.trim() || "",
         });
 
         await newUser.save();
@@ -50,12 +59,12 @@ router.post("/register", async (req, res) => {
     }
 });
 
-// LOGIN
+// ── LOGIN ─────────────────────────────────────────────────────
 router.post("/login", async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase().trim() });
         if (!user) {
             return res.status(400).json({ message: "User not found" });
         }
@@ -69,9 +78,10 @@ router.post("/login", async (req, res) => {
             return res.status(400).json({ message: "Invalid credentials" });
         }
 
+        // Generate JWT
         const token = jwt.sign(
             { id: user._id, role: user.role },
-            "secretkey",
+            process.env.JWT_SECRET || "secretkey", 
             { expiresIn: "1d" }
         );
 
@@ -79,9 +89,13 @@ router.post("/login", async (req, res) => {
             message: "Login successful",
             token,
             user: {
-                name: user.name,
-                email: user.email,
-                role: user.role
+                name:        user.name,
+                email:       user.email,
+                role:        user.role,
+                age:         user.age,
+                gender:      user.gender,
+                project:     user.project,
+                designation: user.designation,
             }
         });
 
@@ -90,38 +104,31 @@ router.post("/login", async (req, res) => {
     }
 });
 
-// SUPER ADMIN OVERVIEW
+// ── ENHANCED SUPER ADMIN OVERVIEW ──
 router.get("/superadmin/overview", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
-        const [users, assessments] = await Promise.all([
-            User.find().select("_id name email role isActive").sort({ name: 1 }),
-            Result.countDocuments()
+        const [users, totalResults, passedResults] = await Promise.all([
+            User.find().select("-password").sort({ name: 1 }),
+            Result.countDocuments(),
+            Result.countDocuments({ passed: true }) // Assuming 'passed' is in your Result model
         ]);
-
-        const normalizedUsers = users.map((user) => ({
-            ...user.toObject(),
-            isActive: user.isActive !== false
-        }));
 
         res.json({
             stats: {
-                totalUsers: normalizedUsers.length,
-                activeUsers: normalizedUsers.filter((u) => u.isActive).length,
-                // ✅ changed "teacher" to "admin"
-                administrators: normalizedUsers.filter(
-                    (u) => u.role === "admin" || u.role === "superadmin"
-                ).length,
-                assessments
+                totalUsers: users.length,
+                activeUsers: users.filter(u => u.isActive !== false).length,
+                administrators: users.filter(u => u.role === "admin" || u.role === "superadmin").length,
+                totalAssessments: totalResults,
+                overallPassRate: totalResults > 0 ? Math.round((passedResults / totalResults) * 100) : 0
             },
-            users: normalizedUsers
+            users
         });
-
     } catch (err) {
-        res.status(500).json({ message: "Error fetching super admin overview" });
+        res.status(500).json({ message: "Error fetching overview" });
     }
 });
 
-// UPDATE USER ACCESS
+// ── UPDATE USER ACCESS ───────────────────────────────────────
 router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
         const { isActive } = req.body;
@@ -138,7 +145,7 @@ router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, as
             req.params.id,
             { isActive },
             { new: true }
-        ).select("_id name email role isActive");
+        ).select("_id name email role isActive age gender project designation");
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
