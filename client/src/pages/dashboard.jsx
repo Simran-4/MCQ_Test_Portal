@@ -203,7 +203,6 @@ export default function Dashboard() {
           <img src="/Logo.png" alt="Snehalaya logo" />
           <div>
             <h1>Snehalaya</h1>
-            <p>Empowering Communities</p>
           </div>
         </div>
 
@@ -252,15 +251,6 @@ export default function Dashboard() {
           </div>
 
           <div className="admin-top-actions">
-            <button type="button" className="language-chip">
-              <span>◉</span>
-              English
-              <span>⌄</span>
-            </button>
-            <button type="button" className="notification-btn" aria-label="Notifications">
-              ♡
-              <span>{activeSuites}</span>
-            </button>
             <div className="admin-profile-card">
               <div>{(user.name || "Admin").charAt(0).toUpperCase()}</div>
               <p>
@@ -313,9 +303,6 @@ export default function Dashboard() {
               <p>Create, manage and monitor your test suites.</p>
             </div>
             <div>
-              <button type="button" className="admin-secondary-btn" onClick={() => setShowBulkMail(value => !value)}>
-                ✉ Bulk mail
-              </button>
               <button type="button" className="admin-primary-btn" onClick={openNewSuite}>
                 ＋ New test suite
               </button>

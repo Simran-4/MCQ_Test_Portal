@@ -64,12 +64,6 @@ body {
   line-height: 1;
 }
 
-.admin-brand p {
-  margin: 8px 0 0;
-  color: var(--admin-muted);
-  font-size: 14px;
-}
-
 .admin-nav,
 .admin-nav-group {
   display: grid;
@@ -182,12 +176,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 18px;
+  gap: 20px;
   flex-wrap: wrap;
 }
 
-.language-chip,
-.notification-btn,
 .admin-logout-btn,
 .admin-secondary-btn,
 .admin-primary-btn,
@@ -201,44 +193,6 @@ body {
   font-weight: 800;
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-}
-
-.language-chip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 22px;
-  border: 1px solid var(--admin-border);
-  background: #fff;
-  color: #111;
-}
-
-.language-chip span:first-child {
-  color: var(--admin-green-dark);
-  font-size: 20px;
-}
-
-.notification-btn {
-  position: relative;
-  width: 54px;
-  border: 1px solid var(--admin-border);
-  background: #fff;
-  color: #111;
-  font-size: 20px;
-}
-
-.notification-btn span {
-  position: absolute;
-  top: -9px;
-  right: -5px;
-  min-width: 23px;
-  height: 23px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: #6dad55;
-  color: #fff;
-  font-size: 12px;
 }
 
 .admin-profile-card {
@@ -397,8 +351,7 @@ body {
 .admin-open-btn:hover,
 .admin-delete-btn:hover,
 .admin-toggle-btn:hover,
-.admin-logout-btn:hover,
-.language-chip:hover {
+.admin-logout-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 24px rgba(24, 55, 36, 0.08);
 }
@@ -822,7 +775,6 @@ body {
 
   .admin-suite-actions > *,
   .suite-section-header button,
-  .language-chip,
   .admin-logout-btn {
     width: 100%;
   }
