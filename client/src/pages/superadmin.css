@@ -214,6 +214,149 @@ body {
   font-weight: 800;
 }
 
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 22px;
+  padding: 18px;
+  border: 1px solid #e4ebe6;
+  border-radius: 16px;
+  background: #f8faf8;
+}
+
+.report-toolbar h3 {
+  margin: 0;
+  color: var(--admin-primary);
+  font-size: 32px;
+  line-height: 1;
+}
+
+.report-toolbar p {
+  margin-top: 5px;
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+.report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.report-actions button {
+  padding: 10px 14px;
+  border: 1px solid #cfe3d7;
+  border-radius: 10px;
+  background: var(--admin-white);
+  color: var(--admin-primary-dark);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.report-actions button:hover {
+  background: var(--admin-primary-light);
+}
+
+.control-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.control-panel {
+  padding: 18px;
+  border: 1px solid #e1ebe5;
+  border-radius: 16px;
+  background: #fbfcfb;
+}
+
+.control-panel.wide {
+  grid-column: 1 / -1;
+}
+
+.control-panel h3 {
+  margin-bottom: 14px;
+  color: var(--admin-primary-dark);
+  font-size: 18px;
+}
+
+.control-panel input,
+.control-panel select,
+.control-panel textarea,
+.section-header select {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid #d9e4dd;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--admin-text);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.section-header select {
+  max-width: 260px;
+  margin-bottom: 0;
+}
+
+.control-panel button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--admin-primary);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mini-list,
+.project-list details div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.mini-list span,
+.project-list details div span {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e8f4ed;
+  color: var(--admin-primary-dark);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.project-list {
+  display: grid;
+  gap: 10px;
+}
+
+.project-list details {
+  padding: 12px 14px;
+  border: 1px solid #e1ebe5;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.project-list summary {
+  cursor: pointer;
+  color: var(--admin-primary-dark);
+  font-weight: 800;
+}
+
+.project-list summary span {
+  float: right;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 /* ========== CARD ========== */
 .card {
   padding: 32px;
@@ -318,6 +461,16 @@ tbody tr:last-child td {
 .admin {
   background: #dcfce7;
   color: #15803d;
+}
+
+.badge.active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge.disabled {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 /* ========== TOGGLE SWITCH ========== */

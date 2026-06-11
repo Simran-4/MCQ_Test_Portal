@@ -4,6 +4,17 @@ const Question = require("../models/Question");
 const TestSuite = require("../models/TestSuite");
 const authMiddleware = require("../middleware/authMiddleware");
 
+function sanitizeCategoryCorrectAnswers(rawMap, categories, optionCount) {
+  const source = rawMap && typeof rawMap === "object" ? rawMap : {};
+  return (Array.isArray(categories) ? categories : [])
+    .reduce((acc, cat) => {
+      const answers = Array.isArray(source[cat]) ? source[cat] : [];
+      acc[cat] = [...new Set(answers.map(Number))]
+        .filter(i => Number.isInteger(i) && i >= 0 && i < optionCount);
+      return acc;
+    }, {});
+}
+
 // ── POST /api/questions/add (legacy) ─────────────────────────
 router.post("/add", async (req, res) => {
   try {
@@ -32,27 +43,33 @@ router.post("/add", async (req, res) => {
 // ── PUT /api/questions/:id ────────────────────────────────────
 router.put("/:id", authMiddleware, async (req, res) => {
   try {
-    const { questionText, options, correctAnswer, explanation, marks, category } = req.body;
+    const { questionText, options, correctAnswer, explanation, marks, category, categoryCorrectAnswers } = req.body;
+    const questionType = req.body.questionType === "theory" ? "theory" : "mcq";
     if (!questionText?.trim())
       return res.status(400).json({ message: "Question text is required" });
-    const filledOptions = options.filter(o => o.trim() !== "");
-    if (filledOptions.length < 2)
+    const filledOptions = Array.isArray(options) ? options.filter(o => String(o).trim() !== "") : [];
+    if (questionType === "mcq" && filledOptions.length < 2)
       return res.status(400).json({ message: "At least 2 options are required" });
     const correctArr = Array.isArray(correctAnswer) ? correctAnswer : [correctAnswer];
-    if (correctArr.length === 0)
+    if (questionType === "mcq" && correctArr.length === 0)
       return res.status(400).json({ message: "At least one correct answer is required" });
     const invalidIndex = correctArr.some(i => i < 0 || i >= filledOptions.length);
-    if (invalidIndex)
+    if (questionType === "mcq" && invalidIndex)
       return res.status(400).json({ message: "Correct answer index out of range" });
+    const categories = Array.isArray(category) ? category : (category ? [category] : []);
+    const categoryAnswerMap = sanitizeCategoryCorrectAnswers(categoryCorrectAnswers, categories, filledOptions.length);
+
     const updated = await Question.findByIdAndUpdate(
       req.params.id,
       {
         questionText:  questionText.trim(),
-        options:       filledOptions,
-        correctAnswer: correctArr,
+        questionType,
+        options:       questionType === "theory" ? [] : filledOptions,
+        correctAnswer: questionType === "theory" ? [] : correctArr,
         explanation:   explanation || "",
         marks:         marks || 1,
-        category:      Array.isArray(category) ? category : (category ? [category] : []),
+        category:      categories,
+        categoryCorrectAnswers: questionType === "theory" ? {} : categoryAnswerMap,
       },
       { new: true, runValidators: true }
     );

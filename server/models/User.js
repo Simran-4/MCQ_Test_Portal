@@ -24,6 +24,11 @@ const UserSchema = new mongoose.Schema(
             enum: ["candidate", "admin", "superadmin"],
             default: "candidate",
         },
+        customRole: {
+            type: String,
+            trim: true,
+            default: "",
+        },
         isActive: {
             type: Boolean,
             default: true,

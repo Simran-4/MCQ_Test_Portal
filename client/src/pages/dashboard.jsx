@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./dashboard.css";
+import { getAuthHeaders } from "../utils/auth";
+import BulkMailPanel from "../components/BulkMailPanel";
 
 const API        = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const GREEN      = "#2D5F3F";
@@ -15,6 +17,7 @@ function SuiteModal({ suite, onClose, onSave }) {
   const [name, setName]        = useState(suite?.name || "");
   const [description, setDesc] = useState(suite?.description || "");
   const [status, setStatus]    = useState(suite?.status || "draft");
+  const [passingPercentage, setPassingPercentage] = useState(suite?.passingPercentage ?? 50);
   const [loading, setLoading]  = useState(false);
   const [error, setError]      = useState("");
 
@@ -23,9 +26,14 @@ function SuiteModal({ suite, onClose, onSave }) {
     setLoading(true);
     setError("");
     try {
-      const token  = localStorage.getItem("token");
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      const payload = { name, description, status };
+      const config = { headers: getAuthHeaders() };
+      const passMark = Number(passingPercentage);
+      if (!Number.isFinite(passMark) || passMark < 0 || passMark > 100) {
+        setError("Passing percentage must be between 0 and 100");
+        setLoading(false);
+        return;
+      }
+      const payload = { name, description, status, passingPercentage: passMark };
       if (suite) {
         const res = await axios.put(`${API}/api/test-suites/${suite._id}`, payload, config);
         onSave(res.data, "edit");
@@ -71,6 +79,17 @@ function SuiteModal({ suite, onClose, onSave }) {
               <option value="scheduled">Scheduled</option>
             </select>
           </div>
+          <div>
+            <label style={{ fontSize: "12px", color: "#666", display: "block", marginBottom: "5px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Passing Criteria (%)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              style={inputStyle}
+              value={passingPercentage}
+              onChange={e => setPassingPercentage(e.target.value)}
+            />
+          </div>
         </div>
         <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "22px" }}>
           <button onClick={onClose} style={{ padding: "10px 20px", fontSize: "14px", borderRadius: "22px", border: "1px solid #ddd", background: WHITE, cursor: "pointer", fontWeight: "600", color: "#555" }}>
@@ -93,14 +112,14 @@ export default function Dashboard() {
   const [showModal, setShowModal]   = useState(false);
   const [editingSuite, setEditing]  = useState(null);
   const [togglingId, setTogglingId] = useState(null);
+  const [showBulkMail, setShowBulkMail] = useState(false);
 
   useEffect(() => { fetchSuites(); }, []);
 
   const fetchSuites = async () => {
     try {
-      const token = localStorage.getItem("token");
       const res = await axios.get(`${API}/api/test-suites`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
       setSuites(res.data);
     } catch (err) {
@@ -123,9 +142,8 @@ export default function Dashboard() {
     e.stopPropagation();
     if (!window.confirm(`Delete "${suiteName}" and all its questions?`)) return;
     try {
-      const token = localStorage.getItem("token");
       await axios.delete(`${API}/api/test-suites/${suiteId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
       setSuites(prev => prev.filter(s => s._id !== suiteId));
     } catch (err) {
@@ -138,12 +156,11 @@ export default function Dashboard() {
     e.stopPropagation();
     setTogglingId(suiteId);
     try {
-      const token = localStorage.getItem("token");
       const newStatus = currentStatus === "active" ? "draft" : "active";
       await axios.put(
         `${API}/api/test-suites/${suiteId}`,
         { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: getAuthHeaders() }
       );
       setSuites(prev => prev.map(s =>
         s._id === suiteId ? { ...s, status: newStatus } : s
@@ -224,10 +241,21 @@ export default function Dashboard() {
             TEST SUITES
             <div className="section-line"></div>
           </div>
-          <button className="new-suite-btn" onClick={() => { setEditing(null); setShowModal(true); }}>
-            + New test suite
-          </button>
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <button className="new-suite-btn" onClick={() => setShowBulkMail(v => !v)}>
+              ✉ Bulk mail
+            </button>
+            <button className="new-suite-btn" onClick={() => { setEditing(null); setShowModal(true); }}>
+              + New test suite
+            </button>
+          </div>
         </div>
+
+        {showBulkMail && (
+          <div style={{ marginBottom: "20px" }}>
+            <BulkMailPanel compact />
+          </div>
+        )}
 
         {loading ? (
           <div style={{ textAlign: "center", padding: "40px", color: "#666" }}>Loading your suites...</div>
@@ -243,7 +271,7 @@ export default function Dashboard() {
                   <div className="suite-icon">📄</div>
                   <div>
                     <div className="suite-name">{suite.name}</div>
-                    <div className="suite-info">{suite.questionCount ?? 0} questions</div>
+                    <div className="suite-info">{suite.questionCount ?? 0} questions · Pass {suite.passingPercentage ?? 50}%</div>
                   </div>
                 </div>
                 <div className="suite-right">

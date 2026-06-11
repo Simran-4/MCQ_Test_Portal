@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const answerSchema = new mongoose.Schema({
   questionId:      { type: mongoose.Schema.Types.ObjectId, ref: "Question" },
   selectedOptions: { type: [Number], default: [] },
+  textAnswer:      { type: String, default: "" },
   isCorrect:       { type: Boolean, default: false },
   earnedMarks:     { type: Number, default: 0 },
   category:        { type: [String], default: [] },
@@ -18,6 +19,7 @@ const categoryResultSchema = new mongoose.Schema({
 
 const resultSchema = new mongoose.Schema({
   suiteId:        { type: mongoose.Schema.Types.ObjectId, ref: "TestSuite" },
+  testName:       { type: String, default: "" },
   CandidateName:  { type: String },
   CandidateEmail: { type: String },
   userName:       { type: String },

@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { getAuthHeaders } from "../utils/auth";
 
 const API        = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const GREEN      = "#2D5F3F";
@@ -11,12 +12,93 @@ const WHITE      = "#ffffff";
 
 const emptyForm = {
   questionText:   "",
+  questionType:   "mcq",
   options:        ["", "", "", ""],
   correctAnswers: [],
+  categoryCorrectAnswers: {},
   explanation:    "",
   marks:          1,
   categories:     [],
 };
+
+function getCategoryAnswerMap(q) {
+  if (!q?.categoryCorrectAnswers) return {};
+  if (q.categoryCorrectAnswers instanceof Map) return Object.fromEntries(q.categoryCorrectAnswers);
+  return q.categoryCorrectAnswers;
+}
+
+function uniqueSortedIndexes(indexes) {
+  return [...new Set((Array.isArray(indexes) ? indexes : []).map(Number))]
+    .filter(Number.isInteger)
+    .sort((a, b) => a - b);
+}
+
+function isTheoryQuestion(q) {
+  return q?.questionType === "theory";
+}
+
+function rowValue(row, keys) {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== "") {
+      return row[key];
+    }
+  }
+  return "";
+}
+
+function splitList(value) {
+  return String(value || "")
+    .split(",")
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function parseCorrectAnswerIndexes(value, options) {
+  const optionLetters = { a: 0, b: 1, c: 2, d: 3 };
+  return [...new Set(splitList(value).map(item => {
+    const token = item.toLowerCase();
+    if (/^\d+$/.test(token)) return Number(token);
+    if (optionLetters[token] !== undefined) return optionLetters[token];
+    return options.findIndex(option => option.toLowerCase() === token);
+  }))]
+    .filter(index => Number.isInteger(index) && index >= 0 && index < options.length);
+}
+
+function normalizeImportRow(row, rowNum) {
+  const questionText = String(rowValue(row, ["questionText", "Question", "question"])).trim();
+  const questionType = String(rowValue(row, ["questionType", "QuestionType", "type", "Type"]) || "mcq")
+    .trim()
+    .toLowerCase() === "theory" ? "theory" : "mcq";
+  const options = [
+    rowValue(row, ["option1", "Option1", "A"]),
+    rowValue(row, ["option2", "Option2", "B"]),
+    rowValue(row, ["option3", "Option3", "C"]),
+    rowValue(row, ["option4", "Option4", "D"]),
+  ].map(value => String(value).trim()).filter(Boolean);
+  const category = splitList(rowValue(row, ["category", "Category"]));
+  const correctAnswer = parseCorrectAnswerIndexes(
+    rowValue(row, ["correctAnswers", "CorrectAnswers", "correctAnswer", "CorrectAnswer", "correct", "answer", "Answer"]),
+    options
+  );
+
+  if (!questionText) return { error: `Row ${rowNum}: missing questionText` };
+  if (questionType === "mcq" && options.length < 2) return { error: `Row ${rowNum}: need at least 2 options` };
+  if (questionType === "mcq" && correctAnswer.length === 0) {
+    return { error: `Row ${rowNum}: invalid correctAnswers. Use 0-based index, A/B/C/D, or exact option text.` };
+  }
+
+  return {
+    questionText,
+    questionType,
+    options: questionType === "theory" ? [] : options,
+    correctAnswer: questionType === "theory" ? [] : correctAnswer,
+    categoryCorrectAnswers: {},
+    explanation: String(rowValue(row, ["explanation", "Explanation"])).trim(),
+    marks: Number(rowValue(row, ["marks", "Marks"]) || 1) || 1,
+    language: String(rowValue(row, ["language", "Language"]) || "en").trim(),
+    category,
+  };
+}
 
 export default function TestSuiteDetail() {
   const { suiteId }               = useParams();
@@ -38,6 +120,10 @@ export default function TestSuiteDetail() {
   const [showQtsServe, setShowQtsServe]   = useState(false);
   const [qtsServeVal, setQtsServeVal]     = useState("");
   const [savingQts, setSavingQts]         = useState(false);
+
+  const [showPassing, setShowPassing] = useState(false);
+  const [passingVal, setPassingVal]   = useState(50);
+  const [savingPassing, setSavingPassing] = useState(false);
 
   // Feature 9: Date window
   const [showDateWindow, setShowDateWindow] = useState(false);
@@ -71,6 +157,7 @@ export default function TestSuiteDetail() {
       setSuite(suiteRes.data);
       setDurationVal(suiteRes.data.duration || 30);
       setQtsServeVal(suiteRes.data.questionsToServe || "");
+      setPassingVal(suiteRes.data.passingPercentage ?? 50);
       // Format dates for datetime-local input
       setStartDate(suiteRes.data.startDate
         ? new Date(suiteRes.data.startDate).toISOString().slice(0, 16) : "");
@@ -90,21 +177,113 @@ export default function TestSuiteDetail() {
 
   const handleImportClick = () => fileInputRef.current?.click();
 
+  const importQuestionsFromExcelInBrowser = async (file) => {
+    const XLSX = await import("xlsx");
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+    if (rows.length === 0) {
+      throw new Error("Excel file is empty or has no data rows.");
+    }
+
+    const parsed = rows.map((row, index) => normalizeImportRow(row, index + 2));
+    const errors = parsed.filter(row => row.error).map(row => row.error);
+    const questionsToImport = parsed.filter(row => !row.error);
+
+    if (questionsToImport.length === 0) {
+      throw new Error(["No valid questions found.", ...errors].join("\n"));
+    }
+
+    let imported = 0;
+    const postErrors = [];
+    for (const question of questionsToImport) {
+      try {
+        await axios.post(`${API}/api/test-suites/${suiteId}/questions`, question, {
+          headers: getAuthHeaders(),
+        });
+        imported += 1;
+      } catch (err) {
+        postErrors.push(`${question.questionText.slice(0, 60)}: ${err.response?.data?.message || err.message}`);
+      }
+    }
+
+    return {
+      imported,
+      skipped: errors.length + postErrors.length,
+      errors: [...errors, ...postErrors],
+    };
+  };
+
+  const handleDownloadImportTemplate = async () => {
+    const XLSX = await import("xlsx");
+    const headers = [
+      "questionText",
+      "option1",
+      "option2",
+      "option3",
+      "option4",
+      "correctAnswers",
+      "explanation",
+      "marks",
+      "category",
+      "language",
+      "questionType",
+    ];
+    const example = [
+      "What is 2+2?",
+      "3",
+      "4",
+      "5",
+      "6",
+      "1",
+      "4 is the correct answer.",
+      "1",
+      "Confidence",
+      "en",
+      "mcq",
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+    ws["!cols"] = headers.map(header => ({ wch: Math.max(16, header.length + 4) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Questions");
+    XLSX.writeFile(wb, "question_import_format.xlsx");
+  };
+
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+    if (!isExcel) {
+      alert("Please upload an Excel file only (.xlsx or .xls).");
+      e.target.value = "";
+      return;
+    }
     setImporting(true);
     try {
-      const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("file", file);
-      await axios.post(`${API}/api/test-suites/${suiteId}/import`, formData, {
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" },
-      });
+      let fallbackResult = null;
+      try {
+        await axios.post(`${API}/api/test-suites/${suiteId}/import-excel`, formData, {
+          headers: getAuthHeaders({ "Content-Type": "multipart/form-data" }),
+        });
+      } catch (err) {
+        if (err.response?.status !== 404) throw err;
+        fallbackResult = await importQuestionsFromExcelInBrowser(file);
+      }
       await fetchData();
-      alert("Questions imported successfully!");
+      if (fallbackResult) {
+        const details = fallbackResult.errors.length
+          ? `\n\nSkipped ${fallbackResult.skipped} row(s):\n${fallbackResult.errors.slice(0, 5).join("\n")}`
+          : "";
+        alert(`Questions imported successfully: ${fallbackResult.imported}${details}`);
+      } else {
+        alert("Questions imported successfully!");
+      }
     } catch (err) {
-      alert(err.response?.data?.message || "Import failed");
+      alert(err.response?.data?.message || err.message || "Import failed");
     } finally {
       setImporting(false);
       e.target.value = "";
@@ -115,10 +294,9 @@ export default function TestSuiteDetail() {
     if (!durationVal || durationVal < 1) return alert("Please enter a valid duration");
     setSavingDur(true);
     try {
-      const token = localStorage.getItem("token");
       await axios.put(`${API}/api/test-suites/${suiteId}`,
         { duration: Number(durationVal) },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: getAuthHeaders() }
       );
       setSuite(prev => ({ ...prev, duration: Number(durationVal) }));
       setShowDuration(false);
@@ -131,17 +309,37 @@ export default function TestSuiteDetail() {
   const handleSaveQtsServe = async () => {
     setSavingQts(true);
     try {
-      const token = localStorage.getItem("token");
       const value = qtsServeVal ? Number(qtsServeVal) : null;
       await axios.put(`${API}/api/test-suites/${suiteId}`,
         { questionsToServe: value },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: getAuthHeaders() }
       );
       setSuite(prev => ({ ...prev, questionsToServe: value }));
       setShowQtsServe(false);
       alert(value ? `Set to serve ${value} random questions!` : "Serving all questions.");
     } catch { alert("Failed to save."); }
     finally { setSavingQts(false); }
+  };
+
+  const handleSavePassing = async () => {
+    const value = Number(passingVal);
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      return alert("Please enter a passing percentage between 0 and 100.");
+    }
+    setSavingPassing(true);
+    try {
+      await axios.put(`${API}/api/test-suites/${suiteId}`,
+        { passingPercentage: value },
+        { headers: getAuthHeaders() }
+      );
+      setSuite(prev => ({ ...prev, passingPercentage: value }));
+      setShowPassing(false);
+      alert(`Passing criteria saved at ${value}%.`);
+    } catch {
+      alert("Failed to save passing criteria.");
+    } finally {
+      setSavingPassing(false);
+    }
   };
 
   // Feature 9: Save date window
@@ -151,13 +349,12 @@ export default function TestSuiteDetail() {
     }
     setSavingDates(true);
     try {
-      const token = localStorage.getItem("token");
       await axios.put(`${API}/api/test-suites/${suiteId}`,
         {
           startDate: startDate || null,
           endDate:   endDate   || null,
         },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: getAuthHeaders() }
       );
       setSuite(prev => ({ ...prev, startDate, endDate }));
       setShowDateWindow(false);
@@ -179,16 +376,30 @@ export default function TestSuiteDetail() {
     const used = questions.some(q => (Array.isArray(q.category) ? q.category : [q.category]).includes(cat));
     if (used && !window.confirm(`"${cat}" is used by some questions. Remove anyway?`)) return;
     setCategories(prev => prev.filter(c => c !== cat));
-    setForm(f => ({ ...f, categories: f.categories.filter(c => c !== cat) }));
+    setForm(f => {
+      const nextMap = { ...(f.categoryCorrectAnswers || {}) };
+      delete nextMap[cat];
+      return { ...f, categories: f.categories.filter(c => c !== cat), categoryCorrectAnswers: nextMap };
+    });
   };
 
   const toggleCategory = (cat) => {
-    setForm(f => ({
-      ...f,
-      categories: f.categories.includes(cat)
-        ? f.categories.filter(c => c !== cat)
-        : [...f.categories, cat],
-    }));
+    setForm(f => {
+      const selected = f.categories.includes(cat);
+      const nextMap = { ...(f.categoryCorrectAnswers || {}) };
+      if (selected) {
+        delete nextMap[cat];
+      } else if (!nextMap[cat]) {
+        nextMap[cat] = uniqueSortedIndexes(f.correctAnswers);
+      }
+      return {
+        ...f,
+        categories: selected
+          ? f.categories.filter(c => c !== cat)
+          : [...f.categories, cat],
+        categoryCorrectAnswers: nextMap,
+      };
+    });
   };
 
   const toggleCorrectAnswer = (index) => {
@@ -198,6 +409,24 @@ export default function TestSuiteDetail() {
         ? f.correctAnswers.filter(i => i !== index)
         : [...f.correctAnswers, index],
     }));
+  };
+
+  const toggleCategoryCorrectAnswer = (cat, index) => {
+    setForm(f => {
+      const current = Array.isArray(f.categoryCorrectAnswers?.[cat])
+        ? f.categoryCorrectAnswers[cat]
+        : [];
+      const nextAnswers = current.includes(index)
+        ? current.filter(i => i !== index)
+        : [...current, index];
+      return {
+        ...f,
+        categoryCorrectAnswers: {
+          ...(f.categoryCorrectAnswers || {}),
+          [cat]: uniqueSortedIndexes(nextAnswers),
+        },
+      };
+    });
   };
 
   const handleOptionChange = (index, value) => {
@@ -220,30 +449,67 @@ export default function TestSuiteDetail() {
       correctAnswers: form.correctAnswers
         .filter(i => i !== index)
         .map(i => i > index ? i - 1 : i),
+      categoryCorrectAnswers: Object.fromEntries(
+        Object.entries(form.categoryCorrectAnswers || {}).map(([cat, answers]) => [
+          cat,
+          uniqueSortedIndexes(answers)
+            .filter(i => i !== index)
+            .map(i => i > index ? i - 1 : i),
+        ])
+      ),
     });
   };
 
   const handleSubmit = async () => {
     setError("");
     if (!form.questionText.trim()) return setError("Question text is required");
-    const trimmedOptions = form.options.map(o => o.trim()).filter(Boolean);
-    if (trimmedOptions.length < 2) return setError("At least 2 options are required");
-    if (form.correctAnswers.length === 0) return setError("Select at least one correct answer");
-    if (form.categories.length === 0) return setError("Please select at least one category");
+    const questionType = form.questionType === "theory" ? "theory" : "mcq";
+    const trimmedOptions = questionType === "theory"
+      ? []
+      : form.options.map(o => o.trim()).filter(Boolean);
+    if (questionType === "mcq" && trimmedOptions.length < 2) return setError("At least 2 options are required");
+    const usesCategoryAnswerKeys = form.categories.length > 1;
+    if (questionType === "mcq" && !usesCategoryAnswerKeys && form.correctAnswers.length === 0) {
+      return setError("Select at least one correct answer");
+    }
+    if (questionType === "mcq" && usesCategoryAnswerKeys) {
+      const missingCats = form.categories.filter(cat => {
+        const answers = form.categoryCorrectAnswers?.[cat] || [];
+        return answers.every(i => !form.options[i]?.trim());
+      });
+      if (missingCats.length > 0) {
+        return setError(`Select answer(s) for: ${missingCats.join(", ")}`);
+      }
+    }
 
     const remappedCorrect = [];
+    const oldToNew = {};
     let currentNewIdx = 0;
     form.options.forEach((opt, oldIdx) => {
       if (opt.trim()) {
+        oldToNew[oldIdx] = currentNewIdx;
         if (form.correctAnswers.includes(oldIdx)) remappedCorrect.push(currentNewIdx);
         currentNewIdx++;
       }
     });
+    const remappedCategoryCorrect = form.categories.reduce((acc, cat) => {
+      const rawAnswers = form.categoryCorrectAnswers?.[cat] || [];
+      const remapped = uniqueSortedIndexes(rawAnswers)
+        .map(i => oldToNew[i])
+        .filter(Number.isInteger);
+      acc[cat] = remapped.length > 0 ? remapped : remappedCorrect;
+      return acc;
+    }, {});
+    const fallbackCorrect = remappedCorrect.length > 0
+      ? remappedCorrect
+      : uniqueSortedIndexes(Object.values(remappedCategoryCorrect).flat());
 
     const payload = {
       questionText:  form.questionText.trim(),
+      questionType,
       options:       trimmedOptions,
-      correctAnswer: remappedCorrect,
+      correctAnswer: questionType === "theory" ? [] : fallbackCorrect,
+      categoryCorrectAnswers: questionType === "theory" ? {} : remappedCategoryCorrect,
       explanation:   form.explanation.trim(),
       marks:         Number(form.marks) || 1,
       category:      form.categories,
@@ -252,8 +518,7 @@ export default function TestSuiteDetail() {
 
     setSaving(true);
     try {
-      const token  = localStorage.getItem("token");
-      const config = { headers: { Authorization: `Bearer ${token}` } };
+      const config = { headers: getAuthHeaders() };
       if (editingQ) {
         const res = await axios.put(`${API}/api/questions/${editingQ}`, payload, config);
         setQuestions(prev => prev.map(q => q._id === editingQ ? res.data : q));
@@ -273,13 +538,22 @@ export default function TestSuiteDetail() {
     const opts = q.options.length < 4
       ? [...q.options, ...Array(4 - q.options.length).fill("")]
       : q.options;
+    const cats = Array.isArray(q.category) ? q.category : (q.category ? [q.category] : []);
+    const defaultCorrect = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
+    const savedCategoryAnswers = getCategoryAnswerMap(q);
+    const categoryCorrectAnswers = cats.reduce((acc, cat) => {
+      acc[cat] = uniqueSortedIndexes(savedCategoryAnswers?.[cat] || defaultCorrect);
+      return acc;
+    }, {});
     setForm({
       questionText:   q.questionText,
+      questionType:   q.questionType === "theory" ? "theory" : "mcq",
       options:        opts,
-      correctAnswers: Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer],
+      correctAnswers: defaultCorrect,
+      categoryCorrectAnswers,
       explanation:    q.explanation || "",
       marks:          q.marks || 1,
-      categories:     Array.isArray(q.category) ? q.category : (q.category ? [q.category] : []),
+      categories:     cats,
     });
     setEditingQ(q._id);
     setShowForm(true);
@@ -289,9 +563,13 @@ export default function TestSuiteDetail() {
   const handleDeleteQuestion = async (qId) => {
     if (!window.confirm("Delete this question?")) return;
     try {
-      await axios.delete(`${API}/api/questions/${qId}`);
+      await axios.delete(`${API}/api/questions/${qId}`, {
+        headers: getAuthHeaders(),
+      });
       setQuestions(prev => prev.filter(q => q._id !== qId));
-    } catch { alert("Failed to delete question."); }
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to delete question.");
+    }
   };
 
   const handleCancelForm = () => {
@@ -325,7 +603,7 @@ export default function TestSuiteDetail() {
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "'Segoe UI', sans-serif" }}>
 
-      <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={handleFileChange} />
+      <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileChange} />
 
       {/* ── Top bar ── */}
       <div style={{ padding: "16px 28px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -367,7 +645,11 @@ export default function TestSuiteDetail() {
           </button>
           <button onClick={handleImportClick} disabled={importing}
             style={{ padding: "10px 20px", background: WHITE, color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: importing ? 0.6 : 1 }}>
-            {importing ? "Importing…" : "⬆️ Import Questions"}
+            {importing ? "Importing…" : "⬆️ Import Excel Questions"}
+          </button>
+          <button onClick={handleDownloadImportTemplate}
+            style={{ padding: "10px 20px", background: WHITE, color: GREEN_DARK, border: "1px solid #d8e9df", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+            ⬇️ Excel Format
           </button>
           <button onClick={() => setShowCatManager(s => !s)}
             style={{ padding: "10px 20px", background: WHITE, color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
@@ -376,6 +658,10 @@ export default function TestSuiteDetail() {
           <button onClick={() => setShowDuration(s => !s)}
             style={{ padding: "10px 20px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
             ⏱ Set duration ({suite.duration || 30} min)
+          </button>
+          <button onClick={() => setShowPassing(s => !s)}
+            style={{ padding: "10px 20px", background: WHITE, color: "#166534", border: "1px solid #86efac", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+            ✅ Passing criteria ({suite.passingPercentage ?? 50}%)
           </button>
           {/* Feature 5 */}
           <button onClick={() => setShowQtsServe(s => !s)}
@@ -404,6 +690,30 @@ export default function TestSuiteDetail() {
                 {savingDur ? "Saving…" : "Save"}
               </button>
               <button onClick={() => setShowDuration(false)} style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {showPassing && (
+          <div style={{ background: WHITE, border: "1px solid #86efac", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: "700", color: "#166534", marginTop: 0, marginBottom: "6px" }}>✅ Test-wise Passing Criteria</h2>
+            <p style={{ fontSize: "13px", color: "#888", marginBottom: "14px" }}>
+              This pass percentage applies only to this test.
+            </p>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={passingVal}
+                onChange={e => setPassingVal(e.target.value)}
+                style={{ ...inputStyle, width: "120px" }}
+              />
+              <span style={{ fontSize: "14px", color: "#666" }}>% required to pass</span>
+              <button onClick={handleSavePassing} disabled={savingPassing} style={{ padding: "10px 20px", background: "#166534", color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: savingPassing ? 0.6 : 1 }}>
+                {savingPassing ? "Saving…" : "Save"}
+              </button>
+              <button onClick={() => setShowPassing(false)} style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}>Cancel</button>
             </div>
           </div>
         )}
@@ -501,7 +811,42 @@ export default function TestSuiteDetail() {
                   value={form.questionText} onChange={e => setForm({ ...form, questionText: e.target.value })} />
               </div>
               <div>
-                <label style={labelStyle}>Categories * (select all that apply)</label>
+                <label style={labelStyle}>Question Type *</label>
+                <div style={{ display: "inline-flex", gap: "8px", background: "#f4f7f5", borderRadius: "12px", padding: "4px", border: "1px solid #d8e9df" }}>
+                  {[
+                    { value: "mcq", label: "MCQ" },
+                    { value: "theory", label: "Theory" },
+                  ].map(type => {
+                    const selected = form.questionType === type.value;
+                    return (
+                      <button
+                        key={type.value}
+                        type="button"
+                        onClick={() => setForm(f => ({
+                          ...f,
+                          questionType: type.value,
+                          correctAnswers: type.value === "theory" ? [] : f.correctAnswers,
+                          categoryCorrectAnswers: type.value === "theory" ? {} : f.categoryCorrectAnswers,
+                        }))}
+                        style={{
+                          padding: "8px 18px",
+                          borderRadius: "10px",
+                          border: "none",
+                          background: selected ? GREEN : "transparent",
+                          color: selected ? WHITE : GREEN_DARK,
+                          fontSize: "13px",
+                          fontWeight: "700",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {selected ? "✓ " : ""}{type.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>Categories (optional)</label>
                 {categories.length === 0 ? (
                   <p style={{ fontSize: "13px", color: "#aaa", margin: 0 }}>
                     No categories yet.{" "}
@@ -524,9 +869,10 @@ export default function TestSuiteDetail() {
                   <p style={{ fontSize: "12px", color: "#888", margin: "6px 0 0" }}>Selected: {form.categories.join(", ")}</p>
                 )}
               </div>
+              {form.questionType === "mcq" ? (
               <div>
-                <label style={labelStyle}>Options * — check all correct answers</label>
-                <div style={{ fontSize: "12px", color: "#888", marginBottom: "10px" }}>Use checkboxes to mark one or more correct answers</div>
+                <label style={labelStyle}>Options * — default correct answer</label>
+                <div style={{ fontSize: "12px", color: "#888", marginBottom: "10px" }}>Use the category answer key below when different categories have different answers.</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {form.options.map((opt, i) => {
                     const isCorrect = form.correctAnswers.includes(i);
@@ -554,7 +900,58 @@ export default function TestSuiteDetail() {
                     ✓ Multiple correct answers: {form.correctAnswers.length} selected
                   </div>
                 )}
+                {form.categories.length > 0 && (
+                  <div style={{ marginTop: "14px", padding: "14px", background: "#f8faf9", border: "1px solid #d8e9df", borderRadius: "12px" }}>
+                    <label style={{ ...labelStyle, color: GREEN_DARK, marginBottom: "10px" }}>Category answer key</label>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                      {form.categories.map(cat => {
+                        const selectedAnswers = form.categoryCorrectAnswers?.[cat] || [];
+                        return (
+                          <div key={cat} style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: "10px", alignItems: "start" }}>
+                            <div style={{ fontSize: "13px", color: GREEN_DARK, fontWeight: "700", paddingTop: "6px" }}>{cat}</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                              {form.options.map((opt, i) => {
+                                const hasText = opt.trim();
+                                const selected = selectedAnswers.includes(i);
+                                return (
+                                  <label key={`${cat}-${i}`} style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    minHeight: "32px",
+                                    padding: "6px 10px",
+                                    borderRadius: "8px",
+                                    border: selected ? `1.5px solid ${GREEN}` : "1px solid #d7ded9",
+                                    background: selected ? "#e8f4ed" : WHITE,
+                                    color: hasText ? (selected ? GREEN_DARK : "#555") : "#aaa",
+                                    fontSize: "12px",
+                                    fontWeight: selected ? "700" : "500",
+                                    cursor: hasText ? "pointer" : "not-allowed",
+                                  }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selected}
+                                      disabled={!hasText}
+                                      onChange={() => toggleCategoryCorrectAnswer(cat, i)}
+                                      style={{ accentColor: GREEN }}
+                                    />
+                                    {String.fromCharCode(65 + i)}. {hasText ? opt : `Option ${i + 1}`}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
+              ) : (
+                <div style={{ padding: "14px", background: "#f8faf9", border: "1px solid #d8e9df", borderRadius: "12px", color: GREEN_DARK, fontSize: "13px", fontWeight: "600" }}>
+                  Theory question: candidates will write a text answer. This answer is saved for admin review and is not auto-scored.
+                </div>
+              )}
               <div style={{ display: "flex", gap: "12px" }}>
                 <div style={{ flex: 1 }}>
                   <label style={labelStyle}>Explanation (optional)</label>
@@ -595,6 +992,8 @@ export default function TestSuiteDetail() {
                   {qs.map((q, idx) => {
                     const correctArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
                     const catArr     = Array.isArray(q.category) ? q.category : (q.category ? [q.category] : []);
+                    const categoryAnswerMap = getCategoryAnswerMap(q);
+                    const theory = isTheoryQuestion(q);
                     return (
                       <div key={q._id}
                         style={{ background: WHITE, border: "1px solid #e5e7eb", borderRadius: "14px", padding: "16px 18px", transition: "border-color 0.2s" }}
@@ -613,6 +1012,11 @@ export default function TestSuiteDetail() {
                             <p style={{ fontSize: "14px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 10px" }}>
                               <span style={{ color: "#aaa", marginRight: "6px" }}>Q{idx + 1}.</span>{q.questionText}
                             </p>
+                            {theory ? (
+                              <div style={{ background: "#f8faf9", border: "1px solid #d8e9df", color: GREEN_DARK, borderRadius: "8px", padding: "8px 10px", fontSize: "13px", fontWeight: "600" }}>
+                                Theory question - written answer
+                              </div>
+                            ) : (
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                               {q.options.map((opt, i) => {
                                 const isCorrect = correctArr.includes(i);
@@ -623,11 +1027,26 @@ export default function TestSuiteDetail() {
                                 );
                               })}
                             </div>
+                            )}
                             {q.explanation && <p style={{ fontSize: "12px", color: "#888", marginTop: "8px", marginBottom: 0, fontStyle: "italic" }}>💡 {q.explanation}</p>}
                             <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
                               <span style={{ fontSize: "11px", background: "#f3f4f6", color: "#555", padding: "2px 8px", borderRadius: "999px" }}>{q.marks ?? 1} mark{(q.marks ?? 1) !== 1 ? "s" : ""}</span>
-                              {correctArr.length > 1 && <span style={{ fontSize: "11px", background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: "999px" }}>Multiple correct</span>}
+                              <span style={{ fontSize: "11px", background: theory ? "#dbeafe" : "#dcfce7", color: theory ? "#1d4ed8" : "#166534", padding: "2px 8px", borderRadius: "999px", fontWeight: "600" }}>{theory ? "Theory" : "MCQ"}</span>
+                              {!theory && correctArr.length > 1 && <span style={{ fontSize: "11px", background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: "999px" }}>Multiple correct</span>}
                             </div>
+                            {!theory && catArr.length > 0 && Object.keys(categoryAnswerMap).length > 0 && (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
+                                {catArr.map(c => {
+                                  const answersForCat = uniqueSortedIndexes(categoryAnswerMap[c] || correctArr);
+                                  const labels = answersForCat.map(i => q.options[i]).filter(Boolean).join(", ");
+                                  return (
+                                    <span key={`${q._id}-${c}`} style={{ fontSize: "11px", background: "#eef7f1", color: GREEN_DARK, border: "1px solid #cfe3d5", padding: "3px 8px", borderRadius: "8px", fontWeight: "600" }}>
+                                      {c}: {labels || "No answer"}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                           <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
                             <button onClick={() => handleEdit(q)} style={{ padding: "6px 12px", fontSize: "12px", fontWeight: "600", background: WHITE, color: GREEN, border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>Edit</button>

@@ -2,7 +2,46 @@ const express = require("express");
 const router  = express.Router();
 const Result   = require("../models/Result");
 const Question = require("../models/Question");
+const TestSuite = require("../models/TestSuite");
 const Settings = require("../models/ExamSettings"); 
+
+function getQuestionCats(q) {
+  if (Array.isArray(q.category) && q.category.length > 0) return q.category;
+  if (typeof q.category === "string" && q.category.trim()) return [q.category.trim()];
+  return ["Uncategorized"];
+}
+
+function getCategoryAnswerMap(q) {
+  const rawMap = q.categoryCorrectAnswers;
+  if (!rawMap) return {};
+  if (rawMap instanceof Map) return Object.fromEntries(rawMap);
+  if (typeof rawMap.toObject === "function") return rawMap.toObject();
+  return rawMap;
+}
+
+function uniqueIndexes(indexes) {
+  return [...new Set((Array.isArray(indexes) ? indexes : []).map(Number))]
+    .filter(Number.isInteger);
+}
+
+function getCorrectAnswersForCategory(q, cat) {
+  const fallback = uniqueIndexes(Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer]);
+  const map = getCategoryAnswerMap(q);
+  const categoryAnswers = uniqueIndexes(map[cat]);
+  return categoryAnswers.length > 0 ? categoryAnswers : fallback;
+}
+
+function scoreSelected(selectedArr, correctArr) {
+  if (correctArr.length === 0) return { earnedFrac: 0, isRight: false };
+  const hits = selectedArr.filter(i => correctArr.includes(i)).length;
+  const wrongs = selectedArr.filter(i => !correctArr.includes(i)).length;
+  const earnedFrac = Math.max(0, (hits - wrongs) / correctArr.length);
+  return { earnedFrac, isRight: earnedFrac === 1 };
+}
+
+function isTheoryQuestion(q) {
+  return q?.questionType === "theory";
+}
 
 // ══════════════════════════════════════════════════════════════
 // POST /api/results
@@ -17,53 +56,68 @@ router.post("/", async (req, res) => {
       answers,
       project,
       designation,
+      testName,
     } = req.body;
 
     // Fetch data and settings
-    const [questions, settings] = await Promise.all([
+    const [questions, settings, suite] = await Promise.all([
       Question.find({ testSuite: suiteId }),
-      Settings.findOne()
+      Settings.findOne(),
+      TestSuite.findById(suiteId),
     ]);
 
-    const passingPct = settings?.passingPercentage ?? 50;
+    const passingPct = suite?.passingPercentage ?? settings?.passingPercentage ?? 50;
     let score        = 0;
     let totalMarks   = 0;
     let correctCount = 0;
     const categoryMap = {};
 
-    const gradedAnswers = answers.map(({ questionId, selectedOptions }) => {
+    const gradedAnswers = answers.map(({ questionId, selectedOptions, textAnswer }) => {
       const q = questions.find(q => q._id.toString() === questionId);
-      if (!q) return { questionId, selectedOptions: selectedOptions || [], isCorrect: false };
+      if (!q) return { questionId, selectedOptions: selectedOptions || [], textAnswer: textAnswer || "", isCorrect: false };
+
+      if (isTheoryQuestion(q)) {
+        return {
+          questionId,
+          selectedOptions: [],
+          textAnswer: String(textAnswer || "").trim(),
+          isCorrect: false,
+          earnedMarks: 0,
+          category: getQuestionCats(q),
+        };
+      }
 
       const marks = q.marks ?? 1;
       totalMarks += marks;
 
-      const correctArr  = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
       const selectedArr = Array.isArray(selectedOptions) ? selectedOptions : [];
+      const cats = getQuestionCats(q);
+      const categoryScores = cats.map(cat => {
+        const correctArr = getCorrectAnswersForCategory(q, cat);
+        const scored = scoreSelected(selectedArr, correctArr);
+        return { cat, correctArr, ...scored };
+      });
+      const bestEarnedFrac = categoryScores.length
+        ? Math.max(...categoryScores.map(s => s.earnedFrac))
+        : 0;
 
-      // Logic for Multi-Correct / Partial Credit
-      const hits   = selectedArr.filter(i => correctArr.includes(i)).length;
-      const wrongs = selectedArr.filter(i => !correctArr.includes(i)).length;
-      
-      // earnedFrac logic: (Hits - Wrongs) / Total Correct
-      const earnedFrac = Math.max(0, (hits - wrongs) / correctArr.length);
-      const isRight    = earnedFrac === 1;
+      const isRight = bestEarnedFrac === 1;
 
-      const earnedMarks = earnedFrac * marks;
+      const earnedMarks = bestEarnedFrac * marks;
       score += earnedMarks;
       if (isRight) correctCount++;
 
       // Map Categories for breakdown
-      const cats = Array.isArray(q.category) ? q.category : [q.category || "Uncategorized"];
-      cats.forEach(cat => {
+      categoryScores.forEach(({ cat, earnedFrac }) => {
         if (!categoryMap[cat]) categoryMap[cat] = { earned: 0, total: 0 };
         categoryMap[cat].total += marks;
-        categoryMap[cat].earned += earnedMarks;
+        categoryMap[cat].earned += earnedFrac * marks;
       });
 
       return {
         questionId,
         selectedOptions: selectedArr,
+        textAnswer: "",
         isCorrect: isRight,
         earnedMarks,
         category: cats
@@ -75,6 +129,7 @@ router.post("/", async (req, res) => {
       category,
       score:      Math.round(data.earned * 100) / 100,
       total:      data.total,
+      earnedMarks: Math.round(data.earned * 100) / 100,
       percentage: data.total > 0 ? Math.round((data.earned / data.total) * 100) : 0,
     }));
 
@@ -83,6 +138,7 @@ router.post("/", async (req, res) => {
 
     const result = new Result({
       suiteId,
+      testName:       suite?.name || testName || "",
       CandidateName,
       CandidateEmail,
       userName:       CandidateName,
@@ -121,7 +177,9 @@ router.post("/", async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 router.get("/suite/:suiteId", async (req, res) => {
   try {
-    const results = await Result.find({ suiteId: req.params.suiteId }).sort({ submittedAt: -1 });
+    const results = await Result.find({ suiteId: req.params.suiteId })
+      .populate("suiteId", "name passingPercentage")
+      .sort({ submittedAt: -1 });
     res.json(results);
   } catch (err) {
     res.status(500).json({ message: "Error fetching suite results" });
@@ -147,10 +205,13 @@ router.get("/all", async (req, res) => {
         { userEmail: regex },
         { project: regex },
         { designation: regex },
+        { testName: regex },
       ];
     }
 
-    const results = await Result.find(query).sort({ submittedAt: -1 });
+    const results = await Result.find(query)
+      .populate("suiteId", "name passingPercentage")
+      .sort({ submittedAt: -1 });
     res.json(results);
   } catch (err) {
     res.status(500).json({ message: "Error Fetching Results" });

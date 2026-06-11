@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { getAuthHeaders } from "../utils/auth";
 
 const API        = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const GREEN      = "#2D5F3F";
@@ -33,8 +34,7 @@ export default function CandidateDashboard() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const token   = localStorage.getItem("token");
-        const headers = { Authorization: `Bearer ${token}` };
+        const headers = getAuthHeaders();
         const [suitesRes, resultsRes] = await Promise.all([
           axios.get(`${API}/api/test-suites`, { headers }),
           axios.get(`${API}/api/results/all`, { headers, params: { search: user.email } }),

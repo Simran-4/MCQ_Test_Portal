@@ -68,6 +68,7 @@ function App() {
 
         {/* Results & Stats */}
         <Route path="/view-results"               element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><ViewResults /></ProtectedRoute>} />
+        <Route path="/admin/results"              element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><AdminSuiteResults /></ProtectedRoute>} />
         <Route path="/admin-results/:suiteId"     element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><AdminSuiteResults /></ProtectedRoute>} />
 
         {/* Settings & System */}

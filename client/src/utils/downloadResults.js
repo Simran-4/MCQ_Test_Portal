@@ -1,320 +1,588 @@
 // src/utils/downloadResults.js
-// Usage:
-//   import { downloadResultsPDF, downloadResultsExcel } from "../utils/downloadResults";
-//   await downloadResultsPDF(suite, questions, results);
-//   downloadResultsExcel(suite, questions, results);
-//
-// Requires:  npm install jspdf jspdf-autotable xlsx
-// In client folder:  npm install jspdf jspdf-autotable xlsx
+// Client-side PDF and Excel exports for suite results.
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
-// ── Colour constants ────────────────────────────────────────
-const GREEN       = [45, 95, 63];
-const GREEN_DARK  = [26, 61, 40];
-const GREEN_LIGHT = [232, 242, 236];
-const WHITE       = [255, 255, 255];
-const GREY_TEXT   = [107, 107, 94];
-
+const GREEN = [45, 95, 63];
+const GREEN_DARK = [26, 61, 40];
+const GREEN_SOFT = [232, 242, 236];
+const BG_SOFT = [248, 247, 244];
+const WHITE = [255, 255, 255];
+const GREY_TEXT = [107, 107, 94];
+const BORDER = [220, 220, 215];
 function pctColor(pct) {
   if (pct >= 75) return [22, 101, 52];
   if (pct >= 50) return [146, 64, 14];
   return [185, 28, 28];
 }
 
-// ── Deduplicate / group category map ───────────────────────
-function groupCatMap(catMap) {
-  const grouped = {};
-  Object.entries(catMap).forEach(([cat, stats]) => {
-    const keys = cat.includes(",") ? cat.split(",").map(s => s.trim()) : [cat];
-    keys.forEach(key => {
-      if (!grouped[key]) grouped[key] = { total: 0, correct: 0, marks: 0, earned: 0 };
-      grouped[key].total   += stats.total   / keys.length;
-      grouped[key].correct += stats.correct / keys.length;
-      grouped[key].marks   += stats.marks   / keys.length;
-      grouped[key].earned  += stats.earned  / keys.length;
-    });
-  });
-  Object.values(grouped).forEach(s => {
-    s.total   = Math.round(s.total);
-    s.correct = Math.round(s.correct);
-    s.marks   = Math.round(s.marks);
-    s.earned  = Math.round(s.earned * 10) / 10;
-  });
-  return grouped;
+function getQuestionCats(q) {
+  if (Array.isArray(q.category) && q.category.length > 0) return q.category;
+  if (typeof q.category === "string" && q.category.trim()) {
+    return q.category.split(",").map(s => s.trim()).filter(Boolean);
+  }
+  return ["Uncategorized"];
 }
 
-// ── PDF helpers ─────────────────────────────────────────────
-function drawHeader(doc, suite, pageWidth) {
+function isTheoryQuestion(q) {
+  return q?.questionType === "theory";
+}
+
+function getCategoryAnswerMap(q) {
+  if (!q?.categoryCorrectAnswers) return {};
+  if (q.categoryCorrectAnswers instanceof Map) return Object.fromEntries(q.categoryCorrectAnswers);
+  return q.categoryCorrectAnswers;
+}
+
+function uniqueIndexes(indexes) {
+  return [...new Set((Array.isArray(indexes) ? indexes : []).map(Number))]
+    .filter(Number.isInteger);
+}
+
+function getCorrectAnswersForCategory(q, cat) {
+  const fallback = uniqueIndexes(Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer]);
+  const map = getCategoryAnswerMap(q);
+  const categoryAnswers = uniqueIndexes(map[cat]);
+  return categoryAnswers.length > 0 ? categoryAnswers : fallback;
+}
+
+function scoreSelected(selectedArr, correctArr) {
+  if (correctArr.length === 0) return { earnedFrac: 0, isRight: false };
+  const hits = selectedArr.filter(i => correctArr.includes(i)).length;
+  const wrongs = selectedArr.filter(i => !correctArr.includes(i)).length;
+  const earnedFrac = Math.max(0, (hits - wrongs) / correctArr.length);
+  return { earnedFrac, isRight: earnedFrac === 1 };
+}
+
+function formatNumber(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function safeName(name) {
+  return String(name || "results").replace(/[^a-z0-9]/gi, "_").toLowerCase();
+}
+
+function candidateName(r) {
+  return r.CandidateName || r.userName || "Unknown";
+}
+
+function candidateEmail(r) {
+  return r.CandidateEmail || r.userEmail || "-";
+}
+
+function suitePassingPercentage(suite) {
+  return Number.isFinite(Number(suite?.passingPercentage)) ? Number(suite.passingPercentage) : 50;
+}
+
+function resultStatus(r, suite) {
+  if (typeof r.passed === "boolean") return r.passed ? "Pass" : "Fail";
+  return r.pct >= suitePassingPercentage(suite) ? "Pass" : "Fail";
+}
+
+function optionLabels(q, indexes) {
+  return uniqueIndexes(indexes)
+    .map(i => q.options?.[i])
+    .filter(Boolean)
+    .join(", ");
+}
+
+async function loadImageAsDataUrl(src) {
+  try {
+    const res = await fetch(src);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+function buildStats(suite, questions, results) {
+  const scoredQuestions = questions.filter(q => !isTheoryQuestion(q));
+  const allCats = [...new Set(scoredQuestions.flatMap(q => getQuestionCats(q)))];
+  const statsPerResult = results.map(r => {
+    const catMap = {};
+
+    scoredQuestions.forEach(q => {
+      const marks = q.marks ?? 1;
+      getQuestionCats(q).forEach(cat => {
+        if (!catMap[cat]) catMap[cat] = { total: 0, correct: 0, marks: 0, earned: 0 };
+        catMap[cat].total += 1;
+        catMap[cat].marks += marks;
+      });
+    });
+
+    (r.answers || []).forEach(ans => {
+      const q = questions.find(q =>
+        q._id === ans.questionId || q._id?.toString() === ans.questionId?.toString()
+      );
+      if (!q || isTheoryQuestion(q)) return;
+
+      const selectedArr = Array.isArray(ans.selectedOptions) ? ans.selectedOptions : [];
+      const marks = q.marks ?? 1;
+      getQuestionCats(q).forEach(cat => {
+        if (!catMap[cat]) catMap[cat] = { total: 0, correct: 0, marks: 0, earned: 0 };
+        const { earnedFrac, isRight } = scoreSelected(
+          selectedArr,
+          getCorrectAnswersForCategory(q, cat)
+        );
+        if (isRight) catMap[cat].correct += 1;
+        catMap[cat].earned += earnedFrac * marks;
+      });
+    });
+
+    const pct = r.totalMarks > 0 ? Math.round(((r.score ?? 0) / r.totalMarks) * 100) : 0;
+    return { ...r, catMap, pct };
+  });
+
+  const totalMarksAll = scoredQuestions.reduce((sum, q) => sum + (q.marks ?? 1), 0);
+  return { suite, questions, results: statsPerResult, allCats, totalMarksAll };
+}
+
+function categoryRowsForResult(r, allCats) {
+  return allCats.map(cat => {
+    const s = r.catMap[cat] || { correct: 0, total: 0, marks: 0, earned: 0 };
+    const pct = s.marks > 0 ? Math.round((s.earned / s.marks) * 100) : 0;
+    const grade = pct >= 70 ? "High" : pct >= 40 ? "Moderate" : "Low";
+    return {
+      category: cat,
+      correct: s.correct,
+      total: s.total,
+      earned: formatNumber(s.earned),
+      marks: formatNumber(s.marks),
+      pct,
+      grade,
+    };
+  });
+}
+
+function questionRowsForResult(r, questions) {
+  return questions.map((q, idx) => {
+    const ans = (r.answers || []).find(a =>
+      q._id === a.questionId || q._id?.toString() === a.questionId?.toString()
+    );
+    const selectedArr = Array.isArray(ans?.selectedOptions) ? ans.selectedOptions : [];
+    const cats = getQuestionCats(q);
+
+    if (isTheoryQuestion(q)) {
+      return {
+        number: idx + 1,
+        question: q.questionText || "-",
+        categories: cats.join(", "),
+        selected: ans?.textAnswer || "Not answered",
+        correct: "Theory answer - review manually",
+        score: "Not auto-scored",
+      };
+    }
+
+    const catAnswerText = cats.map(cat => {
+      const labels = optionLabels(q, getCorrectAnswersForCategory(q, cat)) || "-";
+      return `${cat}: ${labels}`;
+    }).join("; ");
+    const catScoreText = cats.map(cat => {
+      const { earnedFrac, isRight } = scoreSelected(selectedArr, getCorrectAnswersForCategory(q, cat));
+      const earned = formatNumber(earnedFrac * (q.marks ?? 1));
+      return `${cat}: ${isRight ? "Correct" : "Incorrect"} (${earned}/${q.marks ?? 1})`;
+    }).join("; ");
+
+    return {
+      number: idx + 1,
+      question: q.questionText || "-",
+      categories: cats.join(", "),
+      selected: optionLabels(q, selectedArr) || "Not answered",
+      correct: catAnswerText,
+      score: catScoreText,
+    };
+  });
+}
+
+function drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth) {
   doc.setFillColor(...GREEN_DARK);
-  doc.rect(0, 0, pageWidth, 22, "F");
+  doc.rect(0, 0, pageWidth, 25, "F");
+
+  if (logoDataUrl) {
+    doc.setFillColor(...WHITE);
+    doc.roundedRect(12, 5, 15, 15, 2, 2, "F");
+    doc.addImage(logoDataUrl, "PNG", 13.5, 6.5, 12, 12);
+  }
+
   doc.setTextColor(...WHITE);
-  doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
-  doc.text("Snehalaya MCQ Portal", 14, 9);
-  doc.setFontSize(9);
+  doc.setFontSize(13);
+  doc.text("Snehalaya MCQ Portal", logoDataUrl ? 32 : 14, 10);
   doc.setFont("helvetica", "normal");
-  doc.text(`Results Report - ${suite.name}`, 14, 16);
-  const dateStr = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
+  doc.text(`${reportTitle} - ${suite?.name || "Test Suite"}`, logoDataUrl ? 32 : 14, 16);
+
+  const dateStr = new Date().toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
   doc.text(dateStr, pageWidth - 14, 16, { align: "right" });
 }
 
 function drawFooter(doc, pageNum, totalPages, pageWidth, pageHeight) {
-  doc.setFontSize(7);
+  doc.setDrawColor(...BORDER);
+  doc.line(14, pageHeight - 10, pageWidth - 14, pageHeight - 10);
   doc.setTextColor(...GREY_TEXT);
   doc.setFont("helvetica", "normal");
-  doc.text(`Page ${pageNum} of ${totalPages}`, pageWidth / 2, pageHeight - 6, { align: "center" });
-  doc.setDrawColor(200, 200, 200);
-  doc.line(14, pageHeight - 10, pageWidth - 14, pageHeight - 10);
+  doc.setFontSize(7);
+  doc.text(`Page ${pageNum} of ${totalPages}`, pageWidth / 2, pageHeight - 5.5, { align: "center" });
 }
 
-// ════════════════════════════════════════════════════════════
-//  PDF EXPORT
-// ════════════════════════════════════════════════════════════
-export async function downloadResultsPDF(suite, questions, results) {
-  const doc        = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageWidth  = doc.internal.pageSize.getWidth();
+function drawMetricCards(doc, stats, y, pageWidth) {
+  const cardWidth = (pageWidth - 40) / 4;
+  const cards = [
+    ["Candidates", stats.results.length],
+    ["Questions", stats.questions.length],
+    ["Total Marks", stats.totalMarksAll],
+    ["Categories", stats.allCats.length],
+  ];
+
+  cards.forEach(([label, value], idx) => {
+    const x = 14 + idx * (cardWidth + 4);
+    doc.setFillColor(...BG_SOFT);
+    doc.roundedRect(x, y, cardWidth, 18, 3, 3, "F");
+    doc.setTextColor(...GREY_TEXT);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.text(label, x + 4, y + 6);
+    doc.setTextColor(...GREEN_DARK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(String(value), x + 4, y + 14);
+  });
+}
+
+function addStyledTable(doc, config) {
+  autoTable(doc, {
+    margin: { left: 14, right: 14 },
+    styles: {
+      font: "helvetica",
+      fontSize: 7.5,
+      cellPadding: 2.4,
+      textColor: [30, 30, 30],
+      lineColor: BORDER,
+      lineWidth: 0.2,
+      overflow: "linebreak",
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: GREEN_DARK,
+      textColor: WHITE,
+      fontStyle: "bold",
+      halign: "center",
+    },
+    alternateRowStyles: { fillColor: BG_SOFT },
+    ...config,
+  });
+}
+
+function addPageNumbers(doc, pageWidth, pageHeight) {
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let page = 1; page <= totalPages; page++) {
+    doc.setPage(page);
+    drawFooter(doc, page, totalPages, pageWidth, pageHeight);
+  }
+}
+
+function savePdf(doc, suite, reportType) {
+  doc.save(`${reportType}_results_${safeName(suite?.name)}_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+function buildWorkbookSummary(wb, stats) {
+  const headers = [
+    "#",
+    "Candidate Name",
+    "Email",
+    "Project",
+    "Department",
+    "Score",
+    "Total Marks",
+    "Percentage",
+    "Result",
+    ...stats.allCats.map(cat => `${cat} %`),
+    ...stats.allCats.map(cat => `${cat} Correct/Total`),
+  ];
+  const rows = stats.results.map((r, i) => {
+    const catPcts = stats.allCats.map(cat => {
+      const row = categoryRowsForResult(r, stats.allCats).find(item => item.category === cat);
+      return row?.pct ?? 0;
+    });
+    const catScores = stats.allCats.map(cat => {
+      const row = categoryRowsForResult(r, stats.allCats).find(item => item.category === cat);
+      return row ? `${row.correct}/${row.total}` : "0/0";
+    });
+    return [
+      i + 1,
+      candidateName(r),
+      candidateEmail(r),
+      r.project || "",
+      r.designation || "",
+      r.score ?? 0,
+      r.totalMarks ?? 0,
+      r.pct,
+      resultStatus(r, stats.suite),
+      ...catPcts,
+      ...catScores,
+    ];
+  });
+
+  const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  sheet["!cols"] = headers.map((header, idx) => ({ wch: idx < 2 ? 24 : Math.max(12, Math.min(26, String(header).length + 4)) }));
+  XLSX.utils.book_append_sheet(wb, sheet, "Summary");
+}
+
+function buildWorkbookDescriptive(wb, stats) {
+  const questionHeaders = [
+    "Candidate Name",
+    "Email",
+    "Project",
+    "Department",
+    "Q No.",
+    "Question",
+    "Categories",
+    "Selected Answer",
+    "Correct Answer by Category",
+    "Category Score",
+  ];
+  const questionRows = [];
+  stats.results.forEach(r => {
+    questionRowsForResult(r, stats.questions).forEach(row => {
+      questionRows.push([
+        candidateName(r),
+        candidateEmail(r),
+        r.project || "",
+        r.designation || "",
+        row.number,
+        row.question,
+        row.categories,
+        row.selected,
+        row.correct,
+        row.score,
+      ]);
+    });
+  });
+  const questionSheet = XLSX.utils.aoa_to_sheet([questionHeaders, ...questionRows]);
+  questionSheet["!cols"] = [
+    { wch: 24 },
+    { wch: 30 },
+    { wch: 22 },
+    { wch: 24 },
+    { wch: 8 },
+    { wch: 52 },
+    { wch: 24 },
+    { wch: 26 },
+    { wch: 48 },
+    { wch: 48 },
+  ];
+  XLSX.utils.book_append_sheet(wb, questionSheet, "Descriptive Detail");
+
+  const categoryHeaders = [
+    "Candidate Name",
+    "Email",
+    "Project",
+    "Department",
+    "Category",
+    "Correct",
+    "Total Qs",
+    "Earned Marks",
+    "Total Marks",
+    "Percentage",
+    "Grade",
+  ];
+  const categoryRows = [];
+  stats.results.forEach(r => {
+    categoryRowsForResult(r, stats.allCats).forEach(row => {
+      categoryRows.push([
+        candidateName(r),
+        candidateEmail(r),
+        r.project || "",
+        r.designation || "",
+        row.category,
+        row.correct,
+        row.total,
+        row.earned,
+        row.marks,
+        row.pct,
+        row.grade,
+      ]);
+    });
+  });
+  const categorySheet = XLSX.utils.aoa_to_sheet([categoryHeaders, ...categoryRows]);
+  categorySheet["!cols"] = [
+    { wch: 24 },
+    { wch: 30 },
+    { wch: 22 },
+    { wch: 24 },
+    { wch: 22 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 10 },
+  ];
+  XLSX.utils.book_append_sheet(wb, categorySheet, "Category Detail");
+}
+
+export async function downloadResultsPDF(suite, questions, results, options = {}) {
+  const reportType = options.reportType === "descriptive" ? "descriptive" : "summary";
+  const reportTitle = reportType === "descriptive" ? "Descriptive Results Report" : "Summary Results Report";
+  const stats = buildStats(suite, questions, results);
+  const logoDataUrl = await loadImageAsDataUrl(`${window.location.origin}/Logo.png`);
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  // Build per-result stats
-  const statsPerResult = results.map(r => {
-    const catMap = {};
-    questions.forEach(q => {
-      const cats = Array.isArray(q.category)
-        ? q.category
-        : (q.category ? q.category.split(",").map(s => s.trim()) : ["Uncategorized"]);
-      cats.forEach(cat => {
-        if (!catMap[cat]) catMap[cat] = { total: 0, correct: 0, marks: 0, earned: 0 };
-        catMap[cat].total++;
-        catMap[cat].marks += q.marks ?? 1;
-      });
-    });
-    (r.answers || []).forEach(ans => {
-      const q = questions.find(q => q._id === ans.questionId || q._id?.toString() === ans.questionId?.toString());
-      if (!q) return;
-      const cats = Array.isArray(q.category)
-        ? q.category
-        : (q.category ? q.category.split(",").map(s => s.trim()) : ["Uncategorized"]);
-      const earnedPerCat = (ans.earnedMarks ?? (ans.isCorrect ? (q.marks ?? 1) : 0)) / cats.length;
-      cats.forEach(cat => {
-        if (!catMap[cat]) catMap[cat] = { total: 0, correct: 0, marks: 0, earned: 0 };
-        if (ans.isCorrect) catMap[cat].correct++;
-        catMap[cat].earned += earnedPerCat;
-      });
-    });
-    const pct = r.totalMarks > 0 ? Math.round((r.score / r.totalMarks) * 100) : 0;
-    return { ...r, catMap, pct };
-  });
+  drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth);
+  let y = 34;
+  drawMetricCards(doc, stats, y, pageWidth);
+  y += 28;
 
-  const allCatsRaw = [...new Set(
-    questions.flatMap(q =>
-      Array.isArray(q.category)
-        ? q.category
-        : (q.category ? q.category.split(",").map(s => s.trim()) : ["Uncategorized"])
-    )
-  )];
-
-  // PAGE 1 — Summary
-  drawHeader(doc, suite, pageWidth);
-  let y = 30;
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
   doc.setTextColor(...GREEN_DARK);
-  doc.text("Summary - All Candidates", 14, y);
-  y += 7;
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...GREY_TEXT);
-  const totalMarksAll = questions.reduce((a, q) => a + (q.marks ?? 1), 0);
-  doc.text(`${results.length} Candidate${results.length !== 1 ? "s" : ""}   |   ${questions.length} questions   |   ${totalMarksAll} total marks`, 14, y);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text(reportType === "descriptive" ? "Candidate Summary" : "All Candidates", 14, y);
   y += 6;
 
-  const summaryHead = [["#", "Candidate Name", "Email", "Score", "%", "Result", ...allCatsRaw.map(c => c.length > 14 ? c.slice(0, 13) + "…" : c)]];
-  const summaryBody = statsPerResult.map((r, i) => {
-    const grouped = groupCatMap(r.catMap);
-    const catCols = allCatsRaw.map(cat => {
-      const s = grouped[cat];
-      if (!s) return "-";
-      const p = s.marks > 0 ? Math.round((s.earned / s.marks) * 100) : 0;
-      return `${s.correct}/${s.total} (${p}%)`;
-    });
-    return [i + 1, r.CandidateName || "-", r.CandidateEmail || "-", `${r.score ?? 0}/${r.totalMarks ?? 0}`, `${r.pct}%`, r.pct >= 50 ? "Pass" : "Fail", ...catCols];
+  const summaryHead = [["#", "Candidate", "Email", "Score", "%", "Result", ...stats.allCats.map(cat => cat.length > 12 ? `${cat.slice(0, 11)}...` : cat)]];
+  const summaryBody = stats.results.map((r, i) => {
+    const catCols = categoryRowsForResult(r, stats.allCats).map(row => `${row.correct}/${row.total} (${row.pct}%)`);
+    return [
+      i + 1,
+      candidateName(r),
+      candidateEmail(r),
+      `${r.score ?? 0}/${r.totalMarks ?? 0}`,
+      `${r.pct}%`,
+      resultStatus(r, stats.suite),
+      ...catCols,
+    ];
   });
 
-  autoTable(doc, {
-    startY: y, head: summaryHead, body: summaryBody,
-    margin: { left: 14, right: 14 },
-    styles: { fontSize: 7.5, cellPadding: 2.5, font: "helvetica", textColor: [30, 30, 30], lineColor: [220, 220, 215], lineWidth: 0.2, overflow: "linebreak" },
-    headStyles: { fillColor: GREEN_DARK, textColor: WHITE, fontStyle: "bold", fontSize: 7.5, halign: "center" },
-    alternateRowStyles: { fillColor: [248, 247, 244] },
-    columnStyles: { 0: { cellWidth: 7, halign: "center" }, 1: { cellWidth: 28 }, 2: { cellWidth: 38 }, 3: { cellWidth: 16, halign: "center" }, 4: { cellWidth: 12, halign: "center", fontStyle: "bold" }, 5: { cellWidth: 14, halign: "center", fontStyle: "bold" } },
-    didParseCell(data) {
-      if (data.section === "body") {
-        if (data.column.index === 4) data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0]));
-        if (data.column.index === 5) data.cell.styles.textColor = data.cell.text[0] === "Pass" ? [22, 101, 52] : [185, 28, 28];
-        if (data.column.index >= 6) { const m = data.cell.text[0].match(/\((\d+)%\)/); if (m) data.cell.styles.textColor = pctColor(parseInt(m[1])); }
-      }
+  addStyledTable(doc, {
+    startY: y,
+    head: summaryHead,
+    body: summaryBody,
+    columnStyles: {
+      0: { cellWidth: 7, halign: "center" },
+      1: { cellWidth: 28 },
+      2: { cellWidth: 36 },
+      3: { cellWidth: 16, halign: "center" },
+      4: { cellWidth: 12, halign: "center", fontStyle: "bold" },
+      5: { cellWidth: 14, halign: "center", fontStyle: "bold" },
     },
-    didDrawPage() { const pg = doc.internal.getCurrentPageInfo().pageNumber; drawFooter(doc, pg, "?", pageWidth, pageHeight); },
+    didParseCell(data) {
+      if (data.section !== "body") return;
+      if (data.column.index === 4) data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0], 10));
+      if (data.column.index === 5) data.cell.styles.textColor = data.cell.text[0] === "Pass" ? [22, 101, 52] : [185, 28, 28];
+    },
   });
 
-  // PAGE 2+ — Detail per candidate
-  doc.addPage();
-  drawHeader(doc, suite, pageWidth);
-  y = 30;
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...GREEN_DARK);
-  doc.text("Detailed Results - Per Candidate", 14, y);
-  y += 10;
+  if (reportType === "descriptive") {
+    stats.results.forEach((r, idx) => {
+      doc.addPage();
+      drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth);
+      let detailY = 34;
 
-  statsPerResult.forEach((r, idx) => {
-    if (y > pageHeight - 70) { doc.addPage(); drawHeader(doc, suite, pageWidth); y = 30; }
-    doc.setFillColor(...GREEN_LIGHT);
-    doc.roundedRect(14, y, pageWidth - 28, 10, 2, 2, "F");
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...GREEN_DARK);
-    doc.text(`${idx + 1}. ${r.CandidateName || "Unknown"}`, 18, y + 6.5);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...pctColor(r.pct));
-    doc.text(`${r.pct}%  (${r.score}/${r.totalMarks} marks)  --  ${r.pct >= 50 ? "PASS" : "FAIL"}`, pageWidth - 18, y + 6.5, { align: "right" });
-    y += 14;
+      doc.setFillColor(...GREEN_SOFT);
+      doc.roundedRect(14, detailY, pageWidth - 28, 16, 3, 3, "F");
+      doc.setTextColor(...GREEN_DARK);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(`${idx + 1}. ${candidateName(r)}`, 18, detailY + 7);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(candidateEmail(r), 18, detailY + 12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...pctColor(r.pct));
+      doc.text(`${r.pct}% (${r.score ?? 0}/${r.totalMarks ?? 0})`, pageWidth - 18, detailY + 10, { align: "right" });
+      detailY += 24;
 
-    const grouped = groupCatMap(r.catMap);
-    const catRows = allCatsRaw.map(cat => {
-      const s = grouped[cat] || { correct: 0, total: 0, marks: 0, earned: 0 };
-      const p = s.marks > 0 ? Math.round((s.earned / s.marks) * 100) : 0;
-      return [cat, `${s.correct}/${s.total}`, `${s.earned}/${s.marks}`, `${p}%`];
+      addStyledTable(doc, {
+        startY: detailY,
+        head: [["Category", "Correct / Total", "Marks", "%", "Level"]],
+        body: categoryRowsForResult(r, stats.allCats).map(row => [
+          row.category,
+          `${row.correct}/${row.total}`,
+          `${row.earned}/${row.marks}`,
+          `${row.pct}%`,
+          row.grade,
+        ]),
+        tableWidth: pageWidth - 28,
+        columnStyles: {
+          1: { halign: "center" },
+          2: { halign: "center" },
+          3: { halign: "center", fontStyle: "bold" },
+          4: { halign: "center" },
+        },
+        didParseCell(data) {
+          if (data.section === "body" && data.column.index === 3) {
+            data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0], 10));
+          }
+        },
+      });
+
+      detailY = doc.lastAutoTable.finalY + 10;
+      doc.setTextColor(...GREEN_DARK);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Question-wise Detail", 14, detailY);
+      detailY += 5;
+
+      addStyledTable(doc, {
+        startY: detailY,
+        head: [["Q", "Question", "Category", "Selected", "Correct Answer", "Category Score"]],
+        body: questionRowsForResult(r, stats.questions).map(row => [
+          row.number,
+          row.question,
+          row.categories,
+          row.selected,
+          row.correct,
+          row.score,
+        ]),
+        styles: { fontSize: 6.7, cellPadding: 2, overflow: "linebreak", valign: "top" },
+        columnStyles: {
+          0: { cellWidth: 8, halign: "center" },
+          1: { cellWidth: 44 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 22 },
+          4: { cellWidth: 38 },
+          5: { cellWidth: 40 },
+        },
+      });
     });
+  }
 
-    autoTable(doc, {
-      startY: y,
-      head: [["Category", "Correct / Total", "Marks Earned", "%"]],
-      body: catRows,
-      margin: { left: 14, right: 14 },
-      tableWidth: (pageWidth - 28) * 0.65,
-      styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: [220, 220, 215], lineWidth: 0.2 },
-      headStyles: { fillColor: GREEN, textColor: WHITE, fontStyle: "bold", fontSize: 7.5 },
-      alternateRowStyles: { fillColor: [248, 247, 244] },
-      columnStyles: { 1: { halign: "center" }, 2: { halign: "center" }, 3: { halign: "center", fontStyle: "bold" } },
-      didParseCell(data) { if (data.section === "body" && data.column.index === 3) data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0])); },
-      didDrawPage() { drawHeader(doc, suite, pageWidth); },
-    });
-    y = doc.lastAutoTable.finalY + 12;
-  });
-
-  // Fix page numbers
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let p = 1; p <= totalPages; p++) { doc.setPage(p); drawFooter(doc, p, totalPages, pageWidth, pageHeight); }
-
-  const safeName = suite.name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
-  doc.save(`results_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`);
+  addPageNumbers(doc, pageWidth, pageHeight);
+  savePdf(doc, suite, reportType);
 }
 
-// ════════════════════════════════════════════════════════════
-//  EXCEL EXPORT  (client-side, no backend needed)
-// ════════════════════════════════════════════════════════════
-export function downloadResultsExcel(suite, questions, results) {
+export function downloadResultsExcel(suite, questions, results, options = {}) {
+  const reportType = options.reportType === "descriptive" ? "descriptive" : "summary";
+  const stats = buildStats(suite, questions, results);
   const wb = XLSX.utils.book_new();
 
-  // ── Unique categories ──
-  const allCats = [...new Set(
-    questions.flatMap(q =>
-      Array.isArray(q.category)
-        ? q.category
-        : (q.category ? q.category.split(",").map(s => s.trim()) : ["Uncategorized"])
-    )
-  )];
+  if (reportType === "summary") {
+    buildWorkbookSummary(wb, stats);
+  } else {
+    buildWorkbookDescriptive(wb, stats);
+  }
 
-  // ── Build per-result stats (same logic as PDF) ──
-  const statsPerResult = results.map(r => {
-    const catMap = {};
-    questions.forEach(q => {
-      const cats = Array.isArray(q.category)
-        ? q.category
-        : (q.category ? q.category.split(",").map(s => s.trim()) : ["Uncategorized"]);
-      cats.forEach(cat => {
-        if (!catMap[cat]) catMap[cat] = { total: 0, correct: 0, marks: 0, earned: 0 };
-        catMap[cat].total++;
-        catMap[cat].marks += q.marks ?? 1;
-      });
-    });
-    (r.answers || []).forEach(ans => {
-      const q = questions.find(q => q._id === ans.questionId || q._id?.toString() === ans.questionId?.toString());
-      if (!q) return;
-      const cats = Array.isArray(q.category)
-        ? q.category
-        : (q.category ? q.category.split(",").map(s => s.trim()) : ["Uncategorized"]);
-      const earnedPerCat = (ans.earnedMarks ?? (ans.isCorrect ? (q.marks ?? 1) : 0)) / cats.length;
-      cats.forEach(cat => {
-        if (!catMap[cat]) catMap[cat] = { total: 0, correct: 0, marks: 0, earned: 0 };
-        if (ans.isCorrect) catMap[cat].correct++;
-        catMap[cat].earned += earnedPerCat;
-      });
-    });
-    const pct = r.totalMarks > 0 ? Math.round((r.score / r.totalMarks) * 100) : 0;
-    return { ...r, catMap, pct };
-  });
+  wb.Workbook = wb.Workbook || {};
+  wb.Workbook.Views = [{ activeTab: 0 }];
 
-  // ════════════════════════════════
-  //  SHEET 1 — Summary
-  // ════════════════════════════════
-  const summaryHeaders = ["#", "Candidate Name", "Email", "Score", "Total Marks", "Percentage", "Result", ...allCats.map(c => `${c} (%)`), ...allCats.map(c => `${c} (Correct/Total)`)];
-  const summaryRows = statsPerResult.map((r, i) => {
-    const grouped = groupCatMap(r.catMap);
-    const catPcts  = allCats.map(cat => { const s = grouped[cat]; if (!s) return 0; return s.marks > 0 ? Math.round((s.earned / s.marks) * 100) : 0; });
-    const catScores = allCats.map(cat => { const s = grouped[cat]; if (!s) return "0/0"; return `${s.correct}/${s.total}`; });
-    return [i + 1, r.CandidateName || "", r.CandidateEmail || "", r.score ?? 0, r.totalMarks ?? 0, r.pct, r.pct >= 50 ? "Pass" : "Fail", ...catPcts, ...catScores];
-  });
-
-  const summarySheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
-
-  // Column widths
-  summarySheet["!cols"] = [
-    { wch: 4 }, { wch: 24 }, { wch: 30 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 8 },
-    ...allCats.map(() => ({ wch: 18 })),
-    ...allCats.map(() => ({ wch: 20 })),
-  ];
-
-  XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
-
-  // ════════════════════════════════
-  //  SHEET 2 — Per-Category Detail
-  // ════════════════════════════════
-  const detailHeaders = ["Candidate Name", "Email", "Category", "Correct", "Total Qs", "Earned Marks", "Total Marks", "Percentage", "Grade"];
-  const detailRows = [];
-
-  statsPerResult.forEach(r => {
-    const grouped = groupCatMap(r.catMap);
-    allCats.forEach(cat => {
-      const s = grouped[cat] || { correct: 0, total: 0, marks: 0, earned: 0 };
-      const p = s.marks > 0 ? Math.round((s.earned / s.marks) * 100) : 0;
-      const grade = p >= 70 ? "High" : p >= 40 ? "Moderate" : "Low";
-      detailRows.push([r.CandidateName || "", r.CandidateEmail || "", cat, s.correct, s.total, s.earned, s.marks, p, grade]);
-    });
-  });
-
-  const detailSheet = XLSX.utils.aoa_to_sheet([detailHeaders, ...detailRows]);
-  detailSheet["!cols"] = [{ wch: 24 }, { wch: 30 }, { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
-  XLSX.utils.book_append_sheet(wb, detailSheet, "Category Detail");
-
-  // ════════════════════════════════
-  //  SHEET 3 — Question Template
-  //  (blank template admins can fill and re-upload)
-  // ════════════════════════════════
-  const templateHeaders = ["questionText", "option1", "option2", "option3", "option4", "correctAnswers", "explanation", "marks", "category", "language"];
-  const templateExample = [
-    "What is the capital of France?", "Paris", "London", "Berlin", "Madrid", "0", "Paris is the capital of France.", "1", "Geography", "en",
-  ];
-  const templateSheet = XLSX.utils.aoa_to_sheet([templateHeaders, templateExample]);
-  templateSheet["!cols"] = templateHeaders.map(() => ({ wch: 22 }));
-  XLSX.utils.book_append_sheet(wb, templateSheet, "Import Template");
-
-  // ── Save ──
-  const safeName = suite.name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
-  XLSX.writeFile(wb, `results_${safeName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.writeFile(
+    wb,
+    `${reportType}_results_${safeName(suite?.name)}_${new Date().toISOString().slice(0, 10)}.xlsx`
+  );
 }

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
+import { apiProjectsToMap, defaultOrgOptions, mergeOrgOptions, readLocalOrgOptions } from "../utils/orgOptions";
 
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
@@ -19,8 +20,23 @@ function Register() {
   const [project,     setProject]     = useState("");
   const [designation, setDesignation] = useState("");
   const [loading,     setLoading]     = useState(false);
+  const [orgOptions, setOrgOptions]   = useState(defaultOrgOptions);
 
   const navigate = useNavigate();
+  const projectNames = Object.keys(orgOptions).sort((a, b) => a.localeCompare(b));
+  const departmentOptions = project ? orgOptions[project] || [] : [];
+
+  useEffect(() => {
+    let ignore = false;
+    axios.get(`${API}/api/auth/org-options`)
+      .then(res => {
+        if (!ignore) {
+          setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
+        }
+      })
+      .catch(() => {});
+    return () => { ignore = true; };
+  }, []);
 
   const handleRegister = async () => {
     // ── Validation ──────────────────────────────────────────
@@ -34,10 +50,10 @@ function Register() {
       return alert("Please enter a valid age (10–100)");
     if (!gender)
       return alert("Please select your gender");
-    if (!project.trim())
-      return alert("Please enter your project name");
-    if (!designation.trim())
-      return alert("Please enter your designation");
+    if (!project)
+      return alert("Please select your project");
+    if (!designation)
+      return alert("Please select your department");
 
     setLoading(true);
     try {
@@ -48,8 +64,8 @@ function Register() {
         role,
         age:         parseInt(age),
         gender,
-        project:     project.trim(),
-        designation: designation.trim(),
+        project,
+        designation,
       });
       alert("Registration Successful");
       navigate("/");
@@ -89,6 +105,12 @@ function Register() {
   const selectStyle = {
     ...inputStyle,
     color: WHITE,
+  };
+
+  const disabledSelectStyle = {
+    ...selectStyle,
+    opacity: 0.62,
+    cursor: "not-allowed",
   };
 
   const Row = ({ children }) => (
@@ -173,12 +195,40 @@ function Register() {
 
           <div>
             <label style={labelStyle}>Project *</label>
-            <input type="text" placeholder="e.g. Child Welfare Program" style={inputStyle} value={project} onChange={(e) => setProject(e.target.value)} />
+            <select
+              style={selectStyle}
+              value={project}
+              onChange={(e) => {
+                setProject(e.target.value);
+                setDesignation("");
+              }}
+            >
+              <option value="" style={{ color: "#333", background: WHITE }}>Select project</option>
+              {projectNames.map(projectName => (
+                <option key={projectName} value={projectName} style={{ color: "#333", background: WHITE }}>
+                  {projectName}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label style={labelStyle}>Designation *</label>
-            <input type="text" placeholder="e.g. Social Worker" style={inputStyle} value={designation} onChange={(e) => setDesignation(e.target.value)} />
+            <label style={labelStyle}>Department *</label>
+            <select
+              style={project ? selectStyle : disabledSelectStyle}
+              value={designation}
+              disabled={!project}
+              onChange={(e) => setDesignation(e.target.value)}
+            >
+              <option value="" style={{ color: "#333", background: WHITE }}>
+                {project ? "Select department" : "Select project first"}
+              </option>
+              {departmentOptions.map(department => (
+                <option key={department} value={department} style={{ color: "#333", background: WHITE }}>
+                  {department}
+                </option>
+              ))}
+            </select>
           </div>
 
           <p style={{ fontSize: "10px", fontWeight: "700", letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.50)", margin: "6px 0 0" }}>

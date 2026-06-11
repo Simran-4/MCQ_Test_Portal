@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 import "./superadmin.css";
+import { getAuthHeaders } from "../utils/auth";
+import BulkMailPanel from "../components/BulkMailPanel";
+import { apiProjectsToMap, defaultOrgOptions, mergeOrgOptions, readLocalOrgOptions, writeLocalOrgOptions } from "../utils/orgOptions";
 
-const API_URL = "https://charismatic-happiness-production-dc36.up.railway.app/api/auth";
+const API_BASE = "https://charismatic-happiness-production-dc36.up.railway.app/api";
+const API_URL = `${API_BASE}/auth`;
+const LOCAL_ROLES_KEY = "snehalaya_custom_roles";
 
 const emptyStats = {
   totalUsers: 0,
@@ -13,12 +21,153 @@ const emptyStats = {
 };
 
 const getOverview = async () => {
-  const token = localStorage.getItem("token"); // already has "Bearer " prefix
   const res = await axios.get(`${API_URL}/superadmin/overview`, {
-    headers: { Authorization: token },
+    headers: getAuthHeaders(),
   });
   return res.data;
 };
+
+function readLocalRoles() {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_ROLES_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalRoles(roles) {
+  localStorage.setItem(LOCAL_ROLES_KEY, JSON.stringify(roles));
+}
+
+function candidateName(result) {
+  return result.CandidateName || result.userName || "Unknown";
+}
+
+function candidateEmail(result) {
+  return result.CandidateEmail || result.userEmail || "-";
+}
+
+function resultPct(result) {
+  return result.totalMarks > 0 ? Math.round(((result.score || 0) / result.totalMarks) * 100) : 0;
+}
+
+function resultTestName(result, suitesById) {
+  if (result.testName) return result.testName;
+  if (result.suiteId?.name) return result.suiteId.name;
+  const suiteId = typeof result.suiteId === "string" ? result.suiteId : result.suiteId?._id;
+  return suitesById[suiteId] || "Assessment";
+}
+
+function resultStatus(result) {
+  if (typeof result.passed === "boolean") return result.passed ? "Pass" : "Fail";
+  return resultPct(result) >= 50 ? "Pass" : "Fail";
+}
+
+function saveReportsExcel(results, suitesById, reportType) {
+  const wb = XLSX.utils.book_new();
+  const summaryHeaders = ["Test Name", "Candidate", "Email", "Project", "Department", "Score", "Percentage", "Result", "Submitted At"];
+  const summaryRows = results.map(result => [
+    resultTestName(result, suitesById),
+    candidateName(result),
+    candidateEmail(result),
+    result.project || "-",
+    result.designation || "-",
+    `${result.score || 0}/${result.totalMarks || 0}`,
+    `${resultPct(result)}%`,
+    resultStatus(result),
+    result.submittedAt ? new Date(result.submittedAt).toLocaleString() : "-",
+  ]);
+  const summarySheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
+  summarySheet["!cols"] = summaryHeaders.map(header => ({ wch: Math.max(16, header.length + 4) }));
+  XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+
+  if (reportType === "descriptive") {
+    const categoryHeaders = ["Test Name", "Candidate", "Email", "Category", "Score", "Total", "Percentage"];
+    const categoryRows = [];
+    results.forEach(result => {
+      const rows = Array.isArray(result.categoryResults) && result.categoryResults.length
+        ? result.categoryResults
+        : [{ category: "Overall", score: result.score || 0, total: result.totalMarks || 0, percentage: resultPct(result) }];
+      rows.forEach(row => {
+        categoryRows.push([
+          resultTestName(result, suitesById),
+          candidateName(result),
+          candidateEmail(result),
+          row.category || "Overall",
+          row.score ?? row.earnedMarks ?? 0,
+          row.total ?? 0,
+          `${row.percentage ?? 0}%`,
+        ]);
+      });
+    });
+    const categorySheet = XLSX.utils.aoa_to_sheet([categoryHeaders, ...categoryRows]);
+    categorySheet["!cols"] = categoryHeaders.map(header => ({ wch: Math.max(16, header.length + 4) }));
+    XLSX.utils.book_append_sheet(wb, categorySheet, "Category Detail");
+  }
+
+  XLSX.writeFile(wb, `${reportType}_superadmin_results_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+function saveReportsPDF(results, suitesById, reportType) {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const title = reportType === "descriptive" ? "Super Admin Descriptive Results" : "Super Admin Summary Results";
+  doc.setFillColor(26, 61, 40);
+  doc.rect(0, 0, 297, 22, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text(title, 14, 14);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(new Date().toLocaleDateString(), 283, 14, { align: "right" });
+
+  autoTable(doc, {
+    startY: 30,
+    head: [["#", "Test Name", "Candidate", "Email", "Project", "Department", "Score", "%", "Result", "Date"]],
+    body: results.map((result, index) => [
+      index + 1,
+      resultTestName(result, suitesById),
+      candidateName(result),
+      candidateEmail(result),
+      result.project || "-",
+      result.designation || "-",
+      `${result.score || 0}/${result.totalMarks || 0}`,
+      `${resultPct(result)}%`,
+      resultStatus(result),
+      result.submittedAt ? new Date(result.submittedAt).toLocaleDateString() : "-",
+    ]),
+    styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
+    headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
+    alternateRowStyles: { fillColor: [248, 247, 244] },
+  });
+
+  if (reportType === "descriptive") {
+    results.forEach((result, index) => {
+      doc.addPage("a4", "landscape");
+      doc.setTextColor(26, 61, 40);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text(`${index + 1}. ${candidateName(result)} - ${resultTestName(result, suitesById)}`, 14, 16);
+      autoTable(doc, {
+        startY: 24,
+        head: [["Category", "Score", "Total", "Percentage"]],
+        body: (Array.isArray(result.categoryResults) && result.categoryResults.length
+          ? result.categoryResults
+          : [{ category: "Overall", score: result.score || 0, total: result.totalMarks || 0, percentage: resultPct(result) }]
+        ).map(row => [
+          row.category || "Overall",
+          row.score ?? row.earnedMarks ?? 0,
+          row.total ?? 0,
+          `${row.percentage ?? 0}%`,
+        ]),
+        headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
+        styles: { fontSize: 8, cellPadding: 2.5 },
+      });
+    });
+  }
+
+  doc.save(`${reportType}_superadmin_results_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
 
 function SuperAdmin() {
   const navigate = useNavigate();
@@ -28,6 +177,24 @@ function SuperAdmin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeNav, setActiveNav] = useState("dashboard");
+  const [reportResults, setReportResults] = useState([]);
+  const [suitesById, setSuitesById] = useState({});
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportSearch, setReportSearch] = useState("");
+  const [controlMode, setControlMode] = useState("roles");
+  const [roles, setRoles] = useState([
+    { name: "candidate", baseRole: "candidate", system: true },
+    { name: "admin", baseRole: "admin", system: true },
+    { name: "superadmin", baseRole: "admin", system: true },
+    ...readLocalRoles(),
+  ]);
+  const [roleForm, setRoleForm] = useState({ name: "", baseRole: "candidate", description: "" });
+  const [assignUserId, setAssignUserId] = useState("");
+  const [assignRole, setAssignRole] = useState("candidate");
+  const [orgOptions, setOrgOptions] = useState(defaultOrgOptions);
+  const [projectName, setProjectName] = useState("");
+  const [departmentProject, setDepartmentProject] = useState("");
+  const [departmentName, setDepartmentName] = useState("");
 
   const setOverview = useCallback((overview) => {
     setUsers(overview.users);
@@ -54,18 +221,127 @@ function SuperAdmin() {
     return () => { ignore = true; };
   }, [setOverview]);
 
+  useEffect(() => {
+    if (activeNav !== "reports") return;
+    let ignore = false;
+    const fetchReports = async () => {
+      setReportsLoading(true);
+      try {
+        const headers = getAuthHeaders();
+        const [resultsRes, suitesRes] = await Promise.all([
+          axios.get(`${API_BASE}/results/all`, { headers }),
+          axios.get(`${API_BASE}/test-suites`, { headers }),
+        ]);
+        if (ignore) return;
+        setReportResults(resultsRes.data);
+        const nextSuites = {};
+        suitesRes.data.forEach(suite => { nextSuites[suite._id] = suite.name; });
+        setSuitesById(nextSuites);
+      } catch (err) {
+        if (!ignore) setError(err.response?.data?.message || "Unable to load reports");
+      } finally {
+        if (!ignore) setReportsLoading(false);
+      }
+    };
+    fetchReports();
+    return () => { ignore = true; };
+  }, [activeNav]);
+
+  useEffect(() => {
+    if (activeNav !== "management") return;
+    const headers = getAuthHeaders();
+    axios.get(`${API_URL}/superadmin/roles`, { headers })
+      .then(res => setRoles(res.data))
+      .catch(() => setRoles(prev => [...prev.filter(role => role.system), ...readLocalRoles()]));
+    axios.get(`${API_URL}/org-options`, { headers })
+      .then(res => setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data))))
+      .catch(() => setOrgOptions(defaultOrgOptions()));
+  }, [activeNav]);
+
   const updateAccess = async (userId, isActive) => {
     try {
-      const token = localStorage.getItem("token"); // already has "Bearer " prefix
       await axios.put(
         `${API_URL}/superadmin/users/${userId}/access`,
         { isActive },
-        { headers: { Authorization: token } }
+        { headers: getAuthHeaders() }
       );
       await fetchOverview();
     } catch (err) {
       alert(err.response?.data?.message || "Unable to update user access");
     }
+  };
+
+  const createRole = async () => {
+    const name = roleForm.name.trim();
+    if (!name) return alert("Enter a role name.");
+    const payload = { ...roleForm, name };
+    try {
+      const res = await axios.post(`${API_URL}/superadmin/roles`, payload, { headers: getAuthHeaders() });
+      setRoles(prev => [...prev, { ...res.data, system: false }]);
+      setRoleForm({ name: "", baseRole: "candidate", description: "" });
+    } catch (err) {
+      if (err.response?.status === 404) {
+        const nextRole = { ...payload, system: false };
+        const nextRoles = [...readLocalRoles().filter(role => role.name.toLowerCase() !== name.toLowerCase()), nextRole];
+        writeLocalRoles(nextRoles);
+        setRoles(prev => [...prev.filter(role => role.system), ...nextRoles]);
+        setRoleForm({ name: "", baseRole: "candidate", description: "" });
+        alert("Role saved locally. Redeploy Railway backend to save roles for all admins.");
+      } else {
+        alert(err.response?.data?.message || "Unable to create role");
+      }
+    }
+  };
+
+  const assignUserRole = async () => {
+    if (!assignUserId || !assignRole) return alert("Select a user and role.");
+    try {
+      const res = await axios.put(
+        `${API_URL}/superadmin/users/${assignUserId}/role`,
+        { role: assignRole },
+        { headers: getAuthHeaders() }
+      );
+      setUsers(prev => prev.map(user => user._id === res.data._id ? res.data : user));
+      setAssignUserId("");
+      setAssignRole("candidate");
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to assign role. Railway backend may need redeploy.");
+    }
+  };
+
+  const saveProjectLocal = (name) => {
+    const nextOptions = mergeOrgOptions(orgOptions, { [name]: [] });
+    writeLocalOrgOptions(nextOptions);
+    setOrgOptions(nextOptions);
+  };
+
+  const addProject = async () => {
+    const name = projectName.trim();
+    if (!name) return alert("Enter a project name.");
+    try {
+      const res = await axios.post(`${API_URL}/superadmin/org-options/projects`, { name }, { headers: getAuthHeaders() });
+      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
+    } catch (err) {
+      saveProjectLocal(name);
+      alert("Project saved locally. Redeploy Railway backend to save it for everyone.");
+    }
+    setProjectName("");
+  };
+
+  const addDepartment = async () => {
+    const project = departmentProject.trim();
+    const department = departmentName.trim();
+    if (!project || !department) return alert("Select a project and enter a department.");
+    try {
+      const res = await axios.post(`${API_URL}/superadmin/org-options/departments`, { project, department }, { headers: getAuthHeaders() });
+      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
+    } catch (err) {
+      const nextOptions = mergeOrgOptions(orgOptions, { [project]: [...(orgOptions[project] || []), department] });
+      writeLocalOrgOptions(nextOptions);
+      setOrgOptions(nextOptions);
+      alert("Department saved locally. Redeploy Railway backend to save it for everyone.");
+    }
+    setDepartmentName("");
   };
 
   const logout = () => {
@@ -78,16 +354,26 @@ function SuperAdmin() {
     if (activeNav === "Candidates") base = users.filter(u => u.role === "candidate");
     if (activeNav === "administrators") base = users.filter(u => u.role === "admin" || u.role === "superadmin");
     return base.filter(u =>
-      `${u.name} ${u.email} ${u.role}`.toLowerCase().includes(search.toLowerCase())
+      `${u.name} ${u.email} ${u.role} ${u.customRole || ""}`.toLowerCase().includes(search.toLowerCase())
     );
   };
 
   const filteredUsers = getFilteredUsers();
+  const filteredReports = reportResults.filter(result =>
+    [
+      resultTestName(result, suitesById),
+      candidateName(result),
+      candidateEmail(result),
+      result.project,
+      result.designation,
+    ].join(" ").toLowerCase().includes(reportSearch.toLowerCase())
+  );
 
   const getSectionTitle = () => {
     if (activeNav === "Candidates") return "Candidates";
     if (activeNav === "administrators") return "Administrators";
     if (activeNav === "reports") return "Reports";
+    if (activeNav === "management") return "Controls";
     if (activeNav === "settings") return "Settings";
     return "User Management";
   };
@@ -131,6 +417,13 @@ function SuperAdmin() {
             onClick={() => { setActiveNav("reports"); setSearch(""); }}
           >
             📊 Reports
+          </button>
+          <button
+            type="button"
+            className={activeNav === "management" ? "active" : ""}
+            onClick={() => { setActiveNav("management"); setSearch(""); }}
+          >
+            🧩 Controls
           </button>
           <button
             type="button"
@@ -186,28 +479,66 @@ function SuperAdmin() {
           <section className="card">
             <div className="section-header">
               <h2>📊 Reports</h2>
+              <input
+                type="text"
+                value={reportSearch}
+                onChange={(e) => setReportSearch(e.target.value)}
+                placeholder="Search reports..."
+              />
             </div>
-            <div style={{ textAlign: "center", padding: "60px 0", color: "#888" }}>
-              <div style={{ fontSize: "60px", marginBottom: "20px" }}>📊</div>
-              <h3 style={{ fontSize: "22px", color: "#2d5d50", marginBottom: "10px" }}>
-                Total Assessments Submitted
-              </h3>
-              <div style={{ fontSize: "64px", fontWeight: "800", color: "#1f5d42", margin: "20px 0" }}>
-                {stats.totalAssessments}
+
+            <div className="report-toolbar">
+              <div>
+                <h3>{filteredReports.length}</h3>
+                <p>submissions shown</p>
               </div>
-              <p style={{ color: "#aaa" }}>View detailed results in the Admin Dashboard</p>
-              <button
-                onClick={() => navigate("/view-results")}
-                style={{
-                  marginTop: "24px", padding: "12px 30px",
-                  background: "linear-gradient(135deg, #1f4037, #2c7744)",
-                  color: "white", border: "none", borderRadius: "12px",
-                  fontSize: "16px", cursor: "pointer",
-                }}
-              >
-                View All Results →
-              </button>
+              <div className="report-actions">
+                <button type="button" onClick={() => saveReportsPDF(filteredReports, suitesById, "summary")}>Summary PDF</button>
+                <button type="button" onClick={() => saveReportsExcel(filteredReports, suitesById, "summary")}>Summary Excel</button>
+                <button type="button" onClick={() => saveReportsPDF(filteredReports, suitesById, "descriptive")}>Descriptive PDF</button>
+                <button type="button" onClick={() => saveReportsExcel(filteredReports, suitesById, "descriptive")}>Descriptive Excel</button>
+              </div>
             </div>
+
+            {reportsLoading ? (
+              <p className="empty-message">Loading reports...</p>
+            ) : (
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Test Name</th>
+                      <th>Candidate</th>
+                      <th>Email</th>
+                      <th>Project</th>
+                      <th>Department</th>
+                      <th>Score</th>
+                      <th>%</th>
+                      <th>Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredReports.map(result => (
+                      <tr key={result._id}>
+                        <td>{resultTestName(result, suitesById)}</td>
+                        <td>{candidateName(result)}</td>
+                        <td>{candidateEmail(result)}</td>
+                        <td>{result.project || "-"}</td>
+                        <td>{result.designation || "-"}</td>
+                        <td>{result.score || 0}/{result.totalMarks || 0}</td>
+                        <td>{resultPct(result)}%</td>
+                        <td>
+                          <span className={`badge ${resultStatus(result) === "Pass" ? "active" : "disabled"}`}>
+                            {resultStatus(result)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filteredReports.length === 0 && <p className="empty-message">No reports found.</p>}
+              </div>
+            )}
           </section>
         )}
 
@@ -232,6 +563,87 @@ function SuperAdmin() {
                 Go to Exam Settings →
               </button>
             </div>
+          </section>
+        )}
+
+        {activeNav === "management" && (
+          <section className="card">
+            <div className="section-header">
+              <h2>🧩 Controls</h2>
+              <select value={controlMode} onChange={e => setControlMode(e.target.value)}>
+                <option value="roles">Roles & people</option>
+                <option value="org">Projects & departments</option>
+                <option value="mail">Bulk mail</option>
+              </select>
+            </div>
+
+            {controlMode === "roles" && (
+              <div className="control-grid">
+                <div className="control-panel">
+                  <h3>Create New Role</h3>
+                  <input value={roleForm.name} onChange={e => setRoleForm({ ...roleForm, name: e.target.value })} placeholder="Role name" />
+                  <select value={roleForm.baseRole} onChange={e => setRoleForm({ ...roleForm, baseRole: e.target.value })}>
+                    <option value="candidate">Candidate-level access</option>
+                    <option value="admin">Admin-level access</option>
+                  </select>
+                  <textarea value={roleForm.description} onChange={e => setRoleForm({ ...roleForm, description: e.target.value })} placeholder="Role description" rows={3} />
+                  <button type="button" onClick={createRole}>Create Role</button>
+                </div>
+
+                <div className="control-panel">
+                  <h3>Add People To Role</h3>
+                  <select value={assignUserId} onChange={e => setAssignUserId(e.target.value)}>
+                    <option value="">Select user</option>
+                    {users.map(user => <option key={user._id} value={user._id}>{user.name} - {user.email}</option>)}
+                  </select>
+                  <select value={assignRole} onChange={e => setAssignRole(e.target.value)}>
+                    {roles.map(role => <option key={role.name} value={role.name}>{role.name}</option>)}
+                  </select>
+                  <button type="button" onClick={assignUserRole}>Assign Role</button>
+                  <div className="mini-list">
+                    {roles.map(role => (
+                      <span key={role.name}>{role.name}{role.system ? " (system)" : ""}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {controlMode === "org" && (
+              <div className="control-grid">
+                <div className="control-panel">
+                  <h3>Add Project</h3>
+                  <input value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Project name" />
+                  <button type="button" onClick={addProject}>Add Project</button>
+                </div>
+
+                <div className="control-panel">
+                  <h3>Add Department</h3>
+                  <select value={departmentProject} onChange={e => setDepartmentProject(e.target.value)}>
+                    <option value="">Select project</option>
+                    {Object.keys(orgOptions).sort((a, b) => a.localeCompare(b)).map(project => (
+                      <option key={project} value={project}>{project}</option>
+                    ))}
+                  </select>
+                  <input value={departmentName} onChange={e => setDepartmentName(e.target.value)} placeholder="Department name" />
+                  <button type="button" onClick={addDepartment}>Add Department</button>
+                </div>
+
+                <div className="control-panel wide">
+                  <h3>Current Projects</h3>
+                  <div className="project-list">
+                    {Object.entries(orgOptions).sort(([a], [b]) => a.localeCompare(b)).map(([project, departments]) => (
+                      <details key={project}>
+                        <summary>{project} <span>{departments.length} departments</span></summary>
+                        <div>{departments.map(dept => <span key={dept}>{dept}</span>)}</div>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {controlMode === "mail" && <BulkMailPanel />}
           </section>
         )}
 
@@ -267,7 +679,7 @@ function SuperAdmin() {
                       <td>{user.email}</td>
                       <td>
                         <span className={`badge ${user.role === "candidate" ? "Candidate" : "admin"}`}>
-                          {user.role}
+                          {user.customRole || user.role}
                         </span>
                       </td>
                       <td>{user.isActive ? "Active" : "Disabled"}</td>

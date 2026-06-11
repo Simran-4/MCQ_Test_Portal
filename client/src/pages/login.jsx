@@ -5,16 +5,19 @@ import { useNavigate } from "react-router-dom";
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
 const WHITE      = "#ffffff";
+const API_AUTH = "https://charismatic-happiness-production-dc36.up.railway.app/api/auth";
 
 function Login() {
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
+  const [resetMessage, setResetMessage] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async () => {
   try {
     const res = await axios.post(
-      "https://charismatic-happiness-production-dc36.up.railway.app/api/auth/login",
+      `${API_AUTH}/login`,
       { email, password }
     );
 
@@ -29,6 +32,28 @@ function Login() {
     alert(err.response?.data?.message || "Login Failed");
   }
 };
+
+  const handleForgotPassword = async () => {
+    const targetEmail = email.trim();
+    if (!targetEmail) {
+      setResetMessage("Enter your email above, then click Forgot password.");
+      return;
+    }
+    setResetLoading(true);
+    setResetMessage("");
+    try {
+      const res = await axios.post(`${API_AUTH}/forgot-password`, { email: targetEmail });
+      setResetMessage(res.data?.message || "Please contact the IT Department to reset your password.");
+    } catch (err) {
+      if (err.response?.status === 404) {
+        setResetMessage("Please contact the IT Department to reset your password: 9011020190 or crm@snehalaya.org.");
+      } else {
+        setResetMessage(err.response?.data?.message || "Please contact the IT Department to reset your password.");
+      }
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   const inputStyle = {
     width: "100%", border: "1px solid rgba(255,255,255,0.4)", borderRadius: "10px",
@@ -113,8 +138,22 @@ function Login() {
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleLogin()}
             />
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={resetLoading}
+              style={{ marginTop: "8px", padding: 0, border: "none", background: "transparent", color: WHITE, fontSize: "12px", fontWeight: "700", textDecoration: "underline", cursor: resetLoading ? "wait" : "pointer" }}
+            >
+              {resetLoading ? "Sending..." : "Forgot password?"}
+            </button>
           </div>
         </div>
+
+        {resetMessage && (
+          <div style={{ marginTop: "12px", padding: "10px 12px", borderRadius: "10px", background: "rgba(255,255,255,0.18)", color: WHITE, fontSize: "12px", lineHeight: 1.5 }}>
+            {resetMessage}
+          </div>
+        )}
 
         <button
           onClick={handleLogin}

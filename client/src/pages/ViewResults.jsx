@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import "../styles/quiz.css";
+import { getAuthHeaders } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -11,11 +12,20 @@ export default function ViewResults() {
   const [filterProject, setFilterProject] = useState("");
   const [searchQuery, setSearchQuery]   = useState("");
   const [loading, setLoading]           = useState(true);
+  const [suiteMap, setSuiteMap]         = useState({});
 
   useEffect(() => {
     fetchProjects();
+    fetchSuites();
     fetchResults();
   }, [filterProject]);
+
+  const getResultTestName = (res) => {
+    if (res.testName) return res.testName;
+    if (res.suiteId?.name) return res.suiteId.name;
+    const suiteId = typeof res.suiteId === "string" ? res.suiteId : res.suiteId?._id;
+    return suiteMap[suiteId] || "Assessment";
+  };
 
   const fetchProjects = async () => {
     try {
@@ -26,10 +36,24 @@ export default function ViewResults() {
     }
   };
 
+  const fetchSuites = async () => {
+    try {
+      const res = await axios.get(`${API}/api/test-suites`, {
+        headers: getAuthHeaders(),
+      });
+      const nextMap = {};
+      res.data.forEach(suite => { nextMap[suite._id] = suite.name; });
+      setSuiteMap(nextMap);
+    } catch (err) {
+      console.error("Error fetching test suites", err);
+    }
+  };
+
   const fetchResults = async () => {
     setLoading(true);
     try {
       const res = await axios.get(`${API}/api/results/all`, {
+        headers: getAuthHeaders(),
         params: { project: filterProject, search: searchQuery }
       });
       setResults(res.data);
@@ -86,7 +110,8 @@ export default function ViewResults() {
               <thead style={{ background: "#F9FAF8", borderBottom: "1px solid #EEE" }}>
                 <tr>
                   <th style={{ padding: "18px" }}>Candidate</th>
-                  <th style={{ padding: "18px" }}>Project / Designation</th>
+                  <th style={{ padding: "18px" }}>Test Name</th>
+                  <th style={{ padding: "18px" }}>Project / Department</th>
                   <th style={{ padding: "18px" }}>Score</th>
                   <th style={{ padding: "18px" }}>Percentage</th>
                   <th style={{ padding: "18px" }}>Status</th>
@@ -103,6 +128,9 @@ export default function ViewResults() {
                       <td style={{ padding: "18px" }}>
                         <div style={{ fontWeight: "600", color: "#1A3D28" }}>{res.userName}</div>
                         <div style={{ fontSize: "12px", color: "#888" }}>{res.userEmail}</div>
+                      </td>
+                      <td style={{ padding: "18px", fontWeight: "600", color: "#1A3D28" }}>
+                        {getResultTestName(res)}
                       </td>
                       <td style={{ padding: "18px" }}>
                         <div style={{ fontSize: "14px" }}>{res.project || "—"}</div>

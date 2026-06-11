@@ -25,6 +25,12 @@ const testSuiteSchema = new mongoose.Schema(
       type: Number,
       default: 30,
     },
+    passingPercentage: {
+      type: Number,
+      default: 50,
+      min: 0,
+      max: 100,
+    },
 
     // ── Feature 5 & 15: Random question pool ─────────────────
     questionsToServe: {

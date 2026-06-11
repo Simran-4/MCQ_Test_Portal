@@ -19,6 +19,13 @@
         padding: 8px 14px;
         border-radius: 50px;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        cursor: grab;
+        user-select: none;
+        touch-action: none;
+      }
+
+      #lang-switcher.dragging {
+        cursor: grabbing;
       }
 
       #lang-switcher .lang-icon {
@@ -40,6 +47,10 @@
         padding-right: 20px;
         font-family: Arial, sans-serif;
         letter-spacing: 0.5px;
+      }
+
+      #lang-switcher select {
+        cursor: pointer;
       }
 
       #lang-switcher select option {
@@ -75,7 +86,7 @@
   <body>
 
     <!-- CUSTOM LANGUAGE SWITCHER -->
-    <div id="lang-switcher">
+    <div id="lang-switcher" title="Drag to move language selector">
       <span class="lang-icon">🌐</span>
       <select id="lang-select" onchange="changeLanguage(this.value)">
         <option value="en">English</option>
@@ -126,7 +137,67 @@
 
       // SAVE LANGUAGE CHOICE
       document.addEventListener("DOMContentLoaded", () => {
-        document.getElementById("lang-select").addEventListener("change", (e) => {
+        const langSelect = document.getElementById("lang-select");
+        const switcher = document.getElementById("lang-switcher");
+        const savedPosition = localStorage.getItem("langSwitcherPosition");
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
+
+        const placeSwitcher = (left, top) => {
+          const rect = switcher.getBoundingClientRect();
+          const nextLeft = clamp(left, 8, window.innerWidth - rect.width - 8);
+          const nextTop = clamp(top, 8, window.innerHeight - rect.height - 8);
+          switcher.style.left = `${nextLeft}px`;
+          switcher.style.top = `${nextTop}px`;
+          switcher.style.right = "auto";
+          switcher.style.bottom = "auto";
+          return { left: nextLeft, top: nextTop };
+        };
+
+        if (savedPosition) {
+          try {
+            const { left, top } = JSON.parse(savedPosition);
+            if (Number.isFinite(left) && Number.isFinite(top)) {
+              requestAnimationFrame(() => placeSwitcher(left, top));
+            }
+          } catch {}
+        }
+
+        let dragState = null;
+        switcher.addEventListener("pointerdown", (e) => {
+          if (e.target.closest("select")) return;
+          const rect = switcher.getBoundingClientRect();
+          dragState = {
+            pointerId: e.pointerId,
+            offsetX: e.clientX - rect.left,
+            offsetY: e.clientY - rect.top,
+          };
+          switcher.classList.add("dragging");
+          switcher.setPointerCapture(e.pointerId);
+        });
+
+        switcher.addEventListener("pointermove", (e) => {
+          if (!dragState || e.pointerId !== dragState.pointerId) return;
+          const pos = placeSwitcher(e.clientX - dragState.offsetX, e.clientY - dragState.offsetY);
+          localStorage.setItem("langSwitcherPosition", JSON.stringify(pos));
+        });
+
+        const stopDrag = (e) => {
+          if (!dragState || e.pointerId !== dragState.pointerId) return;
+          switcher.classList.remove("dragging");
+          switcher.releasePointerCapture(e.pointerId);
+          dragState = null;
+        };
+
+        switcher.addEventListener("pointerup", stopDrag);
+        switcher.addEventListener("pointercancel", stopDrag);
+        window.addEventListener("resize", () => {
+          const rect = switcher.getBoundingClientRect();
+          const pos = placeSwitcher(rect.left, rect.top);
+          localStorage.setItem("langSwitcherPosition", JSON.stringify(pos));
+        });
+
+        langSelect.addEventListener("change", (e) => {
           localStorage.setItem("selectedLang", e.target.value);
         });
       });

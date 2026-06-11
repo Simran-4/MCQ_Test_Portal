@@ -14,13 +14,16 @@
   },
   "dependencies": {
     "axios": "^1.16.1",
+    "build": "^0.1.4",
     "i18next": "^26.3.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "npm": "^11.16.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-i18next": "^17.0.8",
     "react-router-dom": "^7.16.0",
+    "run": "^1.5.0",
     "serve": "^14.2.6",
     "xlsx": "^0.18.5"
   },
