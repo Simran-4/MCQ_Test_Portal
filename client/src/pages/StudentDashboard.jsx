@@ -35,9 +35,10 @@ export default function CandidateDashboard() {
       setLoading(true);
       try {
         const headers = getAuthHeaders();
+        const userSearch = user.email || user.mobile || user.username || user.name || "";
         const [suitesRes, resultsRes] = await Promise.all([
           axios.get(`${API}/api/test-suites`, { headers }),
-          axios.get(`${API}/api/results/all`, { headers, params: { search: user.email } }),
+          axios.get(`${API}/api/results/all`, { headers, params: { search: userSearch } }),
         ]);
         // Feature 13: Only show active suites
         setSuites(suitesRes.data.filter(s => s.status === "active"));
@@ -49,7 +50,7 @@ export default function CandidateDashboard() {
       }
     };
     fetchData();
-  }, [user.email]);
+  }, [user.email, user.mobile, user.username, user.name]);
 
   const tabStyle = (isActive) => ({
     padding: "10px 20px", cursor: "pointer", fontWeight: "700", fontSize: "14px",

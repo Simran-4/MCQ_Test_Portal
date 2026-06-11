@@ -257,7 +257,7 @@ export default function StudentTest() {
         suiteId,
         testName:       suite?.name || "",
         CandidateName:  user.name,
-        CandidateEmail: user.email,
+        CandidateEmail: user.email || user.mobile || user.username || "",
         project:        user.project     || "General",
         designation:    user.designation || "",
         passed,

@@ -8,7 +8,7 @@ const WHITE      = "#ffffff";
 const API_AUTH = "https://charismatic-happiness-production-dc36.up.railway.app/api/auth";
 
 function Login() {
-  const [email, setEmail]       = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
@@ -18,7 +18,7 @@ function Login() {
   try {
     const res = await axios.post(
       `${API_AUTH}/login`,
-      { email, password }
+      { identifier, email: identifier, password }
     );
 
     // ✅ Save token WITH Bearer prefix so all API calls work
@@ -34,15 +34,15 @@ function Login() {
 };
 
   const handleForgotPassword = async () => {
-    const targetEmail = email.trim();
-    if (!targetEmail) {
-      setResetMessage("Enter your email above, then click Forgot password.");
+    const targetIdentifier = identifier.trim();
+    if (!targetIdentifier) {
+      setResetMessage("Enter your username, email, or mobile number above, then click Forgot password.");
       return;
     }
     setResetLoading(true);
     setResetMessage("");
     try {
-      const res = await axios.post(`${API_AUTH}/forgot-password`, { email: targetEmail });
+      const res = await axios.post(`${API_AUTH}/forgot-password`, { identifier: targetIdentifier, email: targetIdentifier });
       setResetMessage(res.data?.message || "Please contact the IT Department to reset your password.");
     } catch (err) {
       if (err.response?.status === 404) {
@@ -119,13 +119,13 @@ function Login() {
         {/* Fields */}
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <div>
-            <label style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)", display: "block", marginBottom: "5px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Email</label>
+            <label style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)", display: "block", marginBottom: "5px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Username / Email / Mobile</label>
             <input
-              type="email"
-              placeholder="you@example.com"
+              type="text"
+              placeholder="username, email, or mobile"
               style={inputStyle}
-              value={email}
-              onChange={e => setEmail(e.target.value)}
+              value={identifier}
+              onChange={e => setIdentifier(e.target.value)}
             />
           </div>
           <div>

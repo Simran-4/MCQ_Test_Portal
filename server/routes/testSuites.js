@@ -6,6 +6,7 @@ const TestSuite = require("../models/TestSuite");
 const Question = require("../models/Question");
 const authMiddleware = require("../middleware/authMiddleware");
 const ExamSettings = require("../models/ExamSettings");
+const jwt = require("jsonwebtoken");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -29,9 +30,40 @@ function normalizePassingPercentage(value, fallback = 50) {
   return Math.max(0, Math.min(100, numeric));
 }
 
+function readOptionalUser(req) {
+  const authHeader = req.header("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+  try {
+    return jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET || "snehalaya2024");
+  } catch {
+    return null;
+  }
+}
+
+function canAccessSuite(suite, user) {
+  if (!suite) return false;
+  if (!user) return suite.status === "active" && suite.isPublic !== false;
+  if (user.role !== "candidate") return true;
+  if (suite.status !== "active") return false;
+  if (suite.isPublic !== false) return true;
+  return (suite.assignedUsers || []).some(id => id.toString() === user.id);
+}
+
+function requireAdmin(req, res, next) {
+  if (!["admin", "superadmin"].includes(req.user.role)) {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+}
+
 // ── GET QUESTIONS FOR A SUITE ─────────────────────────────────
 router.get("/:id/questions", async (req, res) => {
   try {
+    const user = readOptionalUser(req);
+    const suite = await TestSuite.findById(req.params.id);
+    if (!canAccessSuite(suite, user)) {
+      return res.status(403).json({ message: "This test is not assigned to this user" });
+    }
     const questions = await Question.find({ testSuite: req.params.id });
     res.json(questions);
   } catch (err) {
@@ -164,7 +196,19 @@ router.post("/:id/import-excel", authMiddleware, upload.single("file"), async (r
 // ── GET ALL SUITES ────────────────────────────────────────────
 router.get("/", async (req, res) => {
   try {
-    const suites = await TestSuite.find().sort({ createdAt: -1 });
+    const user = readOptionalUser(req);
+    const query = !user
+      ? { status: "active", isPublic: { $ne: false } }
+      : user.role === "candidate"
+        ? {
+            status: "active",
+            $or: [
+              { isPublic: { $ne: false } },
+              { assignedUsers: user.id },
+            ],
+          }
+        : {};
+    const suites = await TestSuite.find(query).sort({ createdAt: -1 });
     const suitesWithCount = await Promise.all(
       suites.map(async (suite) => {
         const count = await Question.countDocuments({ testSuite: suite._id });
@@ -213,6 +257,30 @@ router.put("/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// ── ASSIGN SUITE TO SPECIFIC USERS ───────────────────────────
+router.put("/:id/assignments", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const assignedUsers = Array.isArray(req.body.assignedUsers)
+      ? req.body.assignedUsers.filter(Boolean)
+      : [];
+    const isPublic = req.body.isPublic !== false;
+    const updatedSuite = await TestSuite.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          isPublic,
+          assignedUsers: isPublic ? [] : assignedUsers,
+        },
+      },
+      { new: true }
+    );
+    if (!updatedSuite) return res.status(404).json({ message: "Suite not found" });
+    res.json(updatedSuite);
+  } catch (err) {
+    res.status(500).json({ message: "Error updating suite assignments" });
+  }
+});
+
 // ── DELETE SUITE ──────────────────────────────────────────────
 router.delete("/:id", authMiddleware, async (req, res) => {
   try {
@@ -227,8 +295,12 @@ router.delete("/:id", authMiddleware, async (req, res) => {
 // ── GET SINGLE SUITE DETAILS ──────────────────────────────────
 router.get("/:id", async (req, res) => {
   try {
+    const user = readOptionalUser(req);
     const suite = await TestSuite.findById(req.params.id);
     if (!suite) return res.status(404).json({ message: "Suite not found" });
+    if (!canAccessSuite(suite, user)) {
+      return res.status(403).json({ message: "This test is not assigned to this user" });
+    }
     res.json(suite);
   } catch (err) {
     res.status(500).json({ message: "Error fetching suite details" });

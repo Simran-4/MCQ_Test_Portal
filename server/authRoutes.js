@@ -40,14 +40,48 @@ async function getOrgOptionsDoc() {
     );
 }
 
+function normalizeUsername(value) {
+    return String(value || "").toLowerCase().trim().replace(/\s+/g, "");
+}
+
+function normalizeMobile(value) {
+    return String(value || "").replace(/[^\d+]/g, "").trim();
+}
+
+function normalizeEmail(value) {
+    return String(value || "").toLowerCase().trim();
+}
+
+function isSyntheticMobileEmail(email) {
+    return /@mobile\.local$/i.test(String(email || ""));
+}
+
+function publicUser(user) {
+    return {
+        _id:         user._id,
+        name:        user.name,
+        username:    user.username || "",
+        email:       isSyntheticMobileEmail(user.email) ? "" : user.email,
+        mobile:      user.mobile || "",
+        role:        user.role,
+        customRole:  user.customRole,
+        isActive:    user.isActive,
+        age:         user.age,
+        gender:      user.gender,
+        project:     user.project,
+        designation: user.designation,
+    };
+}
+
 // ── REGISTER ──────────────────────────────────────────────────
 router.post("/register", async (req, res) => {
     try {
-        const { name, email, password, role, age, gender, project, designation } = req.body;
+        const { name, email, mobile, username, password, role, age, gender, project, designation } = req.body;
 
-        // Normalize email and role to lowercase
-        const normalizedEmail = email.toLowerCase().trim();
-        const normalizedRole = role.toLowerCase().trim();
+        const normalizedEmail = normalizeEmail(email);
+        const normalizedMobile = normalizeMobile(mobile);
+        const normalizedUsername = normalizeUsername(username || name);
+        const normalizedRole = String(role || "candidate").toLowerCase().trim();
 
         if (normalizedRole === "superadmin") {
             return res.status(403).json({
@@ -55,16 +89,43 @@ router.post("/register", async (req, res) => {
             });
         }
 
-        const existingUser = await User.findOne({ email: normalizedEmail });
+        if (!normalizedUsername || normalizedUsername.length < 3) {
+            return res.status(400).json({ message: "Username must be at least 3 characters" });
+        }
+
+        if (!normalizedEmail && !normalizedMobile) {
+            return res.status(400).json({ message: "Enter either email or mobile number" });
+        }
+
+        if (normalizedEmail && (!normalizedEmail.includes("@") || !normalizedEmail.includes("."))) {
+            return res.status(400).json({ message: "Enter a valid email address" });
+        }
+
+        if (normalizedMobile && normalizedMobile.replace(/\D/g, "").length < 10) {
+            return res.status(400).json({ message: "Enter a valid mobile number" });
+        }
+
+        const storedEmail = normalizedEmail || `${normalizedUsername}@mobile.local`;
+
+        const existingUser = await User.findOne({
+            $or: [
+                { username: normalizedUsername },
+                { email: storedEmail },
+                ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+                ...(normalizedMobile ? [{ mobile: normalizedMobile }] : []),
+            ],
+        });
         if (existingUser) {
-            return res.status(400).json({ message: "User already exists" });
+            return res.status(400).json({ message: "Username, email, or mobile number already exists" });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newUser = new User({
-            name: name.trim(),
-            email: normalizedEmail,
+            name: String(name || "").trim(),
+            username: normalizedUsername,
+            email: storedEmail,
+            mobile: normalizedMobile || undefined,
             password: hashedPassword,
             role: normalizedRole,
             age:         parseInt(age)   || null,
@@ -85,9 +146,19 @@ router.post("/register", async (req, res) => {
 // ── LOGIN ─────────────────────────────────────────────────────
 router.post("/login", async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { email, identifier, username, mobile, password } = req.body;
+        const rawIdentifier = String(identifier || username || mobile || email || "").trim();
+        const normalizedIdentifier = normalizeEmail(rawIdentifier);
+        const normalizedUsername = normalizeUsername(rawIdentifier);
+        const normalizedMobile = normalizeMobile(rawIdentifier);
 
-        const user = await User.findOne({ email: email.toLowerCase().trim() });
+        const user = await User.findOne({
+            $or: [
+                { email: normalizedIdentifier },
+                { username: normalizedUsername },
+                { mobile: normalizedMobile },
+            ],
+        });
         if (!user) {
             return res.status(400).json({ message: "User not found" });
         }
@@ -110,16 +181,7 @@ router.post("/login", async (req, res) => {
         res.json({
             message: "Login successful",
             token,
-            user: {
-                name:        user.name,
-                email:       user.email,
-                role:        user.role,
-                customRole:  user.customRole,
-                age:         user.age,
-                gender:      user.gender,
-                project:     user.project,
-                designation: user.designation,
-            }
+            user: publicUser(user),
         });
 
     } catch (err) {
@@ -130,14 +192,20 @@ router.post("/login", async (req, res) => {
 // ── FORGOT PASSWORD REQUEST ───────────────────────────────────
 router.post("/forgot-password", async (req, res) => {
     try {
-        const email = String(req.body.email || "").toLowerCase().trim();
-        if (!email) {
-            return res.status(400).json({ message: "Email is required" });
+        const rawIdentifier = String(req.body.identifier || req.body.email || "").trim();
+        if (!rawIdentifier) {
+            return res.status(400).json({ message: "Username, email, or mobile number is required" });
         }
 
-        await User.findOne({ email });
+        await User.findOne({
+            $or: [
+                { email: normalizeEmail(rawIdentifier) },
+                { username: normalizeUsername(rawIdentifier) },
+                { mobile: normalizeMobile(rawIdentifier) },
+            ],
+        });
         res.json({
-            message: "If this email is registered, please contact the IT Department to reset the password.",
+            message: "If this account is registered, please contact the IT Department to reset the password.",
             contactEmail: "crm@snehalaya.org",
             contactPhone: "9011020190",
         });
@@ -163,7 +231,7 @@ router.get("/superadmin/overview", authMiddleware, requireSuperAdmin, async (req
                 totalAssessments: totalResults,
                 overallPassRate: totalResults > 0 ? Math.round((passedResults / totalResults) * 100) : 0
             },
-            users
+            users: users.map(publicUser)
         });
     } catch (err) {
         res.status(500).json({ message: "Error fetching overview" });
@@ -187,13 +255,13 @@ router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, as
             req.params.id,
             { isActive },
             { new: true }
-        ).select("_id name email role customRole isActive age gender project designation");
+        ).select("_id name username email mobile role customRole isActive age gender project designation");
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        res.json(user);
+        res.json(publicUser(user));
 
     } catch (err) {
         res.status(500).json({ message: "Error updating user access" });
@@ -214,7 +282,7 @@ router.put("/superadmin/users/:id/password", authMiddleware, requireSuperAdmin, 
             req.params.id,
             { password: hashedPassword },
             { new: true }
-        ).select("_id name email role customRole isActive age gender project designation");
+        ).select("_id name username email mobile role customRole isActive age gender project designation");
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
@@ -222,7 +290,7 @@ router.put("/superadmin/users/:id/password", authMiddleware, requireSuperAdmin, 
 
         res.json({
             message: "Password reset successfully",
-            user,
+            user: publicUser(user),
         });
 
     } catch (err) {
@@ -233,8 +301,8 @@ router.put("/superadmin/users/:id/password", authMiddleware, requireSuperAdmin, 
 // ── ADMIN USER LIST FOR MAIL / ASSIGNMENT ─────────────────────
 router.get("/users", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
     try {
-        const users = await User.find().select("_id name email role customRole isActive project designation").sort({ name: 1 });
-        res.json(users);
+        const users = await User.find().select("_id name username email mobile role customRole isActive project designation").sort({ name: 1 });
+        res.json(users.map(publicUser));
     } catch (err) {
         res.status(500).json({ message: "Error fetching users" });
     }
@@ -297,10 +365,10 @@ router.put("/superadmin/users/:id/role", authMiddleware, requireSuperAdmin, asyn
             req.params.id,
             { role: nextRole, customRole },
             { new: true }
-        ).select("_id name email role customRole isActive age gender project designation");
+        ).select("_id name username email mobile role customRole isActive age gender project designation");
 
         if (!user) return res.status(404).json({ message: "User not found" });
-        res.json(user);
+        res.json(publicUser(user));
     } catch (err) {
         res.status(500).json({ message: "Error updating user role" });
     }

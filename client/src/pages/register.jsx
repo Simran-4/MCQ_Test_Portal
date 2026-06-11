@@ -12,7 +12,10 @@ const API = import.meta.env.VITE_API_URL ||
 
 function Register() {
   const [name,        setName]        = useState("");
+  const [username,    setUsername]    = useState("");
+  const [contactType, setContactType] = useState("email");
   const [email,       setEmail]       = useState("");
+  const [mobile,      setMobile]      = useState("");
   const [password,    setPassword]    = useState("");
   const [role,        setRole]        = useState("candidate"); // Normalized to lowercase
   const [age,         setAge]         = useState("");
@@ -42,8 +45,12 @@ function Register() {
     // ── Validation ──────────────────────────────────────────
     if (!name || name.trim().length < 2)
       return alert("Please enter a valid full name (at least 2 characters)");
-    if (!email || !email.includes("@") || !email.includes("."))
+    if (!username || username.trim().replace(/\s+/g, "").length < 3)
+      return alert("Please enter a username with at least 3 characters");
+    if (contactType === "email" && (!email || !email.includes("@") || !email.includes(".")))
       return alert("Please enter a valid email address");
+    if (contactType === "mobile" && mobile.replace(/\D/g, "").length < 10)
+      return alert("Please enter a valid mobile number");
     if (!password || password.length < 6)
       return alert("Password must be at least 6 characters");
     if (!age || isNaN(age) || parseInt(age) < 10 || parseInt(age) > 100)
@@ -59,7 +66,9 @@ function Register() {
     try {
       await axios.post(`${API}/api/auth/register`, {
         name:        name.trim(),
-        email:       email.trim().toLowerCase(),
+        username:    username.trim(),
+        email:       contactType === "email" ? email.trim().toLowerCase() : "",
+        mobile:      contactType === "mobile" ? mobile.trim() : "",
         password,
         role,
         age:         parseInt(age),
@@ -236,8 +245,48 @@ function Register() {
           </p>
 
           <div>
-            <label style={labelStyle}>Email *</label>
-            <input type="email" placeholder="you@example.com" style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)} />
+            <label style={labelStyle}>Username *</label>
+            <input
+              type="text"
+              placeholder="Choose a username"
+              style={inputStyle}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </div>
+
+          <Row>
+            <div>
+              <label style={labelStyle}>Login Contact *</label>
+              <select
+                style={selectStyle}
+                value={contactType}
+                onChange={(e) => {
+                  setContactType(e.target.value);
+                  setEmail("");
+                  setMobile("");
+                }}
+              >
+                <option value="email" style={{ color: "#333", background: WHITE }}>Email</option>
+                <option value="mobile" style={{ color: "#333", background: WHITE }}>Mobile number</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>{contactType === "email" ? "Email *" : "Mobile Number *"}</label>
+              <input
+                type={contactType === "email" ? "email" : "tel"}
+                placeholder={contactType === "email" ? "you@example.com" : "10 digit mobile"}
+                style={inputStyle}
+                value={contactType === "email" ? email : mobile}
+                onChange={(e) => contactType === "email" ? setEmail(e.target.value) : setMobile(e.target.value)}
+              />
+            </div>
+          </Row>
+
+          <div>
+            <p style={{ margin: "-2px 0 0", color: "rgba(255,255,255,0.66)", fontSize: "11px", lineHeight: 1.4 }}>
+              You can log in later with your username, {contactType === "email" ? "email" : "mobile number"}, and password.
+            </p>
           </div>
 
           <div>
