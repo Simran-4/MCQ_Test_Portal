@@ -13,15 +13,61 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-function sanitizeCategoryCorrectAnswers(rawMap, categories, optionCount) {
-  const source = rawMap && typeof rawMap === "object" ? rawMap : {};
+function sanitizeCategoryCorrectAnswers(rawMap, categories, optionCount, options = []) {
+  const source = parseCategoryCorrectAnswers(rawMap);
   return (Array.isArray(categories) ? categories : [])
     .reduce((acc, cat) => {
       const answers = Array.isArray(source[cat]) ? source[cat] : [];
-      acc[cat] = [...new Set(answers.map(Number))]
-        .filter(i => Number.isInteger(i) && i >= 0 && i < optionCount);
+      acc[cat] = parseCorrectAnswerIndexes(answers.join(","), options)
+        .filter(i => i >= 0 && i < optionCount);
+      if (acc[cat].length === 0) {
+        acc[cat] = [...new Set(answers.map(Number))]
+          .filter(i => Number.isInteger(i) && i >= 0 && i < optionCount);
+      }
       return acc;
     }, {});
+}
+
+function splitList(value) {
+  return String(value || "")
+    .split(",")
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function parseCorrectAnswerIndexes(value, options) {
+  const optionLetters = { a: 0, b: 1, c: 2, d: 3, e: 4, f: 5 };
+  return [...new Set(splitList(value).map(item => {
+    const token = item.toLowerCase();
+    if (/^\d+$/.test(token)) return Number(token);
+    if (optionLetters[token] !== undefined) return optionLetters[token];
+    return options.findIndex(option => option.toLowerCase() === token);
+  }))]
+    .filter(index => Number.isInteger(index) && index >= 0 && index < options.length);
+}
+
+function parseCategoryCorrectAnswers(rawMap) {
+  if (!rawMap) return {};
+  if (typeof rawMap === "object" && !Array.isArray(rawMap)) return rawMap;
+
+  const text = String(rawMap || "").trim();
+  if (!text) return {};
+
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch {
+    // Keep parsing the simple "Category: 0,1; Other: A" format below.
+  }
+
+  return text.split(";").reduce((acc, part) => {
+    const separator = part.includes(":") ? ":" : part.includes("=") ? "=" : "";
+    if (!separator) return acc;
+    const [category, answers] = part.split(separator);
+    const name = String(category || "").trim();
+    if (name) acc[name] = splitList(answers);
+    return acc;
+  }, {});
 }
 
 function normalizePassingPercentage(value, fallback = 50) {
@@ -72,7 +118,7 @@ router.get("/:id/questions", async (req, res) => {
 });
 
 // ── ADD QUESTION TO A SUITE ───────────────────────────────────
-router.post("/:id/questions", authMiddleware, async (req, res) => {
+router.post("/:id/questions", authMiddleware, requireAdmin, async (req, res) => {
   try {
     const questionType = req.body.questionType === "theory" ? "theory" : "mcq";
     const categories = Array.isArray(req.body.category)
@@ -92,7 +138,8 @@ router.post("/:id/questions", authMiddleware, async (req, res) => {
         : sanitizeCategoryCorrectAnswers(
           req.body.categoryCorrectAnswers,
           categories,
-          options.length
+          options.length,
+          options
         ),
       testSuite: req.params.id,
     });
@@ -105,7 +152,7 @@ router.post("/:id/questions", authMiddleware, async (req, res) => {
 });
 
 // ── IMPORT QUESTIONS FROM EXCEL ───────────────────────────────
-router.post("/:id/import-excel", authMiddleware, upload.single("file"), async (req, res) => {
+router.post("/:id/import-excel", authMiddleware, requireAdmin, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No Excel file uploaded." });
 
@@ -142,13 +189,10 @@ router.post("/:id/import-excel", authMiddleware, upload.single("file"), async (r
         return;
       }
 
-      const rawCorrect = String(
-        row.correctAnswers || row.CorrectAnswers || row.correct || row.answer || "0"
-      ).trim();
-      const correctAnswer = rawCorrect
-        .split(",")
-        .map(s => parseInt(s.trim(), 10))
-        .filter(n => Number.isInteger(n) && n >= 0 && n < options.length);
+      const correctAnswer = parseCorrectAnswerIndexes(
+        row.correctAnswers || row.CorrectAnswers || row.correctAnswer || row.CorrectAnswer || row.correct || row.answer || "",
+        options
+      );
       if (questionType === "mcq" && correctAnswer.length === 0) {
         errors.push(`Row ${rowNum}: invalid correctAnswers`);
         return;
@@ -157,9 +201,10 @@ router.post("/:id/import-excel", authMiddleware, upload.single("file"), async (r
       const rawCat = String(row.category || row.Category || "").trim();
       const category = rawCat.split(",").map(s => s.trim()).filter(Boolean);
       const categoryCorrectAnswers = sanitizeCategoryCorrectAnswers(
-        row.categoryCorrectAnswers,
+        row.categoryCorrectAnswers || row.CategoryCorrectAnswers || row.categoryAnswers || row.CategoryAnswers,
         category,
-        options.length
+        options.length,
+        options
       );
 
       questions.push({
@@ -222,7 +267,7 @@ router.get("/", async (req, res) => {
 });
 
 // ── CREATE NEW SUITE ──────────────────────────────────────────
-router.post("/", authMiddleware, async (req, res) => {
+router.post("/", authMiddleware, requireAdmin, async (req, res) => {
   try {
     const { name, description, status, passingPercentage } = req.body;
     const newSuite = new TestSuite({
@@ -240,7 +285,7 @@ router.post("/", authMiddleware, async (req, res) => {
 });
 
 // ── UPDATE SUITE ──────────────────────────────────────────────
-router.put("/:id", authMiddleware, async (req, res) => {
+router.put("/:id", authMiddleware, requireAdmin, async (req, res) => {
   try {
     const payload = { ...req.body };
     if (payload.passingPercentage !== undefined) {
@@ -282,7 +327,7 @@ router.put("/:id/assignments", authMiddleware, requireAdmin, async (req, res) =>
 });
 
 // ── DELETE SUITE ──────────────────────────────────────────────
-router.delete("/:id", authMiddleware, async (req, res) => {
+router.delete("/:id", authMiddleware, requireAdmin, async (req, res) => {
   try {
     await Question.deleteMany({ testSuite: req.params.id });
     await TestSuite.findByIdAndDelete(req.params.id);

@@ -89,6 +89,10 @@ router.post("/register", async (req, res) => {
             });
         }
 
+        if (!String(name || "").trim() || String(name || "").trim().length < 2) {
+            return res.status(400).json({ message: "Name must be at least 2 characters" });
+        }
+
         if (!normalizedUsername || normalizedUsername.length < 3) {
             return res.status(400).json({ message: "Username must be at least 3 characters" });
         }
@@ -103,6 +107,10 @@ router.post("/register", async (req, res) => {
 
         if (normalizedMobile && normalizedMobile.replace(/\D/g, "").length < 10) {
             return res.status(400).json({ message: "Enter a valid mobile number" });
+        }
+
+        if (!password || String(password).length < 6) {
+            return res.status(400).json({ message: "Password must be at least 6 characters" });
         }
 
         const storedEmail = normalizedEmail || `${normalizedUsername}@mobile.local`;
@@ -148,6 +156,12 @@ router.post("/login", async (req, res) => {
     try {
         const { email, identifier, username, mobile, password } = req.body;
         const rawIdentifier = String(identifier || username || mobile || email || "").trim();
+        if (!rawIdentifier) {
+            return res.status(400).json({ message: "Username, email, or mobile number is required" });
+        }
+        if (!password) {
+            return res.status(400).json({ message: "Password is required" });
+        }
         const normalizedIdentifier = normalizeEmail(rawIdentifier);
         const normalizedUsername = normalizeUsername(rawIdentifier);
         const normalizedMobile = normalizeMobile(rawIdentifier);

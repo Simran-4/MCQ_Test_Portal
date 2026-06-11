@@ -29,7 +29,9 @@ export default function ViewResults() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get(`${API}/api/results/projects`);
+      const res = await axios.get(`${API}/api/results/projects`, {
+        headers: getAuthHeaders(),
+      });
       setProjects(res.data);
     } catch (err) {
       console.error("Error fetching projects", err);

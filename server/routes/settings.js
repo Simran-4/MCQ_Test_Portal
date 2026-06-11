@@ -1,8 +1,16 @@
 const express = require("express");
 const router = express.Router();
 const ExamSettings = require("../models/ExamSettings");
+const authMiddleware = require("../middleware/authMiddleware");
 
-router.post("/save", async (req, res) => {
+const requireAdminOrSuperAdmin = (req, res, next) => {
+  if (!["admin", "superadmin"].includes(req.user.role)) {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+};
+
+router.post("/save", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
   try {
     const settings = await ExamSettings.findOneAndUpdate(
       {},

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { getAuthHeaders } from "../utils/auth";
 
 function ViewQuestions() {
 
@@ -14,7 +15,8 @@ function ViewQuestions() {
   const fetchQuestions = async () => {
     try {
       const res = await axios.get(
-        "https://charismatic-happiness-production-dc36.up.railway.app/api/questions/all"
+        "https://charismatic-happiness-production-dc36.up.railway.app/api/questions/all",
+        { headers: getAuthHeaders() }
       );
       setQuestions(res.data);
     } catch (err) {
@@ -26,21 +28,27 @@ function ViewQuestions() {
     if (!window.confirm("Delete this question?")) return;
     try {
       await axios.delete(
-        `https://charismatic-happiness-production-dc36.up.railway.app/api/questions/${id}`
+        `https://charismatic-happiness-production-dc36.up.railway.app/api/questions/${id}`,
+        { headers: getAuthHeaders() }
       );
       setQuestions(questions.filter(q => q._id !== id));
-    } catch (err) {
+    } catch {
       alert("Error deleting question");
     }
   };
 
   // ✅ Get unique categories
-  const categories = ["All", ...new Set(questions.map(q => q.category).filter(Boolean))];
+  const categories = [
+    "All",
+    ...new Set(questions.flatMap(q => Array.isArray(q.category) ? q.category : [q.category]).filter(Boolean))
+  ];
 
   // ✅ Filter by search + category
   const filteredQuestions = questions.filter(q => {
-    const matchesSearch = q.question.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = selectedCategory === "All" || q.category === selectedCategory;
+    const questionText = q.questionText || q.question || "";
+    const qCategories = Array.isArray(q.category) ? q.category : [q.category];
+    const matchesSearch = questionText.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = selectedCategory === "All" || qCategories.includes(selectedCategory);
     return matchesSearch && matchesCategory;
   });
 
@@ -185,7 +193,10 @@ function ViewQuestions() {
           </div>
         ) : (
           filteredQuestions.map((q, index) => {
-            const catStyle = getCategory(q.category);
+            const qCategories = Array.isArray(q.category) ? q.category : [q.category].filter(Boolean);
+            const categoryLabel = qCategories.join(", ") || "Uncategorized";
+            const catStyle = getCategory(qCategories[0]);
+            const correctIndexes = Array.isArray(q.correctAnswer) ? q.correctAnswer.map(Number) : [Number(q.correctAnswer)];
             return (
               <div
                 key={q._id}
@@ -236,7 +247,7 @@ function ViewQuestions() {
                       lineHeight: "1.5",
                       margin: 0,
                     }}>
-                      {q.question}
+                      {q.questionText || q.question}
                     </h3>
                   </div>
 
@@ -251,7 +262,7 @@ function ViewQuestions() {
                     whiteSpace: "nowrap",
                     flexShrink: 0,
                   }}>
-                    {q.category}
+                    {categoryLabel}
                   </span>
 
                 </div>
@@ -264,8 +275,8 @@ function ViewQuestions() {
                   marginLeft: "50px",
                   marginBottom: "16px",
                 }}>
-                  {q.options.map((option, i) => {
-                    const isCorrect = option === q.correctAnswer;
+                  {(q.options || []).map((option, i) => {
+                    const isCorrect = correctIndexes.includes(i);
                     return (
                       <div
                         key={i}
@@ -334,7 +345,7 @@ function ViewQuestions() {
                       cursor: "pointer",
                       transition: "all 0.2s",
                     }}
-                    onMouseOver={e => e.target.style.background = "#e53e3e" && (e.target.style.color = "white")}
+                    onMouseOver={e => { e.target.style.background = "#e53e3e"; e.target.style.color = "white"; }}
                     onMouseOut={e => { e.target.style.background = "#fff0f0"; e.target.style.color = "#e53e3e"; }}
                   >
                     🗑 Delete

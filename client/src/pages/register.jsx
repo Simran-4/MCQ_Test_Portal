@@ -10,6 +10,14 @@ const WHITE      = "#ffffff";
 const API = import.meta.env.VITE_API_URL ||
   "https://charismatic-happiness-production-dc36.up.railway.app";
 
+function Row({ children }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+      {children}
+    </div>
+  );
+}
+
 function Register() {
   const [name,        setName]        = useState("");
   const [username,    setUsername]    = useState("");
@@ -121,12 +129,6 @@ function Register() {
     opacity: 0.62,
     cursor: "not-allowed",
   };
-
-  const Row = ({ children }) => (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-      {children}
-    </div>
-  );
 
   return (
     <div

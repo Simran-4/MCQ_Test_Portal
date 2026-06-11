@@ -5,7 +5,6 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
-const GREEN = [45, 95, 63];
 const GREEN_DARK = [26, 61, 40];
 const GREEN_SOFT = [232, 242, 236];
 const BG_SOFT = [248, 247, 244];

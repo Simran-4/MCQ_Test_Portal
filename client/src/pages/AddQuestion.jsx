@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import "./dashboard.css";
+import { getAuthHeaders } from "../utils/auth";
 
 const API = "https://charismatic-happiness-production-dc36.up.railway.app";
 
@@ -14,7 +15,7 @@ function AddQuestion() {
 
   // Load test suites on mount
   useEffect(() => {
-    axios.get(`${API}/api/test-suites`)
+    axios.get(`${API}/api/test-suites`, { headers: getAuthHeaders() })
       .then(res => setSuites(res.data))
       .catch(err => console.log("Error loading suites", err));
   }, []);
@@ -45,16 +46,19 @@ function AddQuestion() {
     if (filledOptions.length < 2)              return alert("Please enter at least 2 options");
     if (!correctAnswer.trim())                 return alert("Please select the correct answer");
     if (!filledOptions.includes(correctAnswer)) return alert("Correct answer must match one of the options");
-    if (!category)                             return alert("Please select a category");
 
     try {
-      await axios.post(`${API}/api/questions/add`, {
-        question: question.trim(),
-        options:  filledOptions,
-        correctAnswer: correctAnswer.trim(),
-        category,
-        testSuiteId,
-      });
+      await axios.post(
+        `${API}/api/questions/add`,
+        {
+          question: question.trim(),
+          options:  filledOptions,
+          correctAnswer: correctAnswer.trim(),
+          category: category ? [category] : [],
+          testSuiteId,
+        },
+        { headers: getAuthHeaders() }
+      );
 
       alert("Question Added Successfully");
       setQuestion("");

@@ -150,9 +150,10 @@ export default function TestSuiteDetail() {
 
   const fetchData = async () => {
     try {
+      const config = { headers: getAuthHeaders() };
       const [suiteRes, qRes] = await Promise.all([
-        axios.get(`${API}/api/test-suites/${suiteId}`),
-        axios.get(`${API}/api/test-suites/${suiteId}/questions`),
+        axios.get(`${API}/api/test-suites/${suiteId}`, config),
+        axios.get(`${API}/api/test-suites/${suiteId}/questions`, config),
       ]);
       setSuite(suiteRes.data);
       setDurationVal(suiteRes.data.duration || 30);

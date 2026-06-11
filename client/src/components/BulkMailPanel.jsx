@@ -71,7 +71,7 @@ export default function BulkMailPanel({ compact = false }) {
     if (recipients.length === 0) return alert("No recipients found for this filter.");
     const body = `${message}${testUrl ? `\n\nTest: ${selectedSuite?.name}\n${testUrl}` : ""}`;
     const href = `mailto:?bcc=${encodeURIComponent(recipients.join(","))}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.location.href = href;
+    window.open(href, "_self");
   };
 
   const fieldStyle = {

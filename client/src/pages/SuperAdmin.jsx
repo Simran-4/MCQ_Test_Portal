@@ -351,7 +351,7 @@ function SuperAdmin() {
     try {
       const res = await axios.post(`${API_URL}/superadmin/org-options/projects`, { name }, { headers: getAuthHeaders() });
       setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
-    } catch (err) {
+    } catch {
       saveProjectLocal(name);
       alert("Project saved locally. Redeploy Railway backend to save it for everyone.");
     }
@@ -365,7 +365,7 @@ function SuperAdmin() {
     try {
       const res = await axios.post(`${API_URL}/superadmin/org-options/departments`, { project, department }, { headers: getAuthHeaders() });
       setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
-    } catch (err) {
+    } catch {
       const nextOptions = mergeOrgOptions(orgOptions, { [project]: [...(orgOptions[project] || []), department] });
       writeLocalOrgOptions(nextOptions);
       setOrgOptions(nextOptions);

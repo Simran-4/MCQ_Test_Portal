@@ -272,7 +272,7 @@ export default function Dashboard() {
       setSuites(prev => prev.map(suite =>
         suite._id === suiteId ? { ...suite, status: newStatus } : suite
       ));
-    } catch (err) {
+    } catch {
       alert("Failed to update status.");
     } finally {
       setTogglingId(null);

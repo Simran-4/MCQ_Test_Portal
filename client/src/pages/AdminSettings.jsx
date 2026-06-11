@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import "./auth.css";
+import { getAuthHeaders } from "../utils/auth";
 
 // Use an environment variable or a clean constant for the API
 const API_BASE = "https://charismatic-happiness-production-dc36.up.railway.app/api";
@@ -44,7 +45,7 @@ function AdminSettings() {
         totalQuestions: parseInt(settings.totalQuestions),
         examDuration: parseInt(settings.examDuration),
         passingPercentage: parseInt(settings.passingPercentage),
-      });
+      }, { headers: getAuthHeaders() });
       alert("Settings Saved Successfully");
     } catch (err) {
       console.error("Save Settings Error:", err);

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import "../styles/quiz.css";
+import { getAuthHeaders } from "../utils/auth";
 
 const API = "https://charismatic-happiness-production-dc36.up.railway.app";
 
@@ -20,6 +21,33 @@ function Test() {
 
   // Feature 6: Confirmation dialog
   const [showConfirm, setShowConfirm] = useState(false);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await axios.get(`${API}/api/settings`);
+      if (res.data && res.data.examDuration) {
+        setTimeLeft(parseInt(res.data.examDuration) * 60);
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  const fetchQuestions = async () => {
+    try {
+      // Use suiteId-specific random endpoint if available, else fallback to /all
+      const url = suiteId
+        ? `${API}/api/questions/${suiteId}/random`
+        : `${API}/api/questions/all`;
+
+      const res = await axios.get(url, { headers: getAuthHeaders() });
+      const fetchedQuestions = res.data;
+      setQuestions(fetchedQuestions);
+      setAnswers(new Array(fetchedQuestions.length).fill(null));
+    } catch (err) {
+      console.log(err);
+    }
+  };
 
   useEffect(() => {
     fetchQuestions();
@@ -46,36 +74,9 @@ function Test() {
     return () => clearInterval(timer);
   }, [questions, timeLeft]);
 
-  const fetchSettings = async () => {
-    try {
-      const res = await axios.get(`${API}/api/settings`);
-      if (res.data && res.data.examDuration) {
-        setTimeLeft(parseInt(res.data.examDuration) * 60);
-      }
-    } catch (err) {
-      console.log(err);
-    }
-  };
-
-  const fetchQuestions = async () => {
-    try {
-      // Use suiteId-specific random endpoint if available, else fallback to /all
-      const url = suiteId
-        ? `${API}/api/questions/${suiteId}/random`
-        : `${API}/api/questions/all`;
-
-      const res = await axios.get(url);
-      const fetchedQuestions = res.data;
-      setQuestions(fetchedQuestions);
-      setAnswers(new Array(fetchedQuestions.length).fill(""));
-    } catch (err) {
-      console.log(err);
-    }
-  };
-
-  const handleSelect = (answer) => {
+  const handleSelect = (answerIndex) => {
     const updatedAnswers = [...answers];
-    updatedAnswers[currentQuestion] = answer;
+    updatedAnswers[currentQuestion] = answerIndex;
     setAnswers(updatedAnswers);
   };
 
@@ -90,9 +91,9 @@ function Test() {
 
   // Feature 3 + 6: Block submit if unanswered, then show confirm dialog
   const handleSubmitClick = () => {
-    const unanswered = answers.filter((a) => !a || a === "").length;
+    const unanswered = answers.filter((a) => a === null || a === undefined).length;
     if (unanswered > 0) {
-      const firstUnanswered = answers.findIndex((a) => !a || a === "");
+      const firstUnanswered = answers.findIndex((a) => a === null || a === undefined);
       setCurrentQuestion(firstUnanswered);
       alert(
         `Please answer all questions before submitting.\n\n${unanswered} question(s) still unanswered.\n\nJumping to Question ${firstUnanswered + 1}.`
@@ -131,9 +132,13 @@ function Test() {
         categoryMap[categoryKey].totalMarks += questionMarks;
         totalMarksCount                     += questionMarks;
 
-        const isCorrect = answers[index] === q.correctAnswer;
+        const selectedIndex = answers[index];
+        const correctIndexes = Array.isArray(q.correctAnswer)
+          ? q.correctAnswer.map(Number)
+          : [Number(q.correctAnswer)];
+        const isCorrect = correctIndexes.includes(Number(selectedIndex));
         if (isCorrect) {
-          finalScore++;
+          finalScore += questionMarks;
           categoryMap[categoryKey].score       += 1;
           categoryMap[categoryKey].earnedMarks += questionMarks;
         }
@@ -159,23 +164,27 @@ function Test() {
           ? Math.round((finalScore / totalMarksCount) * 100)
           : 0;
         passed = pct >= passingPct;
-      } catch (_) {
+      } catch {
         // if settings fetch fails, default passed = false
       }
 
       const user = JSON.parse(localStorage.getItem("user")) || {};
 
-      await axios.post(`${API}/api/results/add`, {
-        userName:       user.name        || "Candidate",
-        userEmail:      user.email       || "No Email",
-        project:        user.project     || "General",   // Feature 11
-        designation:    user.designation || "",          // Feature 11
-        score:          finalScore,
-        totalMarks:     totalMarksCount,
-        totalQuestions: questions.length,
-        categoryResults,
-        passed,                                          // Feature 8
-      });
+      await axios.post(
+        `${API}/api/results/add`,
+        {
+          userName:       user.name        || "Candidate",
+          userEmail:      user.email || user.mobile || user.username || "No Contact",
+          project:        user.project     || "General",
+          designation:    user.designation || "",
+          score:          finalScore,
+          totalMarks:     totalMarksCount,
+          totalQuestions: questions.length,
+          categoryResults,
+          passed,
+        },
+        { headers: getAuthHeaders() }
+      );
 
       window.location.href = "/view-results";
 
@@ -204,7 +213,7 @@ function Test() {
 
   const minutes       = Math.floor(timeLeft / 60);
   const seconds       = timeLeft % 60;
-  const answeredCount  = answers.filter((a) => a && a !== "").length;
+  const answeredCount  = answers.filter((a) => a !== null && a !== undefined).length;
   const unansweredCount = questions.length - answeredCount;
   const isMarked       = markedForReview.includes(currentQuestion);
 
@@ -282,15 +291,15 @@ function Test() {
           {questions.length > 0 && (
             <>
               <h2 className="question-text">
-                {questions[currentQuestion]?.question}
+                {questions[currentQuestion]?.questionText || questions[currentQuestion]?.question}
               </h2>
 
               <div className="options">
                 {questions[currentQuestion]?.options.map((option, index) => (
                   <button
                     key={index}
-                    className={`option-btn ${answers[currentQuestion] === option ? "selected" : ""}`}
-                    onClick={() => handleSelect(option)}
+                    className={`option-btn ${answers[currentQuestion] === index ? "selected" : ""}`}
+                    onClick={() => handleSelect(index)}
                   >
                     {option}
                   </button>

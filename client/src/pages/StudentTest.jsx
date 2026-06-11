@@ -284,6 +284,28 @@ export default function StudentTest() {
     }
   };
 
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: BG, display: "grid", placeItems: "center", color: GREEN_DARK, fontFamily: "'Segoe UI', sans-serif" }}>
+        Loading test...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ minHeight: "100vh", background: BG, display: "grid", placeItems: "center", padding: "20px", fontFamily: "'Segoe UI', sans-serif" }}>
+        <div style={{ background: WHITE, borderRadius: "16px", padding: "28px", maxWidth: "420px", textAlign: "center" }}>
+          <h2 style={{ color: GREEN_DARK }}>Unable to load test</h2>
+          <p style={{ color: "#666" }}>{error}</p>
+          <button onClick={() => navigate("/candidate")} style={{ padding: "10px 18px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", cursor: "pointer" }}>
+            Back to Tests
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Results Screen
   if (submitted && result) {
     const pct    = Math.round((result.score / result.totalMarks) * 100) || 0;

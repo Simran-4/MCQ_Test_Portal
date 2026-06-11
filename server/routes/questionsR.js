@@ -3,6 +3,21 @@ const router   = express.Router();
 const Question = require("../models/Question");
 const TestSuite = require("../models/TestSuite");
 const authMiddleware = require("../middleware/authMiddleware");
+const jwt = require("jsonwebtoken");
+
+const requireAdminOrSuperAdmin = (req, res, next) => {
+  if (!["admin", "superadmin"].includes(req.user.role)) {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+};
+
+const requireSuperAdmin = (req, res, next) => {
+  if (req.user.role !== "superadmin") {
+    return res.status(403).json({ message: "Super admin access required" });
+  }
+  next();
+};
 
 function sanitizeCategoryCorrectAnswers(rawMap, categories, optionCount) {
   const source = rawMap && typeof rawMap === "object" ? rawMap : {};
@@ -15,11 +30,30 @@ function sanitizeCategoryCorrectAnswers(rawMap, categories, optionCount) {
     }, {});
 }
 
+function readOptionalUser(req) {
+  const authHeader = req.header("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+  try {
+    return jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET || "snehalaya2024");
+  } catch {
+    return null;
+  }
+}
+
+function canAccessSuite(suite, user) {
+  if (!suite) return false;
+  if (!user) return suite.status === "active" && suite.isPublic !== false;
+  if (user.role !== "candidate") return true;
+  if (suite.status !== "active") return false;
+  if (suite.isPublic !== false) return true;
+  return (suite.assignedUsers || []).some(id => id.toString() === user.id);
+}
+
 // ── POST /api/questions/add (legacy) ─────────────────────────
-router.post("/add", async (req, res) => {
+router.post("/add", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
   try {
     const { question, options, correctAnswer, category, testSuiteId } = req.body;
-    const filledOptions = options.filter(o => o.trim() !== "");
+    const filledOptions = Array.isArray(options) ? options.filter(o => String(o).trim() !== "") : [];
     const correctIndex  = filledOptions.indexOf(correctAnswer);
     if (correctIndex === -1)
       return res.status(400).json({ message: "Correct answer must match one of the options" });
@@ -30,7 +64,7 @@ router.post("/add", async (req, res) => {
       questionText:  question.trim(),
       options:       filledOptions,
       correctAnswer: [correctIndex],
-      category:      Array.isArray(category) ? category : [category],
+      category:      Array.isArray(category) ? category.filter(Boolean) : (category ? [category] : []),
     });
     await newQuestion.save();
     res.status(201).json({ message: "Question Added Successfully" });
@@ -41,7 +75,7 @@ router.post("/add", async (req, res) => {
 });
 
 // ── PUT /api/questions/:id ────────────────────────────────────
-router.put("/:id", authMiddleware, async (req, res) => {
+router.put("/:id", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
   try {
     const { questionText, options, correctAnswer, explanation, marks, category, categoryCorrectAnswers } = req.body;
     const questionType = req.body.questionType === "theory" ? "theory" : "mcq";
@@ -83,7 +117,7 @@ router.put("/:id", authMiddleware, async (req, res) => {
 });
 
 // ── DELETE /api/questions/:id ─────────────────────────────────
-router.delete("/:id", authMiddleware, async (req, res) => {
+router.delete("/:id", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
   try {
     const deleted = await Question.findByIdAndDelete(req.params.id);
     if (!deleted)
@@ -96,7 +130,7 @@ router.delete("/:id", authMiddleware, async (req, res) => {
 });
 
 // ── GET /api/questions/all ────────────────────────────────────
-router.get("/all", async (req, res) => {
+router.get("/all", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
   try {
     const questions = await Question.find();
     res.json(questions);
@@ -110,6 +144,10 @@ router.get("/all", async (req, res) => {
 router.get("/:suiteId/random", async (req, res) => {
   try {
     const suite     = await TestSuite.findById(req.params.suiteId);
+    const user      = readOptionalUser(req);
+    if (!canAccessSuite(suite, user)) {
+      return res.status(403).json({ message: "This test is not assigned to this user" });
+    }
     const questions = await Question.find({ testSuite: req.params.suiteId });
 
     if (!questions.length)
@@ -136,7 +174,7 @@ router.get("/:suiteId/random", async (req, res) => {
 });
 
 // ── GET /api/questions/delete-all (utility) ───────────────────
-router.get("/delete-all", async (req, res) => {
+router.get("/delete-all", authMiddleware, requireSuperAdmin, async (req, res) => {
   try {
     await Question.deleteMany({});
     res.json({ message: "All Questions Deleted Successfully" });

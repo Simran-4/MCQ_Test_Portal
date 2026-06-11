@@ -7,8 +7,33 @@ const authMiddleware = require("../middleware/authMiddleware");
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+const requireAdminOrSuperAdmin = (req, res, next) => {
+  if (!["admin", "superadmin"].includes(req.user.role)) {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+};
+
+function splitList(value) {
+  return String(value || "")
+    .split(",")
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function parseCorrectAnswerIndexes(value, options) {
+  const optionLetters = { a: 0, b: 1, c: 2, d: 3, e: 4, f: 5 };
+  return [...new Set(splitList(value).map(item => {
+    const token = item.toLowerCase();
+    if (/^\d+$/.test(token)) return Number(token);
+    if (optionLetters[token] !== undefined) return optionLetters[token];
+    return options.findIndex(option => option.toLowerCase() === token);
+  }))]
+    .filter(index => Number.isInteger(index) && index >= 0 && index < options.length);
+}
+
 // ── UPDATE QUESTION ───────────────────────────────────────────
-router.put("/:id", authMiddleware, async (req, res) => {
+router.put("/:id", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
   try {
     const updated = await Question.findByIdAndUpdate(
       req.params.id,
@@ -24,7 +49,7 @@ router.put("/:id", authMiddleware, async (req, res) => {
 });
 
 // ── DELETE QUESTION ───────────────────────────────────────────
-router.delete("/:id", authMiddleware, async (req, res) => {
+router.delete("/:id", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
   try {
     await Question.findByIdAndDelete(req.params.id);
     res.json({ message: "Deleted" });
@@ -36,6 +61,8 @@ router.delete("/:id", authMiddleware, async (req, res) => {
 // ── BULK IMPORT FROM EXCEL ────────────────────────────────────
 router.post(
   "/test-suites/:suiteId/import-excel",
+  authMiddleware,
+  requireAdminOrSuperAdmin,
   upload.single("file"),
   async (req, res) => {
     try {
@@ -66,20 +93,17 @@ router.post(
 
         if (options.length < 2) { errors.push(`Row ${rowNum}: need at least 2 options`); return; }
 
-        const rawCorrect = String(
-          row["correctAnswers"] || row["CorrectAnswers"] || row["correct"] || row["answer"] || "0"
-        ).trim();
-        const correctAnswer = rawCorrect
-          .split(",")
-          .map(s => parseInt(s.trim(), 10))
-          .filter(n => !isNaN(n));
+        const correctAnswer = parseCorrectAnswerIndexes(
+          row["correctAnswers"] || row["CorrectAnswers"] || row["correctAnswer"] || row["CorrectAnswer"] || row["correct"] || row["answer"] || "",
+          options
+        );
 
         if (correctAnswer.length === 0) { errors.push(`Row ${rowNum}: invalid correctAnswers`); return; }
 
         const explanation = String(row["explanation"] || row["Explanation"] || "").trim();
         const marks       = parseInt(row["marks"] || row["Marks"] || 1, 10) || 1;
         const language    = String(row["language"] || row["Language"] || "en").trim();
-        const rawCat      = String(row["category"] || row["Category"] || "General").trim();
+        const rawCat      = String(row["category"] || row["Category"] || "").trim();
         const category    = rawCat.split(",").map(s => s.trim()).filter(Boolean);
 
         questions.push({ testSuite: req.params.suiteId, questionText, options, correctAnswer, explanation, marks, language, category });
