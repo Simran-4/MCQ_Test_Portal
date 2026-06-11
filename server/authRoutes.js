@@ -187,7 +187,7 @@ router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, as
             req.params.id,
             { isActive },
             { new: true }
-        ).select("_id name email role isActive age gender project designation");
+        ).select("_id name email role customRole isActive age gender project designation");
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
@@ -197,6 +197,36 @@ router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, as
 
     } catch (err) {
         res.status(500).json({ message: "Error updating user access" });
+    }
+});
+
+// ── RESET USER PASSWORD ──────────────────────────────────────
+router.put("/superadmin/users/:id/password", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const password = String(req.body.password || "");
+
+        if (password.length < 6) {
+            return res.status(400).json({ message: "Password must be at least 6 characters" });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const user = await User.findByIdAndUpdate(
+            req.params.id,
+            { password: hashedPassword },
+            { new: true }
+        ).select("_id name email role customRole isActive age gender project designation");
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        res.json({
+            message: "Password reset successfully",
+            user,
+        });
+
+    } catch (err) {
+        res.status(500).json({ message: "Error resetting password" });
     }
 });
 

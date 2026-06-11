@@ -442,6 +442,114 @@ tbody tr:last-child td {
   border-bottom: none;
 }
 
+.small-action-btn {
+  padding: 8px 12px;
+  border: 1px solid #cfe3d7;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--admin-primary-dark);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.small-action-btn:hover {
+  background: var(--admin-primary-light);
+  border-color: var(--admin-primary);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 24, 20, 0.5);
+}
+
+.modal-card {
+  width: min(440px, 100%);
+  padding: 26px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+}
+
+.modal-card h2 {
+  margin-bottom: 8px;
+  color: var(--admin-primary-dark);
+  font-size: 24px;
+}
+
+.modal-card p {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 18px;
+  color: var(--admin-muted);
+  line-height: 1.45;
+}
+
+.modal-card p strong {
+  color: var(--admin-text);
+}
+
+.modal-card label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--admin-primary-dark);
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.modal-card input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #d9e4dd;
+  border-radius: 12px;
+  color: var(--admin-text);
+  font: inherit;
+  outline: none;
+}
+
+.modal-card input:focus {
+  border-color: var(--admin-primary);
+  box-shadow: 0 0 0 4px rgba(31, 93, 66, 0.1);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.modal-actions button {
+  padding: 11px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--admin-primary);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.modal-actions button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.modal-actions .secondary-btn {
+  border: 1px solid #d9e4dd;
+  background: #fff;
+  color: var(--admin-primary-dark);
+}
+
 /* ========== BADGE ========== */
 .badge {
   display: inline-block;

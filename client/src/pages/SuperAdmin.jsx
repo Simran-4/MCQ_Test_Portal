@@ -195,6 +195,9 @@ function SuperAdmin() {
   const [projectName, setProjectName] = useState("");
   const [departmentProject, setDepartmentProject] = useState("");
   const [departmentName, setDepartmentName] = useState("");
+  const [resetUser, setResetUser] = useState(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetSaving, setResetSaving] = useState(false);
 
   const setOverview = useCallback((overview) => {
     setUsers(overview.users);
@@ -306,6 +309,33 @@ function SuperAdmin() {
       setAssignRole("candidate");
     } catch (err) {
       alert(err.response?.data?.message || "Unable to assign role. Railway backend may need redeploy.");
+    }
+  };
+
+  const openResetPassword = (user) => {
+    setResetUser(user);
+    setResetPassword("");
+  };
+
+  const resetUserPassword = async () => {
+    if (!resetUser) return;
+    if (resetPassword.length < 6) return alert("Temporary password must be at least 6 characters.");
+
+    setResetSaving(true);
+    try {
+      const res = await axios.put(
+        `${API_URL}/superadmin/users/${resetUser._id}/password`,
+        { password: resetPassword },
+        { headers: getAuthHeaders() }
+      );
+      setUsers(prev => prev.map(user => user._id === res.data.user._id ? res.data.user : user));
+      setResetUser(null);
+      setResetPassword("");
+      alert("Password reset successfully. Share the temporary password securely with the user.");
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to reset password. Railway backend may need redeploy.");
+    } finally {
+      setResetSaving(false);
     }
   };
 
@@ -670,6 +700,7 @@ function SuperAdmin() {
                     <th>Role</th>
                     <th>Status</th>
                     <th>Access</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -693,6 +724,15 @@ function SuperAdmin() {
                           <span className="slider"></span>
                         </label>
                       </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="small-action-btn"
+                          onClick={() => openResetPassword(user)}
+                        >
+                          Reset Password
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -707,6 +747,35 @@ function SuperAdmin() {
         )}
 
       </main>
+
+      {resetUser && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
+            <h2 id="reset-password-title">Reset Password</h2>
+            <p>
+              Set a temporary password for <strong>{resetUser.name}</strong>
+              <span>{resetUser.email}</span>
+            </p>
+            <label htmlFor="temporary-password">Temporary password</label>
+            <input
+              id="temporary-password"
+              type="password"
+              value={resetPassword}
+              onChange={(e) => setResetPassword(e.target.value)}
+              placeholder="Minimum 6 characters"
+              autoFocus
+            />
+            <div className="modal-actions">
+              <button type="button" className="secondary-btn" onClick={() => setResetUser(null)}>
+                Cancel
+              </button>
+              <button type="button" onClick={resetUserPassword} disabled={resetSaving}>
+                {resetSaving ? "Saving..." : "Save Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
