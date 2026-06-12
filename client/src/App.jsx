@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 // Auth & Layout
 import Login          from "./pages/login";
@@ -18,15 +18,22 @@ import AdminSuiteResults from "./pages/AdminSuiteResults";
 // Student Pages
 import StudentDashboard from "./pages/StudentDashboard";
 import StudentTest from "./pages/StudentTest";
+import { loginPathForNext } from "./utils/authRedirect";
 
 // ── PROTECTIVE WRAPPER ────────────────────────────────────
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const location = useLocation();
 
-  if (!token) return <Navigate to="/" replace />;
+  if (!token) {
+    return <Navigate to={loginPathForNext(`${location.pathname}${location.search}`)} replace />;
+  }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
+    if (location.pathname.startsWith("/test/")) {
+      return <Navigate to={loginPathForNext(`${location.pathname}${location.search}`)} replace />;
+    }
     return <Navigate to={user.role === "candidate" ? "/candidate" : "/"} replace />;
   }
 
@@ -48,7 +55,7 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="/test/:suiteId" element={
-          <ProtectedRoute allowedRoles={["candidate", "admin", "superadmin"]}>
+          <ProtectedRoute allowedRoles={["candidate"]}>
             <StudentTest />
           </ProtectedRoute>
         } />

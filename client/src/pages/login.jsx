@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { getSafeNextPath, registerPathForNext } from "../utils/authRedirect";
 
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
@@ -13,6 +14,8 @@ function Login() {
   const [resetMessage, setResetMessage] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const nextPath = getSafeNextPath(searchParams.get("next"));
 
   const handleLogin = async () => {
   try {
@@ -27,6 +30,7 @@ function Login() {
 
     if (res.data.user.role === "admin")           navigate("/dashboard");
     else if (res.data.user.role === "superadmin") navigate("/superadmin");
+    else if (nextPath.startsWith("/test/"))        navigate(nextPath);
     else                                          navigate("/candidate");
   } catch (err) {
     alert(err.response?.data?.message || "Login Failed");
@@ -172,7 +176,7 @@ function Login() {
 
         <p
           style={{ textAlign: "center", fontSize: "13px", color: "rgba(255,255,255,0.75)", marginTop: "16px", cursor: "pointer" }}
-          onClick={() => navigate("/register")}
+          onClick={() => navigate(registerPathForNext(nextPath))}
         >
           Don't have an account?{" "}
           <span style={{ color: WHITE, fontWeight: "700", textDecoration: "underline" }}>Register</span>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiProjectsToMap, defaultOrgOptions, mergeOrgOptions, readLocalOrgOptions } from "../utils/orgOptions";
+import { getSafeNextPath, loginPathForNext } from "../utils/authRedirect";
 
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
@@ -33,6 +34,8 @@ function Register() {
   const [orgOptions, setOrgOptions]   = useState(defaultOrgOptions);
 
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const nextPath = getSafeNextPath(searchParams.get("next"));
   const projectNames = Object.keys(orgOptions).sort((a, b) => a.localeCompare(b));
   const departmentOptions = project ? orgOptions[project] || [] : [];
 
@@ -83,8 +86,8 @@ function Register() {
         project,
         designation,
       });
-      alert("Registration Successful");
-      navigate("/");
+      alert("Registration Successful. Please login to start the test.");
+      navigate(loginPathForNext(nextPath));
     } catch (err) {
       alert(err.response?.data?.message || "Registration Failed. Please try again.");
     } finally {
@@ -318,7 +321,7 @@ function Register() {
 
         <p style={{ textAlign: "center", fontSize: "13px", color: "rgba(255,255,255,0.72)", marginTop: "14px" }}>
           Already have an account?{" "}
-          <Link to="/" style={{ color: WHITE, fontWeight: "700", textDecoration: "underline" }}>Login</Link>
+          <Link to={loginPathForNext(nextPath)} style={{ color: WHITE, fontWeight: "700", textDecoration: "underline" }}>Login</Link>
         </p>
       </div>
     </div>
