@@ -117,8 +117,17 @@ router.post("/", authMiddleware, async (req, res) => {
       testName,
     } = req.body;
 
+    if (!Array.isArray(answers)) {
+      return res.status(400).json({ message: "Answers are required" });
+    }
+    const answeredQuestionIds = [...new Set(
+      answers.map(answer => String(answer?.questionId || "")).filter(Boolean)
+    )];
+
     const [questions, settings, suite, submitter] = await Promise.all([
-      Question.find({ testSuite: suiteId }),
+      answeredQuestionIds.length
+        ? Question.find({ testSuite: suiteId, _id: { $in: answeredQuestionIds } })
+        : Promise.resolve([]),
       Settings.findOne(),
       TestSuite.findById(suiteId),
       req.user.role === "candidate"
@@ -129,9 +138,6 @@ router.post("/", authMiddleware, async (req, res) => {
     if (!suite) return res.status(404).json({ message: "Test suite not found" });
     if (!canAccessSuite(suite, req.user)) {
       return res.status(403).json({ message: "This test is not assigned to this user" });
-    }
-    if (!Array.isArray(answers)) {
-      return res.status(400).json({ message: "Answers are required" });
     }
 
     const passingPct = suite?.passingPercentage ?? settings?.passingPercentage ?? 50;

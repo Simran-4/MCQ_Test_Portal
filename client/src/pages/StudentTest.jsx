@@ -164,7 +164,7 @@ export default function StudentTest() {
 
         const [suiteRes, qRes, settingsRes] = await Promise.all([
           axios.get(`${API}/api/test-suites/${suiteId}`, { headers }),
-          axios.get(`${API}/api/test-suites/${suiteId}/questions`, { headers }),
+          axios.get(`${API}/api/questions/${suiteId}/random`, { headers }),
           axios.get(`${API}/api/settings`),
         ]);
 

@@ -37,6 +37,15 @@ const testSuiteSchema = new mongoose.Schema(
       type: Number,
       default: null, // null = serve all questions
     },
+    questionSelectionMode: {
+      type: String,
+      enum: ["all", "random", "selected"],
+      default: "all",
+    },
+    selectedQuestionIds: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Question",
+    }],
 
     // ── Feature 9: Test availability window ──────────────────
     startDate: {

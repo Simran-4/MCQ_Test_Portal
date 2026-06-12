@@ -97,8 +97,11 @@ export default function CandidateDashboard() {
                   )}
                   <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
                     <span style={{ fontSize: "12px", color: "#888" }}>⏱ {suite.duration || 30} min</span>
-                    <span style={{ fontSize: "12px", color: "#888" }}>• {suite.questionCount || 0} questions</span>
-                    {suite.questionsToServe && (
+                    <span style={{ fontSize: "12px", color: "#888" }}>• {suite.effectiveQuestionCount || suite.questionCount || 0} questions</span>
+                    {suite.questionSelectionMode === "selected" && (
+                      <span style={{ fontSize: "12px", color: "#f59e0b" }}>• 📌 selected set</span>
+                    )}
+                    {(suite.questionSelectionMode === "random" || (!suite.questionSelectionMode && suite.questionsToServe)) && suite.questionsToServe && (
                       <span style={{ fontSize: "12px", color: "#f59e0b" }}>• 🎲 {suite.questionsToServe} random</span>
                     )}
                   </div>

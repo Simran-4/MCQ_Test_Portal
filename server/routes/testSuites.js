@@ -9,6 +9,11 @@ const authMiddleware = require("../middleware/authMiddleware");
 const ExamSettings = require("../models/ExamSettings");
 const jwt = require("jsonwebtoken");
 const { hasAdminPermission } = require("../utils/adminPermissions");
+const {
+  getEffectiveQuestionCount,
+  resolveQuestionSelectionMode,
+  selectQuestionsForSuite,
+} = require("../utils/questionSelection");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -78,6 +83,40 @@ function normalizePassingPercentage(value, fallback = 50) {
   return Math.max(0, Math.min(100, numeric));
 }
 
+function sanitizeSuiteUpdatePayload(body) {
+  const payload = { ...body };
+  if (payload.passingPercentage !== undefined) {
+    payload.passingPercentage = normalizePassingPercentage(payload.passingPercentage);
+  }
+  if (payload.questionSelectionMode !== undefined) {
+    payload.questionSelectionMode = ["all", "random", "selected"].includes(payload.questionSelectionMode)
+      ? payload.questionSelectionMode
+      : "all";
+  }
+  if (payload.questionsToServe !== undefined) {
+    const numeric = Number(payload.questionsToServe);
+    payload.questionsToServe = Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : null;
+  }
+  if (payload.selectedQuestionIds !== undefined) {
+    payload.selectedQuestionIds = [...new Set(
+      (Array.isArray(payload.selectedQuestionIds) ? payload.selectedQuestionIds : [])
+        .map(id => String(id))
+        .filter(Boolean)
+    )];
+  }
+  if (payload.questionSelectionMode === "all") {
+    payload.questionsToServe = null;
+    payload.selectedQuestionIds = [];
+  }
+  if (payload.questionSelectionMode === "random") {
+    payload.selectedQuestionIds = [];
+  }
+  if (payload.questionSelectionMode === "selected") {
+    payload.questionsToServe = null;
+  }
+  return payload;
+}
+
 function readOptionalUser(req) {
   const authHeader = req.header("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
@@ -131,7 +170,10 @@ router.get("/:id/questions", async (req, res) => {
       return res.status(403).json({ message: "This test is not assigned to this user" });
     }
     const questions = await Question.find({ testSuite: req.params.id });
-    res.json(questions);
+    const visibleQuestions = user?.role === "candidate"
+      ? selectQuestionsForSuite(suite, questions)
+      : questions;
+    res.json(visibleQuestions);
   } catch (err) {
     res.status(500).json({ message: "Error fetching questions" });
   }
@@ -276,8 +318,16 @@ router.get("/", async (req, res) => {
     const suites = await TestSuite.find(query).sort({ createdAt: -1 });
     const suitesWithCount = await Promise.all(
       suites.map(async (suite) => {
-        const count = await Question.countDocuments({ testSuite: suite._id });
-        return { ...suite.toObject(), questionCount: count };
+        const totalCount = await Question.countDocuments({ testSuite: suite._id });
+        const effectiveCount = getEffectiveQuestionCount(suite, totalCount);
+        const mode = resolveQuestionSelectionMode(suite);
+        return {
+          ...suite.toObject(),
+          questionSelectionMode: mode,
+          questionCount: user?.role === "candidate" ? effectiveCount : totalCount,
+          totalQuestionCount: totalCount,
+          effectiveQuestionCount: effectiveCount,
+        };
       })
     );
     res.json(suitesWithCount);
@@ -352,10 +402,7 @@ router.put("/assignments/user/:userId", authMiddleware, requireAdminFeature("can
 // ── UPDATE SUITE ──────────────────────────────────────────────
 router.put("/:id", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
   try {
-    const payload = { ...req.body };
-    if (payload.passingPercentage !== undefined) {
-      payload.passingPercentage = normalizePassingPercentage(payload.passingPercentage);
-    }
+    const payload = sanitizeSuiteUpdatePayload(req.body);
     const updatedSuite = await TestSuite.findByIdAndUpdate(
       req.params.id,
       { $set: payload },

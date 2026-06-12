@@ -118,6 +118,8 @@ export default function TestSuiteDetail() {
 
   // Feature 5: Questions to serve
   const [showQtsServe, setShowQtsServe]   = useState(false);
+  const [questionMode, setQuestionMode]    = useState("all");
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState([]);
   const [qtsServeVal, setQtsServeVal]     = useState("");
   const [savingQts, setSavingQts]         = useState(false);
 
@@ -157,6 +159,8 @@ export default function TestSuiteDetail() {
       ]);
       setSuite(suiteRes.data);
       setDurationVal(suiteRes.data.duration || 30);
+      setQuestionMode(suiteRes.data.questionSelectionMode || (suiteRes.data.selectedQuestionIds?.length ? "selected" : suiteRes.data.questionsToServe ? "random" : "all"));
+      setSelectedQuestionIds((suiteRes.data.selectedQuestionIds || []).map(id => String(id?._id || id)));
       setQtsServeVal(suiteRes.data.questionsToServe || "");
       setPassingVal(suiteRes.data.passingPercentage ?? 50);
       // Format dates for datetime-local input
@@ -306,18 +310,42 @@ export default function TestSuiteDetail() {
     finally { setSavingDur(false); }
   };
 
-  // Feature 5: Save questionsToServe
+  const toggleSelectedQuestion = (questionId) => {
+    setSelectedQuestionIds(prev =>
+      prev.includes(questionId)
+        ? prev.filter(id => id !== questionId)
+        : [...prev, questionId]
+    );
+  };
+
+  // Feature 5: Save candidate question set
   const handleSaveQtsServe = async () => {
     setSavingQts(true);
     try {
+      const mode = ["all", "random", "selected"].includes(questionMode) ? questionMode : "all";
       const value = qtsServeVal ? Number(qtsServeVal) : null;
+      if (mode === "random" && (!value || value < 1 || value > questions.length)) {
+        setSavingQts(false);
+        return alert(`Enter a random question count between 1 and ${questions.length}.`);
+      }
+      if (mode === "selected" && selectedQuestionIds.length === 0) {
+        setSavingQts(false);
+        return alert("Select at least one question for the candidate set.");
+      }
+      const payload = {
+        questionSelectionMode: mode,
+        questionsToServe: mode === "random" ? value : null,
+        selectedQuestionIds: mode === "selected" ? selectedQuestionIds : [],
+      };
       await axios.put(`${API}/api/test-suites/${suiteId}`,
-        { questionsToServe: value },
+        payload,
         { headers: getAuthHeaders() }
       );
-      setSuite(prev => ({ ...prev, questionsToServe: value }));
+      setSuite(prev => ({ ...prev, ...payload }));
       setShowQtsServe(false);
-      alert(value ? `Set to serve ${value} random questions!` : "Serving all questions.");
+      if (mode === "random") alert(`Candidates will receive ${value} random question(s).`);
+      else if (mode === "selected") alert(`Candidates will receive the ${selectedQuestionIds.length} selected question(s).`);
+      else alert("Candidates will receive all questions.");
     } catch { alert("Failed to save."); }
     finally { setSavingQts(false); }
   };
@@ -625,7 +653,10 @@ export default function TestSuiteDetail() {
         <span onClick={() => navigate("/dashboard")} style={{ fontSize: "14px", color: "#4A7A5C", fontWeight: "500", cursor: "pointer" }}>← Back to dashboard</span>
         <span style={{ fontSize: "13px", color: "#aaa" }}>{questions.length} question{questions.length !== 1 ? "s" : ""}</span>
         <span style={{ fontSize: "13px", color: "#aaa" }}>⏱ {suite.duration || 30} min</span>
-        {suite.questionsToServe && (
+        {suite.questionSelectionMode === "selected" && (
+          <span style={{ fontSize: "13px", color: "#f59e0b" }}>📌 {(suite.selectedQuestionIds || []).length} selected</span>
+        )}
+        {(suite.questionSelectionMode === "random" || (!suite.questionSelectionMode && suite.questionsToServe)) && suite.questionsToServe && (
           <span style={{ fontSize: "13px", color: "#f59e0b" }}>🎲 {suite.questionsToServe} random</span>
         )}
         {suite.startDate && (
@@ -664,10 +695,11 @@ export default function TestSuiteDetail() {
             style={{ padding: "10px 20px", background: WHITE, color: "#166534", border: "1px solid #86efac", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
             ✅ Passing criteria ({suite.passingPercentage ?? 50}%)
           </button>
-          {/* Feature 5 */}
           <button onClick={() => setShowQtsServe(s => !s)}
             style={{ padding: "10px 20px", background: WHITE, color: "#f59e0b", border: "1px solid #fcd34d", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-            🎲 Random questions {suite.questionsToServe ? `(${suite.questionsToServe})` : "(all)"}
+            🎯 Question set {suite.questionSelectionMode === "selected"
+              ? `(${(suite.selectedQuestionIds || []).length} selected)`
+              : suite.questionsToServe ? `(${suite.questionsToServe} random)` : "(all)"}
           </button>
           {/* Feature 9 */}
           <button onClick={() => setShowDateWindow(s => !s)}
@@ -719,22 +751,97 @@ export default function TestSuiteDetail() {
           </div>
         )}
 
-        {/* ── Feature 5: Questions to Serve Panel ── */}
+        {/* ── Feature 5: Candidate Question Set Panel ── */}
         {showQtsServe && (
           <div style={{ background: WHITE, border: "1px solid #fcd34d", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
-            <h2 style={{ fontSize: "15px", fontWeight: "700", color: "#92400e", marginTop: 0, marginBottom: "6px" }}>🎲 Random Questions per Candidate</h2>
+            <h2 style={{ fontSize: "15px", fontWeight: "700", color: "#92400e", marginTop: 0, marginBottom: "6px" }}>🎯 Candidate Question Set</h2>
             <p style={{ fontSize: "13px", color: "#888", marginBottom: "14px" }}>
-              You have {questions.length} questions. Set how many each candidate gets randomly. Leave blank to serve all.
+              You have {questions.length} questions. Choose whether candidates get all questions, a random count, or only selected questions.
             </p>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px" }}>
+              {[
+                { value: "all", label: "All questions" },
+                { value: "random", label: "Random count" },
+                { value: "selected", label: "Selected questions" },
+              ].map(mode => {
+                const active = questionMode === mode.value;
+                return (
+                  <button
+                    key={mode.value}
+                    type="button"
+                    onClick={() => setQuestionMode(mode.value)}
+                    style={{
+                      padding: "9px 14px",
+                      borderRadius: "999px",
+                      border: active ? "1.5px solid #f59e0b" : "1px solid #fcd34d",
+                      background: active ? "#fffbeb" : WHITE,
+                      color: active ? "#92400e" : "#666",
+                      fontSize: "13px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {active ? "✓ " : ""}{mode.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {questionMode === "random" && (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "14px", flexWrap: "wrap" }}>
+                <input
+                  type="number" min={1} max={questions.length}
+                  placeholder={`Max ${questions.length}`}
+                  value={qtsServeVal}
+                  onChange={e => setQtsServeVal(e.target.value)}
+                  style={{ ...inputStyle, width: "140px" }}
+                />
+                <span style={{ fontSize: "14px", color: "#666" }}>random questions per candidate</span>
+              </div>
+            )}
+
+            {questionMode === "selected" && (
+              <div style={{ marginBottom: "14px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "10px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "13px", color: "#92400e", fontWeight: "700" }}>{selectedQuestionIds.length} question(s) selected</span>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button type="button" onClick={() => setSelectedQuestionIds(questions.map(q => q._id))} style={{ padding: "7px 12px", borderRadius: "8px", border: "1px solid #fcd34d", background: WHITE, color: "#92400e", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Select all</button>
+                    <button type="button" onClick={() => setSelectedQuestionIds([])} style={{ padding: "7px 12px", borderRadius: "8px", border: "1px solid #ddd", background: WHITE, color: "#555", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Clear</button>
+                  </div>
+                </div>
+                <div style={{ maxHeight: "300px", overflow: "auto", display: "flex", flexDirection: "column", gap: "8px", paddingRight: "4px" }}>
+                  {questions.map((q, index) => {
+                    const checked = selectedQuestionIds.includes(q._id);
+                    return (
+                      <label key={q._id} style={{
+                        display: "grid",
+                        gridTemplateColumns: "18px 1fr",
+                        gap: "10px",
+                        alignItems: "start",
+                        padding: "10px 12px",
+                        border: checked ? "1.5px solid #f59e0b" : "1px solid #eee",
+                        borderRadius: "10px",
+                        background: checked ? "#fffbeb" : "#fafafa",
+                        cursor: "pointer",
+                      }}>
+                        <input type="checkbox" checked={checked} onChange={() => toggleSelectedQuestion(q._id)} style={{ accentColor: "#f59e0b", marginTop: "2px" }} />
+                        <span style={{ color: "#333", fontSize: "13px", lineHeight: 1.45 }}>
+                          <strong>Q{index + 1}.</strong> {q.questionText}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {questionMode === "all" && (
+              <p style={{ fontSize: "13px", color: "#666", margin: "0 0 14px" }}>
+                Candidates will receive the complete question bank for this suite.
+              </p>
+            )}
+
             <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-              <input
-                type="number" min={1} max={questions.length}
-                placeholder={`Max ${questions.length}`}
-                value={qtsServeVal}
-                onChange={e => setQtsServeVal(e.target.value)}
-                style={{ ...inputStyle, width: "140px" }}
-              />
-              <span style={{ fontSize: "14px", color: "#666" }}>questions per candidate</span>
               <button onClick={handleSaveQtsServe} disabled={savingQts} style={{ padding: "10px 20px", background: "#f59e0b", color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: savingQts ? 0.6 : 1 }}>
                 {savingQts ? "Saving…" : "Save"}
               </button>

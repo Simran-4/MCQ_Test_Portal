@@ -6,6 +6,7 @@ const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
 const jwt = require("jsonwebtoken");
 const { hasAdminPermission } = require("../utils/adminPermissions");
+const { selectQuestionsForSuite } = require("../utils/questionSelection");
 
 const requireAdminOrSuperAdmin = (req, res, next) => {
   if (!["admin", "superadmin"].includes(req.user.role)) {
@@ -173,20 +174,7 @@ router.get("/:suiteId/random", async (req, res) => {
     if (!questions.length)
       return res.status(404).json({ message: "No questions found for this suite" });
 
-    // If questionsToServe is set and less than total, shuffle and slice
-    const limit = suite?.questionsToServe;
-    if (limit && limit > 0 && limit < questions.length) {
-      // Fisher-Yates shuffle
-      const shuffled = [...questions];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      return res.json(shuffled.slice(0, limit));
-    }
-
-    // Otherwise return all questions
-    res.json(questions);
+    res.json(selectQuestionsForSuite(suite, questions));
   } catch (err) {
     console.error("Random questions error:", err);
     res.status(500).json({ message: "Error fetching questions" });
