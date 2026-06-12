@@ -20,6 +20,10 @@ function userLabel(user) {
   return `${user.name}${contact ? ` - ${contact}` : ""}`;
 }
 
+function assignedUserIdsForSuite(suite) {
+  return (suite.assignedUsers || []).map(item => String(item?._id || item));
+}
+
 function resultCandidateName(result) {
   return result.CandidateName || result.userName || "Unknown";
 }
@@ -165,10 +169,9 @@ export default function Dashboard() {
   const [showBulkMail, setShowBulkMail] = useState(false);
   const [users, setUsers] = useState([]);
   const [reportResults, setReportResults] = useState([]);
-  const [assignmentSuiteId, setAssignmentSuiteId] = useState("");
+  const [assignmentUserId, setAssignmentUserId] = useState("");
   const [assignmentSearch, setAssignmentSearch] = useState("");
-  const [assignmentPublic, setAssignmentPublic] = useState(true);
-  const [assignedUserIds, setAssignedUserIds] = useState([]);
+  const [assignedSuiteIds, setAssignedSuiteIds] = useState([]);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
   const [reportUserId, setReportUserId] = useState("");
@@ -221,7 +224,7 @@ export default function Dashboard() {
   const totalQuestions = suites.reduce((sum, suite) => sum + (suite.questionCount ?? 0), 0);
   const activeSuites = suites.filter(suite => suite.status === "active").length;
   const candidateUsers = users.filter(item => item.role === "candidate" && item.isActive !== false);
-  const selectedAssignmentSuite = suites.find(suite => suite._id === assignmentSuiteId);
+  const selectedAssignmentUser = candidateUsers.find(item => item._id === assignmentUserId);
   const selectedReportUser = users.find(item => item._id === reportUserId);
   const assignmentFilteredUsers = candidateUsers.filter(item =>
     userLabel(item).toLowerCase().includes(assignmentSearch.toLowerCase()) ||
@@ -287,40 +290,43 @@ export default function Dashboard() {
       .catch(() => alert(`Share this link: ${url}`));
   };
 
-  const handleAssignmentSuiteChange = (suiteId) => {
-    setAssignmentSuiteId(suiteId);
-    const suite = suites.find(item => item._id === suiteId);
-    setAssignmentPublic(suite?.isPublic !== false);
-    setAssignedUserIds((suite?.assignedUsers || []).map(id => String(id)));
-  };
-
-  const toggleAssignedUser = (userId) => {
-    setAssignedUserIds(prev =>
-      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+  const handleAssignmentUserChange = (userId) => {
+    setAssignmentUserId(userId);
+    setAssignedSuiteIds(
+      suites
+        .filter(suite => suite.isPublic === false && assignedUserIdsForSuite(suite).includes(userId))
+        .map(suite => suite._id)
     );
   };
 
-  const saveSuiteAssignments = async () => {
-    if (!assignmentSuiteId) return alert("Select a test suite first.");
-    if (!assignmentPublic && assignedUserIds.length === 0) {
-      return alert("Select at least one user, or keep the suite public.");
+  const toggleAssignedSuite = (suiteId) => {
+    setAssignedSuiteIds(prev =>
+      prev.includes(suiteId) ? prev.filter(id => id !== suiteId) : [...prev, suiteId]
+    );
+  };
+
+  const saveUserSuiteAssignments = async () => {
+    if (!assignmentUserId) return alert("Select a candidate first.");
+    if (assignedSuiteIds.length === 0 && !window.confirm("No private suites are selected. This will remove private suite assignments for this candidate. Continue?")) {
+      return;
     }
 
     setAssignmentSaving(true);
     try {
       const res = await axios.put(
-        `${API}/api/test-suites/${assignmentSuiteId}/assignments`,
-        { isPublic: assignmentPublic, assignedUsers: assignedUserIds },
+        `${API}/api/test-suites/assignments/user/${assignmentUserId}`,
+        { suiteIds: assignedSuiteIds },
         { headers: getAuthHeaders() }
       );
+      const updatedById = new Map(res.data.map(suite => [suite._id, suite]));
       setSuites(prev => prev.map(suite =>
-        suite._id === res.data._id
-          ? { ...suite, ...res.data, questionCount: suite.questionCount }
+        updatedById.has(suite._id)
+          ? { ...suite, ...updatedById.get(suite._id), questionCount: suite.questionCount }
           : suite
       ));
-      alert("Test suite assignment saved.");
+      alert("Candidate suite assignments saved.");
     } catch (err) {
-      alert(err.response?.data?.message || "Unable to save suite assignment.");
+      alert(err.response?.data?.message || "Unable to save candidate suite assignments.");
     } finally {
       setAssignmentSaving(false);
     }
@@ -501,59 +507,54 @@ export default function Dashboard() {
         <section className="admin-management-grid">
           <div className="admin-management-card">
             <div className="admin-panel-heading">
-              <h3>Assign Test Suite</h3>
-              <p>Make a suite public, or assign it only to selected users.</p>
+              <h3>Assign Test Suites</h3>
+              <p>Select one candidate, then assign one or more private test suites to that candidate.</p>
             </div>
 
-            <select value={assignmentSuiteId} onChange={(e) => handleAssignmentSuiteChange(e.target.value)}>
-              <option value="">Select test suite</option>
-              {suites.map(suite => (
-                <option key={suite._id} value={suite._id}>{suite.name}</option>
+            <input
+              value={assignmentSearch}
+              onChange={(e) => setAssignmentSearch(e.target.value)}
+              placeholder="Search candidate by name, contact, project..."
+            />
+
+            <select value={assignmentUserId} onChange={(e) => handleAssignmentUserChange(e.target.value)}>
+              <option value="">Select candidate</option>
+              {assignmentFilteredUsers.slice(0, 60).map(candidate => (
+                <option key={candidate._id} value={candidate._id}>{userLabel(candidate)}</option>
               ))}
             </select>
 
-            <label className="admin-check-row">
-              <input
-                type="checkbox"
-                checked={assignmentPublic}
-                onChange={(e) => setAssignmentPublic(e.target.checked)}
-              />
-              Available to all active candidates
-            </label>
-
-            {!assignmentPublic && (
-              <>
-                <input
-                  value={assignmentSearch}
-                  onChange={(e) => setAssignmentSearch(e.target.value)}
-                  placeholder="Search users by name, contact, project..."
-                />
-                <div className="admin-user-pick-list">
-                  {assignmentFilteredUsers.slice(0, 12).map(candidate => (
-                    <label key={candidate._id}>
-                      <input
-                        type="checkbox"
-                        checked={assignedUserIds.includes(candidate._id)}
-                        onChange={() => toggleAssignedUser(candidate._id)}
-                      />
-                      <span>
-                        <strong>{candidate.name}</strong>
-                        <small>{userContact(candidate) || candidate.project || "Candidate"}</small>
-                      </span>
-                    </label>
-                  ))}
-                  {assignmentFilteredUsers.length === 0 && <p>No matching users.</p>}
-                </div>
-              </>
-            )}
+            <div className="admin-suite-pick-list">
+              {suites.map(suite => {
+                const selected = assignedSuiteIds.includes(suite._id);
+                const publicSuite = suite.isPublic !== false;
+                return (
+                  <label key={suite._id} className={selected ? "selected" : ""}>
+                    <input
+                      type="checkbox"
+                      disabled={!assignmentUserId}
+                      checked={selected}
+                      onChange={() => toggleAssignedSuite(suite._id)}
+                    />
+                    <span>
+                      <strong>{suite.name}</strong>
+                      <small>
+                        {suite.questionCount ?? 0} questions · {publicSuite ? "Public now" : `${assignedUserIdsForSuite(suite).length} assigned`}
+                      </small>
+                    </span>
+                  </label>
+                );
+              })}
+              {suites.length === 0 && <p>No test suites available.</p>}
+            </div>
 
             <div className="admin-panel-footer">
               <span>
-                {selectedAssignmentSuite
-                  ? assignmentPublic ? "Public suite" : `${assignedUserIds.length} user(s) selected`
-                  : "Choose a suite"}
+                {selectedAssignmentUser
+                  ? `${assignedSuiteIds.length} suite(s) selected for ${selectedAssignmentUser.name}`
+                  : "Choose a candidate"}
               </span>
-              <button type="button" onClick={saveSuiteAssignments} disabled={assignmentSaving}>
+              <button type="button" onClick={saveUserSuiteAssignments} disabled={assignmentSaving}>
                 {assignmentSaving ? "Saving..." : "Save Assignment"}
               </button>
             </div>

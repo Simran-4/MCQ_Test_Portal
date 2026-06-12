@@ -4,6 +4,7 @@ const multer = require("multer");
 const XLSX = require("xlsx");
 const TestSuite = require("../models/TestSuite");
 const Question = require("../models/Question");
+const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
 const ExamSettings = require("../models/ExamSettings");
 const jwt = require("jsonwebtoken");
@@ -303,6 +304,50 @@ router.put("/:id", authMiddleware, requireAdmin, async (req, res) => {
 });
 
 // ── ASSIGN SUITE TO SPECIFIC USERS ───────────────────────────
+router.put("/assignments/user/:userId", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).select("_id role isActive");
+    if (!user || user.role !== "candidate" || user.isActive === false) {
+      return res.status(404).json({ message: "Active candidate not found" });
+    }
+
+    const selectedSuiteIds = [...new Set(
+      (Array.isArray(req.body.suiteIds) ? req.body.suiteIds : [])
+        .map(id => String(id))
+        .filter(Boolean)
+    )];
+
+    const suites = await TestSuite.find();
+    const updatedSuites = [];
+    for (const suite of suites) {
+      const shouldAssign = selectedSuiteIds.includes(String(suite._id));
+      const currentAssigned = (suite.assignedUsers || []).map(id => String(id));
+      const nextAssigned = shouldAssign
+        ? [...new Set([...currentAssigned, String(user._id)])]
+        : currentAssigned.filter(id => id !== String(user._id));
+
+      const shouldUpdate =
+        shouldAssign ||
+        currentAssigned.length !== nextAssigned.length ||
+        currentAssigned.some(id => !nextAssigned.includes(id));
+
+      if (!shouldUpdate) {
+        updatedSuites.push(suite);
+        continue;
+      }
+
+      suite.isPublic = shouldAssign ? false : suite.isPublic;
+      suite.assignedUsers = nextAssigned;
+      updatedSuites.push(await suite.save());
+    }
+
+    res.json(updatedSuites);
+  } catch (err) {
+    console.error("User assignment update error:", err);
+    res.status(500).json({ message: "Error updating user suite assignments" });
+  }
+});
+
 router.put("/:id/assignments", authMiddleware, requireAdmin, async (req, res) => {
   try {
     const assignedUsers = Array.isArray(req.body.assignedUsers)

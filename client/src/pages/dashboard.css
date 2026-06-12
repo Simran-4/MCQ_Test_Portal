@@ -416,6 +416,67 @@ body {
   text-align: center;
 }
 
+.admin-suite-pick-list {
+  max-height: 268px;
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.admin-suite-pick-list label {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #edf0ec;
+  border-radius: 10px;
+  background: #fbfcfb;
+}
+
+.admin-suite-pick-list label.selected {
+  border-color: rgba(31, 107, 58, 0.34);
+  background: #eef8f1;
+}
+
+.admin-suite-pick-list input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: var(--admin-green);
+}
+
+.admin-suite-pick-list input:disabled {
+  cursor: not-allowed;
+}
+
+.admin-suite-pick-list span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-suite-pick-list strong {
+  overflow: hidden;
+  color: var(--admin-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-suite-pick-list small {
+  overflow: hidden;
+  color: var(--admin-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-suite-pick-list p {
+  margin: 0;
+  padding: 12px;
+  color: var(--admin-muted);
+  text-align: center;
+}
+
 .admin-panel-footer,
 .admin-report-actions {
   display: flex;
