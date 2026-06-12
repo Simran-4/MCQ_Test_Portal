@@ -219,7 +219,7 @@ function SuperAdmin() {
   const [suitesById, setSuitesById] = useState({});
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
-  const [controlMode, setControlMode] = useState("roles");
+  const [controlMode, setControlMode] = useState("rights");
   const [roles, setRoles] = useState([
     { name: "candidate", baseRole: "candidate", system: true },
     { name: "admin", baseRole: "admin", system: true },
