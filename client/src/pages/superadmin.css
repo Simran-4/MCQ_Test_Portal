@@ -299,6 +299,25 @@ body {
   font-family: inherit;
 }
 
+.control-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.control-form-grid input,
+.control-form-grid select {
+  margin-bottom: 0;
+}
+
+.control-panel input:disabled,
+.control-panel select:disabled {
+  background: #f3f5f3;
+  color: #8c9690;
+  cursor: not-allowed;
+}
+
 .section-header select {
   max-width: 260px;
   margin-bottom: 0;
@@ -312,6 +331,11 @@ body {
   color: #fff;
   font-weight: 700;
   cursor: pointer;
+}
+
+.control-panel button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .mini-list,

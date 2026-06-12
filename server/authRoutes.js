@@ -38,6 +38,88 @@ const systemRoles = [
     { name: "superadmin", baseRole: "admin", system: true, description: "Full system access" },
 ];
 
+async function resolveRole(roleName) {
+    const requested = String(roleName || "candidate").toLowerCase().trim();
+    if (requested === "superadmin") return { error: "Super admin accounts cannot be created here" };
+    if (requested === "admin") return { role: "admin", customRole: "" };
+    if (requested === "candidate") return { role: "candidate", customRole: "" };
+
+    const custom = await RoleDefinition.findOne({ name: String(roleName || "").trim() });
+    if (!custom) return { error: "Selected role was not found" };
+    return { role: custom.baseRole, customRole: custom.name };
+}
+
+async function createUserFromPayload(payload, options = {}) {
+    const { name, email, mobile, username, password, age, gender, project, designation } = payload;
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedMobile = normalizeMobile(mobile);
+    const normalizedUsername = normalizeUsername(username || name);
+    const roleInfo = await resolveRole(payload.role || "candidate");
+
+    if (roleInfo.error) {
+        return { status: 403, error: roleInfo.error };
+    }
+
+    if (!options.allowAdmin && roleInfo.role !== "candidate") {
+        return { status: 403, error: "Admin accounts must be created by Super Admin" };
+    }
+
+    if (!String(name || "").trim() || String(name || "").trim().length < 2) {
+        return { status: 400, error: "Name must be at least 2 characters" };
+    }
+
+    if (!normalizedUsername || normalizedUsername.length < 3) {
+        return { status: 400, error: "Username must be at least 3 characters" };
+    }
+
+    if (!normalizedEmail && !normalizedMobile) {
+        return { status: 400, error: "Enter either email or mobile number" };
+    }
+
+    if (normalizedEmail && (!normalizedEmail.includes("@") || !normalizedEmail.includes("."))) {
+        return { status: 400, error: "Enter a valid email address" };
+    }
+
+    if (normalizedMobile && normalizedMobile.replace(/\D/g, "").length < 10) {
+        return { status: 400, error: "Enter a valid mobile number" };
+    }
+
+    if (!password || String(password).length < 6) {
+        return { status: 400, error: "Password must be at least 6 characters" };
+    }
+
+    const storedEmail = normalizedEmail || `${normalizedUsername}@mobile.local`;
+    const existingUser = await User.findOne({
+        $or: [
+            { username: normalizedUsername },
+            { email: storedEmail },
+            ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+            ...(normalizedMobile ? [{ mobile: normalizedMobile }] : []),
+        ],
+    });
+    if (existingUser) {
+        return { status: 400, error: "Username, email, or mobile number already exists" };
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({
+        name: String(name || "").trim(),
+        username: normalizedUsername,
+        email: storedEmail,
+        mobile: normalizedMobile || undefined,
+        password: hashedPassword,
+        role: roleInfo.role,
+        customRole: roleInfo.customRole || "",
+        age:         parseInt(age)   || null,
+        gender:      gender          || "",
+        project:     String(project || "").trim(),
+        designation: String(designation || "").trim(),
+    });
+
+    await newUser.save();
+    return { user: newUser };
+}
+
 async function getOrgOptionsDoc() {
     return OrgOption.findOneAndUpdate(
         { key: "default" },
@@ -83,78 +165,23 @@ function publicUser(user) {
 // ── REGISTER ──────────────────────────────────────────────────
 router.post("/register", async (req, res) => {
     try {
-        const { name, email, mobile, username, password, role, age, gender, project, designation } = req.body;
-
-        const normalizedEmail = normalizeEmail(email);
-        const normalizedMobile = normalizeMobile(mobile);
-        const normalizedUsername = normalizeUsername(username || name);
-        const normalizedRole = String(role || "candidate").toLowerCase().trim();
-
-        if (normalizedRole === "superadmin") {
-            return res.status(403).json({
-                message: "Super admin accounts cannot be created publicly"
-            });
-        }
-
-        if (!String(name || "").trim() || String(name || "").trim().length < 2) {
-            return res.status(400).json({ message: "Name must be at least 2 characters" });
-        }
-
-        if (!normalizedUsername || normalizedUsername.length < 3) {
-            return res.status(400).json({ message: "Username must be at least 3 characters" });
-        }
-
-        if (!normalizedEmail && !normalizedMobile) {
-            return res.status(400).json({ message: "Enter either email or mobile number" });
-        }
-
-        if (normalizedEmail && (!normalizedEmail.includes("@") || !normalizedEmail.includes("."))) {
-            return res.status(400).json({ message: "Enter a valid email address" });
-        }
-
-        if (normalizedMobile && normalizedMobile.replace(/\D/g, "").length < 10) {
-            return res.status(400).json({ message: "Enter a valid mobile number" });
-        }
-
-        if (!password || String(password).length < 6) {
-            return res.status(400).json({ message: "Password must be at least 6 characters" });
-        }
-
-        const storedEmail = normalizedEmail || `${normalizedUsername}@mobile.local`;
-
-        const existingUser = await User.findOne({
-            $or: [
-                { username: normalizedUsername },
-                { email: storedEmail },
-                ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
-                ...(normalizedMobile ? [{ mobile: normalizedMobile }] : []),
-            ],
-        });
-        if (existingUser) {
-            return res.status(400).json({ message: "Username, email, or mobile number already exists" });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const newUser = new User({
-            name: String(name || "").trim(),
-            username: normalizedUsername,
-            email: storedEmail,
-            mobile: normalizedMobile || undefined,
-            password: hashedPassword,
-            role: normalizedRole,
-            age:         parseInt(age)   || null,
-            gender:      gender          || "",
-            project:     String(project || "").trim(),
-            designation: String(designation || "").trim(),
-        });
-
-        await newUser.save();
-
+        const result = await createUserFromPayload({ ...req.body, role: "candidate" }, { allowAdmin: false });
+        if (result.error) return res.status(result.status).json({ message: result.error });
         res.json({ message: "User Registered Successfully" });
 
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// ── SUPER ADMIN USER CREATION ────────────────────────────────
+router.post("/superadmin/users", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const result = await createUserFromPayload(req.body, { allowAdmin: true });
+        if (result.error) return res.status(result.status).json({ message: result.error });
+        res.status(201).json(publicUser(result.user));
+    } catch (err) {
+        res.status(500).json({ message: "Error creating user" });
     }
 });
 

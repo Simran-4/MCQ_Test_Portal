@@ -25,7 +25,6 @@ function Register() {
   const [email,       setEmail]       = useState("");
   const [mobile,      setMobile]      = useState("");
   const [password,    setPassword]    = useState("");
-  const [role,        setRole]        = useState("candidate"); // Normalized to lowercase
   const [age,         setAge]         = useState("");
   const [gender,      setGender]      = useState("");
   const [project,     setProject]     = useState("");
@@ -78,7 +77,7 @@ function Register() {
         email:       contactType === "email" ? email.trim().toLowerCase() : "",
         mobile:      contactType === "mobile" ? mobile.trim() : "",
         password,
-        role,
+        role: "candidate",
         age:         parseInt(age),
         gender,
         project,
@@ -296,13 +295,9 @@ function Register() {
             <input type="password" placeholder="Min 6 characters" style={inputStyle} value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
 
-          <div>
-            <label style={labelStyle}>Role *</label>
-            <select style={selectStyle} value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="candidate" style={{ color: "#333", background: WHITE }}>Candidate</option>
-              <option value="admin" style={{ color: "#333", background: WHITE }}>Admin</option>
-            </select>
-          </div>
+          <p style={{ margin: "-2px 0 0", color: "rgba(255,255,255,0.66)", fontSize: "11px", lineHeight: 1.4 }}>
+            Public registration creates candidate accounts. Admin accounts are created by Super Admin.
+          </p>
         </div>
 
         <button

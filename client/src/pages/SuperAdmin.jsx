@@ -12,6 +12,19 @@ import { apiProjectsToMap, defaultOrgOptions, mergeOrgOptions, readLocalOrgOptio
 const API_BASE = "https://charismatic-happiness-production-dc36.up.railway.app/api";
 const API_URL = `${API_BASE}/auth`;
 const LOCAL_ROLES_KEY = "snehalaya_custom_roles";
+const emptyCreateUserForm = {
+  name: "",
+  username: "",
+  contactType: "email",
+  email: "",
+  mobile: "",
+  password: "",
+  role: "candidate",
+  age: "",
+  gender: "",
+  project: "",
+  designation: "",
+};
 const ADMIN_RIGHTS = [
   { key: "canViewReports", label: "View reports", detail: "Can open report pages and see result rows" },
   { key: "canDownloadReports", label: "Download reports", detail: "Can export summary/descriptive PDF or Excel" },
@@ -206,13 +219,15 @@ function SuperAdmin() {
   const [suitesById, setSuitesById] = useState({});
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
-  const [controlMode, setControlMode] = useState("rights");
+  const [controlMode, setControlMode] = useState("roles");
   const [roles, setRoles] = useState([
     { name: "candidate", baseRole: "candidate", system: true },
     { name: "admin", baseRole: "admin", system: true },
     { name: "superadmin", baseRole: "admin", system: true },
     ...readLocalRoles(),
   ]);
+  const [createUserForm, setCreateUserForm] = useState(emptyCreateUserForm);
+  const [creatingUser, setCreatingUser] = useState(false);
   const [roleForm, setRoleForm] = useState({ name: "", baseRole: "candidate", description: "" });
   const [assignUserId, setAssignUserId] = useState("");
   const [assignRole, setAssignRole] = useState("candidate");
@@ -299,6 +314,61 @@ function SuperAdmin() {
       await fetchOverview();
     } catch (err) {
       alert(err.response?.data?.message || "Unable to update user access");
+    }
+  };
+
+  const updateCreateUserForm = (field, value) => {
+    setCreateUserForm(prev => ({
+      ...prev,
+      [field]: value,
+      ...(field === "project" ? { designation: "" } : {}),
+      ...(field === "contactType" ? { email: "", mobile: "" } : {}),
+    }));
+  };
+
+  const createUserAccount = async () => {
+    if (!createUserForm.name.trim()) return alert("Enter full name.");
+    if (!createUserForm.username.trim()) return alert("Enter username.");
+    if (createUserForm.contactType === "email" && (!createUserForm.email.trim() || !createUserForm.email.includes("@") || !createUserForm.email.includes("."))) {
+      return alert("Enter a valid email address.");
+    }
+    if (createUserForm.contactType === "mobile" && createUserForm.mobile.replace(/\D/g, "").length < 10) {
+      return alert("Enter a valid mobile number.");
+    }
+    if (!createUserForm.password || createUserForm.password.length < 6) return alert("Password must be at least 6 characters.");
+    if (!createUserForm.age || Number(createUserForm.age) < 10 || Number(createUserForm.age) > 100) return alert("Enter a valid age between 10 and 100.");
+    if (!createUserForm.gender) return alert("Select gender.");
+    if (!createUserForm.project) return alert("Select project.");
+    if (!createUserForm.designation) return alert("Select department.");
+
+    setCreatingUser(true);
+    try {
+      const payload = {
+        name: createUserForm.name.trim(),
+        username: createUserForm.username.trim(),
+        email: createUserForm.contactType === "email" ? createUserForm.email.trim().toLowerCase() : "",
+        mobile: createUserForm.contactType === "mobile" ? createUserForm.mobile.trim() : "",
+        password: createUserForm.password,
+        role: createUserForm.role,
+        age: createUserForm.age ? Number(createUserForm.age) : "",
+        gender: createUserForm.gender,
+        project: createUserForm.project,
+        designation: createUserForm.designation,
+      };
+      const res = await axios.post(`${API_URL}/superadmin/users`, payload, { headers: getAuthHeaders() });
+      setUsers(prev => [...prev, res.data].sort((a, b) => a.name.localeCompare(b.name)));
+      setStats(prev => ({
+        ...prev,
+        totalUsers: prev.totalUsers + 1,
+        activeUsers: prev.activeUsers + 1,
+        administrators: ["admin", "superadmin"].includes(res.data.role) ? prev.administrators + 1 : prev.administrators,
+      }));
+      setCreateUserForm(emptyCreateUserForm);
+      alert("User created successfully.");
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to create user.");
+    } finally {
+      setCreatingUser(false);
     }
   };
 
@@ -486,6 +556,9 @@ function SuperAdmin() {
   const rightsDepartments = rightsProject
     ? (orgOptions[rightsProject] || [])
     : [];
+  const createUserProjectNames = Object.keys(orgOptions).sort((a, b) => a.localeCompare(b));
+  const createUserDepartments = createUserForm.project ? orgOptions[createUserForm.project] || [] : [];
+  const assignableRoles = roles.filter(role => role.name !== "superadmin");
 
   const getSectionTitle = () => {
     if (activeNav === "Candidates") return "Candidates";
@@ -690,7 +763,7 @@ function SuperAdmin() {
               <h2>🧩 Controls</h2>
               <select value={controlMode} onChange={e => setControlMode(e.target.value)}>
                 <option value="rights">User rights</option>
-                <option value="roles">Roles & people</option>
+                <option value="roles">Users, roles & assignment</option>
                 <option value="org">Projects & departments</option>
                 <option value="mail">Bulk mail</option>
               </select>
@@ -786,6 +859,87 @@ function SuperAdmin() {
 
             {controlMode === "roles" && (
               <div className="control-grid">
+                <div className="control-panel wide">
+                  <h3>Create User Account</h3>
+                  <div className="control-form-grid">
+                    <input
+                      value={createUserForm.name}
+                      onChange={e => updateCreateUserForm("name", e.target.value)}
+                      placeholder="Full name"
+                    />
+                    <input
+                      value={createUserForm.username}
+                      onChange={e => updateCreateUserForm("username", e.target.value)}
+                      placeholder="Username"
+                    />
+                    <input
+                      type="number"
+                      min="10"
+                      max="100"
+                      value={createUserForm.age}
+                      onChange={e => updateCreateUserForm("age", e.target.value)}
+                      placeholder="Age"
+                    />
+                    <select value={createUserForm.gender} onChange={e => updateCreateUserForm("gender", e.target.value)}>
+                      <option value="">Select gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    <select value={createUserForm.project} onChange={e => updateCreateUserForm("project", e.target.value)}>
+                      <option value="">Select project</option>
+                      {createUserProjectNames.map(project => (
+                        <option key={project} value={project}>{project}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={createUserForm.designation}
+                      onChange={e => updateCreateUserForm("designation", e.target.value)}
+                      disabled={!createUserForm.project}
+                    >
+                      <option value="">{createUserForm.project ? "Select department" : "Select project first"}</option>
+                      {createUserDepartments.map(department => (
+                        <option key={department} value={department}>{department}</option>
+                      ))}
+                    </select>
+                    <select value={createUserForm.contactType} onChange={e => updateCreateUserForm("contactType", e.target.value)}>
+                      <option value="email">Use email</option>
+                      <option value="mobile">Use mobile number</option>
+                    </select>
+                    {createUserForm.contactType === "email" ? (
+                      <input
+                        type="email"
+                        value={createUserForm.email}
+                        onChange={e => updateCreateUserForm("email", e.target.value)}
+                        placeholder="Email address"
+                      />
+                    ) : (
+                      <input
+                        type="tel"
+                        value={createUserForm.mobile}
+                        onChange={e => updateCreateUserForm("mobile", e.target.value)}
+                        placeholder="Mobile number"
+                      />
+                    )}
+                    <input
+                      type="password"
+                      value={createUserForm.password}
+                      onChange={e => updateCreateUserForm("password", e.target.value)}
+                      placeholder="Temporary password"
+                    />
+                    <select value={createUserForm.role} onChange={e => updateCreateUserForm("role", e.target.value)}>
+                      {assignableRoles.map(role => (
+                        <option key={role.name} value={role.name}>
+                          {role.name}{role.system ? " (system)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button type="button" onClick={createUserAccount} disabled={creatingUser}>
+                    {creatingUser ? "Creating..." : "Create User"}
+                  </button>
+                </div>
+
                 <div className="control-panel">
                   <h3>Create New Role</h3>
                   <input value={roleForm.name} onChange={e => setRoleForm({ ...roleForm, name: e.target.value })} placeholder="Role name" />
@@ -804,11 +958,11 @@ function SuperAdmin() {
                     {users.map(user => <option key={user._id} value={user._id}>{user.name} - {user.email}</option>)}
                   </select>
                   <select value={assignRole} onChange={e => setAssignRole(e.target.value)}>
-                    {roles.map(role => <option key={role.name} value={role.name}>{role.name}</option>)}
+                    {assignableRoles.map(role => <option key={role.name} value={role.name}>{role.name}</option>)}
                   </select>
                   <button type="button" onClick={assignUserRole}>Assign Role</button>
                   <div className="mini-list">
-                    {roles.map(role => (
+                    {assignableRoles.map(role => (
                       <span key={role.name}>{role.name}{role.system ? " (system)" : ""}</span>
                     ))}
                   </div>
