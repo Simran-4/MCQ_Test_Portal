@@ -68,6 +68,20 @@ const UserSchema = new mongoose.Schema(
             trim: true,
             default: "",
         },
+        adminPermissions: {
+            permissions: {
+                canViewReports:     { type: Boolean, default: true },
+                canDownloadReports: { type: Boolean, default: true },
+                canManageSuites:    { type: Boolean, default: true },
+                canManageQuestions: { type: Boolean, default: true },
+                canAssignTests:     { type: Boolean, default: true },
+                canManageSettings:  { type: Boolean, default: true },
+                canBulkMail:        { type: Boolean, default: true },
+                canViewUsers:       { type: Boolean, default: true },
+            },
+            scopeProjects:    { type: [String], default: [] },
+            scopeDepartments: { type: [String], default: [] },
+        },
         // ─────────────────────────────────────────────────
     },
     { timestamps: true }

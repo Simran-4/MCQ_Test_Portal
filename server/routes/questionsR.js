@@ -2,8 +2,10 @@ const express  = require("express");
 const router   = express.Router();
 const Question = require("../models/Question");
 const TestSuite = require("../models/TestSuite");
+const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
 const jwt = require("jsonwebtoken");
+const { hasAdminPermission } = require("../utils/adminPermissions");
 
 const requireAdminOrSuperAdmin = (req, res, next) => {
   if (!["admin", "superadmin"].includes(req.user.role)) {
@@ -18,6 +20,24 @@ const requireSuperAdmin = (req, res, next) => {
   }
   next();
 };
+
+function requireAdminFeature(feature, message) {
+  return async (req, res, next) => {
+    try {
+      if (req.user.role === "superadmin") return next();
+      if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+      const user = await User.findById(req.user.id).select("role adminPermissions");
+      if (!hasAdminPermission(user, feature)) {
+        return res.status(403).json({ message });
+      }
+      next();
+    } catch (err) {
+      res.status(500).json({ message: "Permission check failed" });
+    }
+  };
+}
 
 function sanitizeCategoryCorrectAnswers(rawMap, categories, optionCount) {
   const source = rawMap && typeof rawMap === "object" ? rawMap : {};
@@ -50,7 +70,7 @@ function canAccessSuite(suite, user) {
 }
 
 // ── POST /api/questions/add (legacy) ─────────────────────────
-router.post("/add", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
+router.post("/add", authMiddleware, requireAdminFeature("canManageQuestions", "Question management access denied"), async (req, res) => {
   try {
     const { question, options, correctAnswer, category, testSuiteId } = req.body;
     const filledOptions = Array.isArray(options) ? options.filter(o => String(o).trim() !== "") : [];
@@ -75,7 +95,7 @@ router.post("/add", authMiddleware, requireAdminOrSuperAdmin, async (req, res) =
 });
 
 // ── PUT /api/questions/:id ────────────────────────────────────
-router.put("/:id", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
+router.put("/:id", authMiddleware, requireAdminFeature("canManageQuestions", "Question management access denied"), async (req, res) => {
   try {
     const { questionText, options, correctAnswer, explanation, marks, category, categoryCorrectAnswers } = req.body;
     const questionType = req.body.questionType === "theory" ? "theory" : "mcq";
@@ -117,7 +137,7 @@ router.put("/:id", authMiddleware, requireAdminOrSuperAdmin, async (req, res) =>
 });
 
 // ── DELETE /api/questions/:id ─────────────────────────────────
-router.delete("/:id", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
+router.delete("/:id", authMiddleware, requireAdminFeature("canManageQuestions", "Question management access denied"), async (req, res) => {
   try {
     const deleted = await Question.findByIdAndDelete(req.params.id);
     if (!deleted)
@@ -130,7 +150,7 @@ router.delete("/:id", authMiddleware, requireAdminOrSuperAdmin, async (req, res)
 });
 
 // ── GET /api/questions/all ────────────────────────────────────
-router.get("/all", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
+router.get("/all", authMiddleware, requireAdminFeature("canManageQuestions", "Question bank access denied"), async (req, res) => {
   try {
     const questions = await Question.find();
     res.json(questions);

@@ -6,6 +6,12 @@ const Result = require("./models/Result");
 const RoleDefinition = require("./models/RoleDefinition");
 const OrgOption = require("./models/OrgOption");
 const authMiddleware = require("./middleware/authMiddleware");
+const {
+    ADMIN_PERMISSION_DEFAULTS,
+    normalizeAdminPermissions,
+    hasAdminPermission,
+    matchesUserScope,
+} = require("./utils/adminPermissions");
 
 const router = express.Router();
 
@@ -70,6 +76,7 @@ function publicUser(user) {
         gender:      user.gender,
         project:     user.project,
         designation: user.designation,
+        adminPermissions: normalizeAdminPermissions(user),
     };
 }
 
@@ -269,7 +276,7 @@ router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, as
             req.params.id,
             { isActive },
             { new: true }
-        ).select("_id name username email mobile role customRole isActive age gender project designation");
+        ).select("_id name username email mobile role customRole isActive age gender project designation adminPermissions");
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
@@ -296,7 +303,7 @@ router.put("/superadmin/users/:id/password", authMiddleware, requireSuperAdmin, 
             req.params.id,
             { password: hashedPassword },
             { new: true }
-        ).select("_id name username email mobile role customRole isActive age gender project designation");
+        ).select("_id name username email mobile role customRole isActive age gender project designation adminPermissions");
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
@@ -315,8 +322,18 @@ router.put("/superadmin/users/:id/password", authMiddleware, requireSuperAdmin, 
 // ── ADMIN USER LIST FOR MAIL / ASSIGNMENT ─────────────────────
 router.get("/users", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
     try {
-        const users = await User.find().select("_id name username email mobile role customRole isActive project designation").sort({ name: 1 });
-        res.json(users.map(publicUser));
+        const requester = await User.findById(req.user.id).select("role adminPermissions");
+        if (requester?.role === "admin" &&
+            !hasAdminPermission(requester, "canViewUsers") &&
+            !hasAdminPermission(requester, "canAssignTests") &&
+            !hasAdminPermission(requester, "canBulkMail")) {
+            return res.status(403).json({ message: "User list access denied" });
+        }
+        const users = await User.find().select("_id name username email mobile role customRole isActive project designation adminPermissions").sort({ name: 1 });
+        const scopedUsers = requester?.role === "admin"
+            ? users.filter(user => matchesUserScope(requester, user))
+            : users;
+        res.json(scopedUsers.map(publicUser));
     } catch (err) {
         res.status(500).json({ message: "Error fetching users" });
     }
@@ -379,12 +396,43 @@ router.put("/superadmin/users/:id/role", authMiddleware, requireSuperAdmin, asyn
             req.params.id,
             { role: nextRole, customRole },
             { new: true }
-        ).select("_id name username email mobile role customRole isActive age gender project designation");
+        ).select("_id name username email mobile role customRole isActive age gender project designation adminPermissions");
 
         if (!user) return res.status(404).json({ message: "User not found" });
         res.json(publicUser(user));
     } catch (err) {
         res.status(500).json({ message: "Error updating user role" });
+    }
+});
+
+router.put("/superadmin/users/:id/permissions", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const permissions = Object.keys(ADMIN_PERMISSION_DEFAULTS).reduce((acc, key) => {
+            acc[key] = req.body.permissions?.[key] === undefined
+                ? ADMIN_PERMISSION_DEFAULTS[key]
+                : Boolean(req.body.permissions[key]);
+            return acc;
+        }, {});
+        const scopeProjects = Array.isArray(req.body.scopeProjects)
+            ? [...new Set(req.body.scopeProjects.map(item => String(item || "").trim()).filter(Boolean))]
+            : [];
+        const scopeDepartments = Array.isArray(req.body.scopeDepartments)
+            ? [...new Set(req.body.scopeDepartments.map(item => String(item || "").trim()).filter(Boolean))]
+            : [];
+
+        const user = await User.findByIdAndUpdate(
+            req.params.id,
+            { adminPermissions: { permissions, scopeProjects, scopeDepartments } },
+            { new: true }
+        ).select("_id name username email mobile role customRole isActive age gender project designation adminPermissions");
+
+        if (!user) return res.status(404).json({ message: "User not found" });
+        if (!["admin", "superadmin"].includes(user.role)) {
+            return res.status(400).json({ message: "Rights can only be saved for admins" });
+        }
+        res.json(publicUser(user));
+    } catch (err) {
+        res.status(500).json({ message: "Error updating user rights" });
     }
 });
 

@@ -6,7 +6,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import "./dashboard.css";
-import { getAuthHeaders } from "../utils/auth";
+import { canAdmin, getAuthHeaders } from "../utils/auth";
 import BulkMailPanel from "../components/BulkMailPanel";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -183,6 +183,12 @@ export default function Dashboard() {
       return {};
     }
   }, []);
+  const canViewReports = canAdmin("canViewReports", user);
+  const canDownloadReports = canAdmin("canDownloadReports", user);
+  const canManageSuites = canAdmin("canManageSuites", user);
+  const canAssignTests = canAdmin("canAssignTests", user);
+  const canBulkMail = canAdmin("canBulkMail", user);
+  const canManageSettings = canAdmin("canManageSettings", user);
 
   const fetchSuites = async () => {
     try {
@@ -208,7 +214,9 @@ export default function Dashboard() {
         const headers = getAuthHeaders();
         const [usersRes, resultsRes] = await Promise.all([
           axios.get(`${API}/api/auth/users`, { headers }),
-          axios.get(`${API}/api/results/all`, { headers }),
+          canViewReports
+            ? axios.get(`${API}/api/results/all`, { headers })
+            : Promise.resolve({ data: [] }),
         ]);
         if (ignore) return;
         setUsers(usersRes.data);
@@ -333,6 +341,7 @@ export default function Dashboard() {
   };
 
   const downloadPersonalExcel = () => {
+    if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     if (!selectedReportUser) return alert("Select a user first.");
     if (selectedUserResults.length === 0) return alert("No reports found for this user.");
 
@@ -355,6 +364,7 @@ export default function Dashboard() {
   };
 
   const downloadPersonalPDF = () => {
+    if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     if (!selectedReportUser) return alert("Select a user first.");
     if (selectedUserResults.length === 0) return alert("No reports found for this user.");
 
@@ -419,18 +429,24 @@ export default function Dashboard() {
             <span>⌂</span>
             Dashboard
           </button>
-          <button type="button" onClick={() => navigate("/view-results")}>
-            <span>▥</span>
-            View results
-          </button>
-          <button type="button" onClick={() => navigate("/settings")}>
-            <span>⚙</span>
-            Exam settings
-          </button>
-          <button type="button" onClick={() => setShowBulkMail(value => !value)}>
-            <span>✉</span>
-            Bulk mail
-          </button>
+          {canViewReports && (
+            <button type="button" onClick={() => navigate("/view-results")}>
+              <span>▥</span>
+              View results
+            </button>
+          )}
+          {canManageSettings && (
+            <button type="button" onClick={() => navigate("/settings")}>
+              <span>⚙</span>
+              Exam settings
+            </button>
+          )}
+          {canBulkMail && (
+            <button type="button" onClick={() => setShowBulkMail(value => !value)}>
+              <span>✉</span>
+              Bulk mail
+            </button>
+          )}
         </nav>
 
         <div className="admin-nav-group">
@@ -439,7 +455,7 @@ export default function Dashboard() {
             <span>□</span>
             All test suites
           </button>
-          <button type="button" onClick={openNewSuite}>
+          <button type="button" onClick={openNewSuite} disabled={!canManageSuites}>
             <span>＋</span>
             New test suite
           </button>
@@ -504,7 +520,8 @@ export default function Dashboard() {
           </div>
         </section>
 
-        <section className="admin-management-grid">
+        {(canAssignTests || canViewReports) && <section className="admin-management-grid">
+          {canAssignTests && (
           <div className="admin-management-card">
             <div className="admin-panel-heading">
               <h3>Assign Test Suites</h3>
@@ -559,7 +576,9 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
+          )}
 
+          {canViewReports && (
           <div className="admin-management-card">
             <div className="admin-panel-heading">
               <h3>User Personal Reports</h3>
@@ -584,11 +603,18 @@ export default function Dashboard() {
             </div>
 
             <div className="admin-report-actions">
-              <button type="button" onClick={downloadPersonalPDF}>Download PDF</button>
-              <button type="button" onClick={downloadPersonalExcel}>Download Excel</button>
+              {canDownloadReports ? (
+                <>
+                  <button type="button" onClick={downloadPersonalPDF}>Download PDF</button>
+                  <button type="button" onClick={downloadPersonalExcel}>Download Excel</button>
+                </>
+              ) : (
+                <span>Download disabled</span>
+              )}
             </div>
           </div>
-        </section>
+          )}
+        </section>}
 
         <section className="suite-section">
           <div className="suite-section-header">
@@ -597,7 +623,7 @@ export default function Dashboard() {
               <p>Create, manage and monitor your test suites.</p>
             </div>
             <div>
-              <button type="button" className="admin-primary-btn" onClick={openNewSuite}>
+              <button type="button" className="admin-primary-btn" onClick={openNewSuite} disabled={!canManageSuites}>
                 ＋ New test suite
               </button>
             </div>
@@ -633,16 +659,18 @@ export default function Dashboard() {
                       {suite.status === "active" ? "Active" : "Draft"}
                     </span>
 
-                    <button
-                      type="button"
-                      className={`admin-toggle-btn ${suite.status === "active" ? "danger" : "success"}`}
-                      disabled={togglingId === suite._id}
-                      onClick={(e) => handleToggleStatus(suite._id, suite.status, e)}
-                    >
-                      {togglingId === suite._id
-                        ? "..."
-                        : suite.status === "active" ? "■ Deactivate" : "▶ Activate"}
-                    </button>
+                    {canManageSuites && (
+                      <button
+                        type="button"
+                        className={`admin-toggle-btn ${suite.status === "active" ? "danger" : "success"}`}
+                        disabled={togglingId === suite._id}
+                        onClick={(e) => handleToggleStatus(suite._id, suite.status, e)}
+                      >
+                        {togglingId === suite._id
+                          ? "..."
+                          : suite.status === "active" ? "■ Deactivate" : "▶ Activate"}
+                      </button>
+                    )}
 
                     <button type="button" className="admin-row-btn" onClick={(e) => handleCopyLink(suite._id, e)}>
                       🔗 Copy link
@@ -650,12 +678,16 @@ export default function Dashboard() {
                     <button type="button" className="admin-open-btn" onClick={() => navigate(`/admin/test-suites/${suite._id}`)}>
                       Open
                     </button>
-                    <button type="button" className="admin-row-btn" onClick={() => { setEditingSuite(suite); setShowModal(true); }}>
-                      ✎ Edit
-                    </button>
-                    <button type="button" className="admin-delete-btn" onClick={(e) => handleDelete(suite._id, suite.name, e)}>
-                      ⌫ Delete
-                    </button>
+                    {canManageSuites && (
+                      <>
+                        <button type="button" className="admin-row-btn" onClick={() => { setEditingSuite(suite); setShowModal(true); }}>
+                          ✎ Edit
+                        </button>
+                        <button type="button" className="admin-delete-btn" onClick={(e) => handleDelete(suite._id, suite.name, e)}>
+                          ⌫ Delete
+                        </button>
+                      </>
+                    )}
                   </div>
                 </article>
               ))}

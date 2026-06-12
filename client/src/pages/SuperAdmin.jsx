@@ -5,13 +5,38 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import "./superadmin.css";
-import { getAuthHeaders } from "../utils/auth";
+import { ADMIN_PERMISSION_DEFAULTS, getAuthHeaders } from "../utils/auth";
 import BulkMailPanel from "../components/BulkMailPanel";
 import { apiProjectsToMap, defaultOrgOptions, mergeOrgOptions, readLocalOrgOptions, writeLocalOrgOptions } from "../utils/orgOptions";
 
 const API_BASE = "https://charismatic-happiness-production-dc36.up.railway.app/api";
 const API_URL = `${API_BASE}/auth`;
 const LOCAL_ROLES_KEY = "snehalaya_custom_roles";
+const ADMIN_RIGHTS = [
+  { key: "canViewReports", label: "View reports", detail: "Can open report pages and see result rows" },
+  { key: "canDownloadReports", label: "Download reports", detail: "Can export summary/descriptive PDF or Excel" },
+  { key: "canManageSuites", label: "Create / edit test suites", detail: "Can create, edit, activate, deactivate, and delete suites" },
+  { key: "canManageQuestions", label: "Manage questions", detail: "Can add, import, edit, and delete questions" },
+  { key: "canAssignTests", label: "Assign tests", detail: "Can assign test suites to candidates" },
+  { key: "canManageSettings", label: "Exam settings", detail: "Can change duration and global settings" },
+  { key: "canBulkMail", label: "Bulk mail", detail: "Can prepare bulk candidate emails" },
+  { key: "canViewUsers", label: "View users", detail: "Can see candidate/admin lists within scope" },
+];
+
+function normalizeRights(user) {
+  const saved = user?.adminPermissions || {};
+  const savedPermissions = saved.permissions || {};
+  return {
+    permissions: Object.keys(ADMIN_PERMISSION_DEFAULTS).reduce((acc, key) => {
+      acc[key] = savedPermissions[key] === undefined
+        ? ADMIN_PERMISSION_DEFAULTS[key]
+        : Boolean(savedPermissions[key]);
+      return acc;
+    }, {}),
+    scopeProjects: Array.isArray(saved.scopeProjects) ? saved.scopeProjects : [],
+    scopeDepartments: Array.isArray(saved.scopeDepartments) ? saved.scopeDepartments : [],
+  };
+}
 
 const emptyStats = {
   totalUsers: 0,
@@ -181,7 +206,7 @@ function SuperAdmin() {
   const [suitesById, setSuitesById] = useState({});
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
-  const [controlMode, setControlMode] = useState("roles");
+  const [controlMode, setControlMode] = useState("rights");
   const [roles, setRoles] = useState([
     { name: "candidate", baseRole: "candidate", system: true },
     { name: "admin", baseRole: "admin", system: true },
@@ -198,6 +223,9 @@ function SuperAdmin() {
   const [resetUser, setResetUser] = useState(null);
   const [resetPassword, setResetPassword] = useState("");
   const [resetSaving, setResetSaving] = useState(false);
+  const [rightsUserId, setRightsUserId] = useState("");
+  const [rightsForm, setRightsForm] = useState(() => normalizeRights());
+  const [rightsSaving, setRightsSaving] = useState(false);
 
   const setOverview = useCallback((overview) => {
     setUsers(overview.users);
@@ -312,6 +340,60 @@ function SuperAdmin() {
     }
   };
 
+  const handleRightsUserChange = (userId) => {
+    setRightsUserId(userId);
+    const selected = users.find(user => user._id === userId);
+    setRightsForm(normalizeRights(selected));
+  };
+
+  const setRightsProject = (project) => {
+    setRightsForm(prev => ({
+      ...prev,
+      scopeProjects: project ? [project] : [],
+      scopeDepartments: [],
+    }));
+  };
+
+  const toggleRightsDepartment = (department) => {
+    setRightsForm(prev => {
+      const selected = prev.scopeDepartments.includes(department);
+      return {
+        ...prev,
+        scopeDepartments: selected
+          ? prev.scopeDepartments.filter(item => item !== department)
+          : [...prev.scopeDepartments, department],
+      };
+    });
+  };
+
+  const toggleRight = (key) => {
+    setRightsForm(prev => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [key]: !prev.permissions[key],
+      },
+    }));
+  };
+
+  const saveAdminRights = async () => {
+    if (!rightsUserId) return alert("Select an admin first.");
+    setRightsSaving(true);
+    try {
+      const res = await axios.put(
+        `${API_URL}/superadmin/users/${rightsUserId}/permissions`,
+        rightsForm,
+        { headers: getAuthHeaders() }
+      );
+      setUsers(prev => prev.map(user => user._id === res.data._id ? res.data : user));
+      alert("Admin rights saved.");
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to save admin rights.");
+    } finally {
+      setRightsSaving(false);
+    }
+  };
+
   const openResetPassword = (user) => {
     setResetUser(user);
     setResetPassword("");
@@ -398,6 +480,12 @@ function SuperAdmin() {
       result.designation,
     ].join(" ").toLowerCase().includes(reportSearch.toLowerCase())
   );
+  const adminUsers = users.filter(user => user.role === "admin" || user.role === "superadmin");
+  const selectedRightsUser = users.find(user => user._id === rightsUserId);
+  const rightsProject = rightsForm.scopeProjects[0] || "";
+  const rightsDepartments = rightsProject
+    ? (orgOptions[rightsProject] || [])
+    : [];
 
   const getSectionTitle = () => {
     if (activeNav === "Candidates") return "Candidates";
@@ -601,11 +689,100 @@ function SuperAdmin() {
             <div className="section-header">
               <h2>🧩 Controls</h2>
               <select value={controlMode} onChange={e => setControlMode(e.target.value)}>
+                <option value="rights">User rights</option>
                 <option value="roles">Roles & people</option>
                 <option value="org">Projects & departments</option>
                 <option value="mail">Bulk mail</option>
               </select>
             </div>
+
+            {controlMode === "rights" && (
+              <div className="rights-console">
+                <div className="rights-filters">
+                  <select value={rightsUserId} onChange={e => handleRightsUserChange(e.target.value)}>
+                    <option value="">Select admin</option>
+                    {adminUsers.map(user => (
+                      <option key={user._id} value={user._id}>
+                        {user.name} - {user.customRole || user.role}
+                      </option>
+                    ))}
+                  </select>
+                  <select value={rightsProject} onChange={e => setRightsProject(e.target.value)}>
+                    <option value="">All projects</option>
+                    {Object.keys(orgOptions).sort((a, b) => a.localeCompare(b)).map(project => (
+                      <option key={project} value={project}>{project}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={saveAdminRights} disabled={rightsSaving || !rightsUserId}>
+                    {rightsSaving ? "Saving..." : "Save Rights"}
+                  </button>
+                </div>
+
+                {selectedRightsUser && (
+                  <div className="rights-scope-card">
+                    <div>
+                      <strong>{selectedRightsUser.name}</strong>
+                      <span>{selectedRightsUser.email || selectedRightsUser.mobile || selectedRightsUser.username}</span>
+                    </div>
+                    <p>
+                      Project scope: {rightsProject || "All projects"} · Department scope: {rightsForm.scopeDepartments.length ? rightsForm.scopeDepartments.join(", ") : "All departments"}
+                    </p>
+                  </div>
+                )}
+
+                {rightsProject && (
+                  <div className="rights-departments">
+                    <span>Departments</span>
+                    {rightsDepartments.length === 0 ? (
+                      <p>No departments found for this project.</p>
+                    ) : rightsDepartments.map(department => (
+                      <button
+                        key={department}
+                        type="button"
+                        className={rightsForm.scopeDepartments.includes(department) ? "selected" : ""}
+                        onClick={() => toggleRightsDepartment(department)}
+                      >
+                        {rightsForm.scopeDepartments.includes(department) ? "✓" : "×"} {department}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="rights-table-wrap">
+                  <table className="rights-table">
+                    <thead>
+                      <tr>
+                        <th>Feature</th>
+                        <th>Details</th>
+                        <th>Allowed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ADMIN_RIGHTS.map(right => {
+                        const allowed = rightsForm.permissions[right.key] !== false;
+                        return (
+                          <tr key={right.key}>
+                            <td>{right.label}</td>
+                            <td>{right.detail}</td>
+                            <td>
+                              <button
+                                type="button"
+                                className={`rights-toggle ${allowed ? "allowed" : "blocked"}`}
+                                onClick={() => toggleRight(right.key)}
+                                disabled={!rightsUserId}
+                                title={allowed ? "Allowed" : "Blocked"}
+                              >
+                                {allowed ? "✓" : "×"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {controlMode === "roles" && (
               <div className="control-grid">

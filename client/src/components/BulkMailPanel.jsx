@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { getAuthHeaders } from "../utils/auth";
+import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL || "https://charismatic-happiness-production-dc36.up.railway.app";
 
@@ -9,6 +9,7 @@ function uniqueEmails(users) {
 }
 
 export default function BulkMailPanel({ compact = false }) {
+  const currentUser = getCurrentUser();
   const [users, setUsers] = useState([]);
   const [suites, setSuites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,12 +18,14 @@ export default function BulkMailPanel({ compact = false }) {
   const [suiteId, setSuiteId] = useState("");
   const [subject, setSubject] = useState("Assessment link");
   const [message, setMessage] = useState("Dear candidate,\n\nPlease use the test link below to attend the assessment.\n\nThank you.");
+  const allowed = canAdmin("canBulkMail", currentUser);
 
   useEffect(() => {
     let ignore = false;
     const fetchData = async () => {
       setLoading(true);
       try {
+        if (!allowed) return;
         const headers = getAuthHeaders();
         const [usersRes, suitesRes] = await Promise.allSettled([
           axios.get(`${API}/api/auth/users`, { headers }),
@@ -52,7 +55,7 @@ export default function BulkMailPanel({ compact = false }) {
     };
     fetchData();
     return () => { ignore = true; };
-  }, []);
+  }, [allowed]);
 
   const projects = useMemo(() => [...new Set(users.map(user => user.project).filter(Boolean))].sort(), [users]);
   const roles = useMemo(() => [...new Set(users.map(user => user.customRole || user.role).filter(Boolean))].sort(), [users]);
@@ -86,6 +89,10 @@ export default function BulkMailPanel({ compact = false }) {
 
   return (
     <div style={{ border: "1px solid #dfe8e2", borderRadius: "16px", padding: compact ? "16px" : "20px", background: "#fbfcfb" }}>
+      {!allowed ? (
+        <div style={{ color: "#991b1b", fontWeight: 700 }}>Bulk mail permission is disabled for your account.</div>
+      ) : (
+        <>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", marginBottom: "14px", flexWrap: "wrap" }}>
         <div>
           <h3 style={{ margin: 0, color: "#1A3D28", fontSize: compact ? "17px" : "20px" }}>Bulk Mail</h3>
@@ -153,6 +160,8 @@ export default function BulkMailPanel({ compact = false }) {
       <p style={{ margin: "10px 0 0", color: "#8A8A7E", fontSize: "12px" }}>
         Emails open in BCC. For automatic server sending, SMTP credentials must be configured on the backend.
       </p>
+      </>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
 const ExamSettings = require("../models/ExamSettings");
 const jwt = require("jsonwebtoken");
+const { hasAdminPermission } = require("../utils/adminPermissions");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -103,6 +104,24 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function requireAdminFeature(feature, message) {
+  return async (req, res, next) => {
+    try {
+      if (req.user.role === "superadmin") return next();
+      if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+      const user = await User.findById(req.user.id).select("role adminPermissions");
+      if (!hasAdminPermission(user, feature)) {
+        return res.status(403).json({ message });
+      }
+      next();
+    } catch (err) {
+      res.status(500).json({ message: "Permission check failed" });
+    }
+  };
+}
+
 // ── GET QUESTIONS FOR A SUITE ─────────────────────────────────
 router.get("/:id/questions", async (req, res) => {
   try {
@@ -119,7 +138,7 @@ router.get("/:id/questions", async (req, res) => {
 });
 
 // ── ADD QUESTION TO A SUITE ───────────────────────────────────
-router.post("/:id/questions", authMiddleware, requireAdmin, async (req, res) => {
+router.post("/:id/questions", authMiddleware, requireAdminFeature("canManageQuestions", "Question management access denied"), async (req, res) => {
   try {
     const questionType = req.body.questionType === "theory" ? "theory" : "mcq";
     const categories = Array.isArray(req.body.category)
@@ -153,7 +172,7 @@ router.post("/:id/questions", authMiddleware, requireAdmin, async (req, res) => 
 });
 
 // ── IMPORT QUESTIONS FROM EXCEL ───────────────────────────────
-router.post("/:id/import-excel", authMiddleware, requireAdmin, upload.single("file"), async (req, res) => {
+router.post("/:id/import-excel", authMiddleware, requireAdminFeature("canManageQuestions", "Question import access denied"), upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No Excel file uploaded." });
 
@@ -268,7 +287,7 @@ router.get("/", async (req, res) => {
 });
 
 // ── CREATE NEW SUITE ──────────────────────────────────────────
-router.post("/", authMiddleware, requireAdmin, async (req, res) => {
+router.post("/", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
   try {
     const { name, description, status, passingPercentage } = req.body;
     const newSuite = new TestSuite({
@@ -285,26 +304,8 @@ router.post("/", authMiddleware, requireAdmin, async (req, res) => {
   }
 });
 
-// ── UPDATE SUITE ──────────────────────────────────────────────
-router.put("/:id", authMiddleware, requireAdmin, async (req, res) => {
-  try {
-    const payload = { ...req.body };
-    if (payload.passingPercentage !== undefined) {
-      payload.passingPercentage = normalizePassingPercentage(payload.passingPercentage);
-    }
-    const updatedSuite = await TestSuite.findByIdAndUpdate(
-      req.params.id,
-      { $set: payload },
-      { new: true }
-    );
-    res.json(updatedSuite);
-  } catch (err) {
-    res.status(500).json({ message: "Error updating suite" });
-  }
-});
-
 // ── ASSIGN SUITE TO SPECIFIC USERS ───────────────────────────
-router.put("/assignments/user/:userId", authMiddleware, requireAdmin, async (req, res) => {
+router.put("/assignments/user/:userId", authMiddleware, requireAdminFeature("canAssignTests", "Test assignment access denied"), async (req, res) => {
   try {
     const user = await User.findById(req.params.userId).select("_id role isActive");
     if (!user || user.role !== "candidate" || user.isActive === false) {
@@ -348,7 +349,25 @@ router.put("/assignments/user/:userId", authMiddleware, requireAdmin, async (req
   }
 });
 
-router.put("/:id/assignments", authMiddleware, requireAdmin, async (req, res) => {
+// ── UPDATE SUITE ──────────────────────────────────────────────
+router.put("/:id", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
+  try {
+    const payload = { ...req.body };
+    if (payload.passingPercentage !== undefined) {
+      payload.passingPercentage = normalizePassingPercentage(payload.passingPercentage);
+    }
+    const updatedSuite = await TestSuite.findByIdAndUpdate(
+      req.params.id,
+      { $set: payload },
+      { new: true }
+    );
+    res.json(updatedSuite);
+  } catch (err) {
+    res.status(500).json({ message: "Error updating suite" });
+  }
+});
+
+router.put("/:id/assignments", authMiddleware, requireAdminFeature("canAssignTests", "Test assignment access denied"), async (req, res) => {
   try {
     const assignedUsers = Array.isArray(req.body.assignedUsers)
       ? req.body.assignedUsers.filter(Boolean)
@@ -372,7 +391,7 @@ router.put("/:id/assignments", authMiddleware, requireAdmin, async (req, res) =>
 });
 
 // ── DELETE SUITE ──────────────────────────────────────────────
-router.delete("/:id", authMiddleware, requireAdmin, async (req, res) => {
+router.delete("/:id", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
   try {
     await Question.deleteMany({ testSuite: req.params.id });
     await TestSuite.findByIdAndDelete(req.params.id);

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { downloadResultsPDF, downloadResultsExcel } from "../utils/downloadResults";
-import { getAuthHeaders } from "../utils/auth";
+import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -79,6 +79,7 @@ export default function AdminSuiteResults() {
   const [error, setError]           = useState("");
   const [search, setSearch]         = useState("");
   const [suiteStatus, setSuiteStatus] = useState(null);
+  const canDownloadReports = canAdmin("canDownloadReports", getCurrentUser());
 
   // ✅ FIXED: flatten multi-category arrays to get all unique categories
   const allCats = [...new Set(
@@ -126,6 +127,7 @@ export default function AdminSuiteResults() {
   };
 
   const handleDownloadPDF = async (reportType) => {
+    if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     setDownloading(true); setDlType(`${reportType}-pdf`);
     try { await downloadResultsPDF(suite, questions, results, { reportType }); }
     catch (err) { console.error(err); alert("Failed to generate PDF."); }
@@ -133,6 +135,7 @@ export default function AdminSuiteResults() {
   };
 
   const handleDownloadExcel = (reportType) => {
+    if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     setDownloading(true); setDlType(`${reportType}-excel`);
     try { downloadResultsExcel(suite, questions, results, { reportType }); }
     catch (err) { console.error(err); alert("Failed to generate Excel."); }
@@ -278,16 +281,17 @@ export default function AdminSuiteResults() {
               <div style={{ fontSize:"12px", color:"#777", marginTop:"2px" }}>Choose summary or descriptive report, then choose PDF or Excel.</div>
             </div>
             {downloading && <span style={{ color: GREEN, fontSize:"12px", fontWeight:"700" }}>Generating...</span>}
+            {!canDownloadReports && <span style={{ color:"#991b1b", fontSize:"12px", fontWeight:"700" }}>Download disabled</span>}
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:"12px" }}>
             <div style={{ border:"1px solid #e5e7eb", borderRadius:"12px", padding:"14px", background:"#fafcfb" }}>
               <div style={{ fontSize:"13px", fontWeight:"800", color: GREEN_DARK, marginBottom:"4px" }}>Summary Result</div>
               <div style={{ fontSize:"12px", color:"#777", minHeight:"34px" }}>Candidate score, percentage, result status, and category-wise summary.</div>
               <div style={{ display:"flex", gap:"8px", flexWrap:"wrap", marginTop:"12px" }}>
-                <button onClick={() => handleDownloadPDF("summary")} disabled={downloading} style={{ padding:"9px 14px", borderRadius:"10px", border:"none", background: GREEN, color: WHITE, fontWeight:"700", cursor: downloading ? "not-allowed" : "pointer", opacity: downloading ? 0.65 : 1 }}>
+                <button onClick={() => handleDownloadPDF("summary")} disabled={downloading || !canDownloadReports} style={{ padding:"9px 14px", borderRadius:"10px", border:"none", background: GREEN, color: WHITE, fontWeight:"700", cursor: downloading || !canDownloadReports ? "not-allowed" : "pointer", opacity: downloading || !canDownloadReports ? 0.65 : 1 }}>
                   {dlType === "summary-pdf" ? "Generating..." : "PDF"}
                 </button>
-                <button onClick={() => handleDownloadExcel("summary")} disabled={downloading} style={{ padding:"9px 14px", borderRadius:"10px", border:`1px solid ${GREEN}`, background: WHITE, color: GREEN_DARK, fontWeight:"700", cursor: downloading ? "not-allowed" : "pointer", opacity: downloading ? 0.65 : 1 }}>
+                <button onClick={() => handleDownloadExcel("summary")} disabled={downloading || !canDownloadReports} style={{ padding:"9px 14px", borderRadius:"10px", border:`1px solid ${GREEN}`, background: WHITE, color: GREEN_DARK, fontWeight:"700", cursor: downloading || !canDownloadReports ? "not-allowed" : "pointer", opacity: downloading || !canDownloadReports ? 0.65 : 1 }}>
                   {dlType === "summary-excel" ? "Generating..." : "Excel"}
                 </button>
               </div>
@@ -296,10 +300,10 @@ export default function AdminSuiteResults() {
               <div style={{ fontSize:"13px", fontWeight:"800", color: GREEN_DARK, marginBottom:"4px" }}>Descriptive Result</div>
               <div style={{ fontSize:"12px", color:"#777", minHeight:"34px" }}>Detailed category performance plus question-wise selected and correct answers.</div>
               <div style={{ display:"flex", gap:"8px", flexWrap:"wrap", marginTop:"12px" }}>
-                <button onClick={() => handleDownloadPDF("descriptive")} disabled={downloading} style={{ padding:"9px 14px", borderRadius:"10px", border:"none", background: GREEN, color: WHITE, fontWeight:"700", cursor: downloading ? "not-allowed" : "pointer", opacity: downloading ? 0.65 : 1 }}>
+                <button onClick={() => handleDownloadPDF("descriptive")} disabled={downloading || !canDownloadReports} style={{ padding:"9px 14px", borderRadius:"10px", border:"none", background: GREEN, color: WHITE, fontWeight:"700", cursor: downloading || !canDownloadReports ? "not-allowed" : "pointer", opacity: downloading || !canDownloadReports ? 0.65 : 1 }}>
                   {dlType === "descriptive-pdf" ? "Generating..." : "PDF"}
                 </button>
-                <button onClick={() => handleDownloadExcel("descriptive")} disabled={downloading} style={{ padding:"9px 14px", borderRadius:"10px", border:`1px solid ${GREEN}`, background: WHITE, color: GREEN_DARK, fontWeight:"700", cursor: downloading ? "not-allowed" : "pointer", opacity: downloading ? 0.65 : 1 }}>
+                <button onClick={() => handleDownloadExcel("descriptive")} disabled={downloading || !canDownloadReports} style={{ padding:"9px 14px", borderRadius:"10px", border:`1px solid ${GREEN}`, background: WHITE, color: GREEN_DARK, fontWeight:"700", cursor: downloading || !canDownloadReports ? "not-allowed" : "pointer", opacity: downloading || !canDownloadReports ? 0.65 : 1 }}>
                   {dlType === "descriptive-excel" ? "Generating..." : "Excel"}
                 </button>
               </div>
