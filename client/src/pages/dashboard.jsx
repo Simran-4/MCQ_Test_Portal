@@ -166,7 +166,6 @@ export default function Dashboard() {
   const [showModal, setShowModal] = useState(false);
   const [editingSuite, setEditingSuite] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
-  const [showBulkMail, setShowBulkMail] = useState(false);
   const [users, setUsers] = useState([]);
   const [reportResults, setReportResults] = useState([]);
   const [assignmentUserId, setAssignmentUserId] = useState("");
@@ -175,6 +174,7 @@ export default function Dashboard() {
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
   const [reportUserId, setReportUserId] = useState("");
+  const [activePanel, setActivePanel] = useState("dashboard");
 
   const user = useMemo(() => {
     try {
@@ -408,6 +408,17 @@ export default function Dashboard() {
     setShowModal(true);
   };
 
+  const showAllSuites = () => {
+    setActivePanel("dashboard");
+    requestAnimationFrame(() => {
+      document.getElementById("admin-test-suites")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const openBulkMail = () => {
+    setActivePanel("bulk-mail");
+  };
+
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -416,65 +427,27 @@ export default function Dashboard() {
 
   return (
     <div className="admin-dashboard-shell">
-      <aside className="admin-sidebar">
-        <div className="admin-brand">
-          <img src="/Logo.png" alt="Snehalaya logo" />
-          <div>
-            <h1>Snehalaya</h1>
-          </div>
-        </div>
-
-        <nav className="admin-nav">
-          <button type="button" className="active">
-            <span>⌂</span>
-            Dashboard
-          </button>
-          {canViewReports && (
-            <button type="button" onClick={() => navigate("/view-results")}>
-              <span>▥</span>
-              View results
-            </button>
-          )}
-          {canManageSettings && (
-            <button type="button" onClick={() => navigate("/settings")}>
-              <span>⚙</span>
-              Exam settings
-            </button>
-          )}
-          {canBulkMail && (
-            <button type="button" onClick={() => setShowBulkMail(value => !value)}>
-              <span>✉</span>
-              Bulk mail
-            </button>
-          )}
-        </nav>
-
-        <div className="admin-nav-group">
-          <p>Test Management</p>
-          <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
-            <span>□</span>
-            All test suites
-          </button>
-          <button type="button" onClick={openNewSuite} disabled={!canManageSuites}>
-            <span>＋</span>
-            New test suite
-          </button>
-        </div>
-
-        <div className="admin-sidebar-note">
-          <span>🌱</span>
-          <p>Together we create a better tomorrow.</p>
-        </div>
-      </aside>
-
       <main className="admin-main">
         <header className="admin-topbar">
-          <div>
+          <div className="admin-brand">
+            <img src="/Logo.png" alt="Snehalaya logo" />
+            <div>
+              <h1>Snehalaya</h1>
+              <span>Test Taking Platform</span>
+            </div>
+          </div>
+
+          <div className="admin-welcome">
             <h2>Welcome back, Admin <span>🌱</span></h2>
             <p>Manage test suites and questions with ease.</p>
           </div>
 
           <div className="admin-top-actions">
+            <div className="admin-date-card">▣ {new Date().toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+            })}</div>
             <div className="admin-profile-card">
               <div>{(user.name || "Admin").charAt(0).toUpperCase()}</div>
               <p>
@@ -487,6 +460,47 @@ export default function Dashboard() {
             </button>
           </div>
         </header>
+
+        <nav className="admin-top-nav">
+          <button type="button" className={activePanel === "dashboard" ? "active" : ""} onClick={showAllSuites}>
+            ⌂ Dashboard
+          </button>
+
+          <div className="admin-nav-menu">
+            <button type="button">▤ Test Management⌄</button>
+            <div className="admin-nav-dropdown">
+              <button type="button" onClick={showAllSuites}>▤ All Test Suites</button>
+              <button type="button" onClick={openNewSuite} disabled={!canManageSuites}>＋ Add Test Suite</button>
+              {canAssignTests && (
+                <button type="button" onClick={() => setActivePanel("assignments")}>
+                  ♙ Assign Test Suites
+                </button>
+              )}
+              {canManageSettings && (
+                <button type="button" onClick={() => navigate("/settings")}>⚙ Exam Settings</button>
+              )}
+            </div>
+          </div>
+
+          {canViewReports && (
+            <div className="admin-nav-menu">
+              <button type="button">▥ Results⌄</button>
+              <div className="admin-nav-dropdown">
+                <button type="button" onClick={() => navigate("/view-results")}>☰ All Test Results</button>
+                <button type="button" onClick={() => navigate("/view-results")}>▥ Test Result</button>
+                <button type="button" onClick={() => setActivePanel("reports")}>
+                  ▧ User Personal Reports
+                </button>
+              </div>
+            </div>
+          )}
+
+          {canBulkMail && (
+            <button type="button" className={activePanel === "bulk-mail" ? "active" : ""} onClick={openBulkMail}>
+              ✉ Bulk Mail
+            </button>
+          )}
+        </nav>
 
         <section className="admin-stats-grid">
           <div className="admin-stat-card">
@@ -518,10 +532,30 @@ export default function Dashboard() {
             </div>
             <div className="admin-progress"><span style={{ width: `${suites.length ? Math.max(22, (activeSuites / suites.length) * 100) : 0}%` }} /></div>
           </div>
+
+          <div className="admin-stat-card">
+            <div className="admin-stat-icon">♙</div>
+            <div>
+              <p>Total Candidates</p>
+              <strong>{candidateUsers.length}</strong>
+              <span>Registered candidates</span>
+            </div>
+            <div className="admin-progress"><span style={{ width: `${Math.min(100, Math.max(18, candidateUsers.length * 3))}%` }} /></div>
+          </div>
+
+          <div className="admin-stat-card">
+            <div className="admin-stat-icon">▧</div>
+            <div>
+              <p>Total Responses</p>
+              <strong>{reportResults.length}</strong>
+              <span>Submitted tests</span>
+            </div>
+            <div className="admin-progress"><span style={{ width: `${Math.min(100, Math.max(18, reportResults.length * 4))}%` }} /></div>
+          </div>
         </section>
 
-        {(canAssignTests || canViewReports) && <section className="admin-management-grid">
-          {canAssignTests && (
+        {activePanel === "assignments" && canAssignTests && (
+          <section className="admin-management-grid single">
           <div className="admin-management-card">
             <div className="admin-panel-heading">
               <h3>Assign Test Suites</h3>
@@ -576,9 +610,11 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
-          )}
+          </section>
+        )}
 
-          {canViewReports && (
+        {activePanel === "reports" && canViewReports && (
+          <section className="admin-management-grid single">
           <div className="admin-management-card">
             <div className="admin-panel-heading">
               <h3>User Personal Reports</h3>
@@ -613,10 +649,16 @@ export default function Dashboard() {
               )}
             </div>
           </div>
-          )}
-        </section>}
+          </section>
+        )}
 
-        <section className="suite-section">
+        {activePanel === "bulk-mail" && canBulkMail && (
+          <section className="admin-bulk-mail">
+            <BulkMailPanel compact />
+          </section>
+        )}
+
+        <section className="suite-section" id="admin-test-suites">
           <div className="suite-section-header">
             <div>
               <h3>Test Suites</h3>
@@ -628,12 +670,6 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
-
-          {showBulkMail && (
-            <div className="admin-bulk-mail">
-              <BulkMailPanel compact />
-            </div>
-          )}
 
           {loading ? (
             <div className="admin-empty-state">Loading your suites...</div>
