@@ -576,12 +576,20 @@ function SuperAdmin() {
     navigate("/");
   };
 
+  const displayUsers = roleAssignmentUsers(users);
+  const displayStats = {
+    totalUsers: displayUsers.length,
+    activeUsers: displayUsers.filter(user => user.isActive !== false).length,
+    administrators: displayUsers.filter(user => user.role === "admin" || user.role === "superadmin").length,
+    totalAssessments: stats.totalAssessments,
+  };
+
   const getFilteredUsers = () => {
-    let base = users;
-    if (activeNav === "Candidates") base = users.filter(u => u.role === "candidate");
-    if (activeNav === "administrators") base = users.filter(u => u.role === "admin" || u.role === "superadmin");
+    let base = displayUsers;
+    if (activeNav === "Candidates") base = displayUsers.filter(u => u.role === "candidate");
+    if (activeNav === "administrators") base = displayUsers.filter(u => u.role === "admin" || u.role === "superadmin");
     return base.filter(u =>
-      `${u.name} ${u.email} ${u.role} ${u.customRole || ""}`.toLowerCase().includes(search.toLowerCase())
+      `${u.name} ${u.email} ${u.mobile} ${u.username} ${u.role} ${u.customRole || ""}`.toLowerCase().includes(search.toLowerCase())
     );
   };
 
@@ -595,7 +603,7 @@ function SuperAdmin() {
       result.designation,
     ].join(" ").toLowerCase().includes(reportSearch.toLowerCase())
   );
-  const adminUsers = users.filter(user => user.role === "admin" || user.role === "superadmin");
+  const adminUsers = displayUsers.filter(user => user.role === "admin" || user.role === "superadmin");
   const selectedRightsUser = users.find(user => user._id === rightsUserId);
   const rightsProject = rightsForm.scopeProjects[0] || "";
   const rightsDepartments = rightsProject
@@ -604,7 +612,7 @@ function SuperAdmin() {
   const createUserProjectNames = Object.keys(orgOptions).sort((a, b) => a.localeCompare(b));
   const createUserDepartments = createUserForm.project ? orgOptions[createUserForm.project] || [] : [];
   const assignableRoles = roles.filter(role => role.name !== "superadmin");
-  const roleUsers = roleAssignmentUsers(users);
+  const roleUsers = displayUsers;
 
   const getSectionTitle = () => {
     if (activeNav === "Candidates") return "Candidates";
@@ -690,23 +698,23 @@ function SuperAdmin() {
           <section className="stats-grid">
             <div className="stat-card" onClick={() => setActiveNav("Candidates")} style={{ cursor: "pointer" }}>
               <h3>Total Users</h3>
-              <h2>{stats.totalUsers}</h2>
+              <h2>{displayStats.totalUsers}</h2>
               <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
             </div>
             <div className="stat-card" onClick={() => setActiveNav("Candidates")} style={{ cursor: "pointer" }}>
               <h3>Active Users</h3>
-              <h2>{stats.activeUsers}</h2>
+              <h2>{displayStats.activeUsers}</h2>
               <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
             </div>
             <div className="stat-card" onClick={() => setActiveNav("administrators")} style={{ cursor: "pointer" }}>
               <h3>Administrators</h3>
-              <h2>{stats.administrators}</h2>
+              <h2>{displayStats.administrators}</h2>
               <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
             </div>
             <div className="stat-card">
               <h3>Assessments</h3>
               {/* ✅ Fixed: backend returns totalAssessments not assessments */}
-              <h2>{stats.totalAssessments}</h2>
+              <h2>{displayStats.totalAssessments}</h2>
               <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Total submitted</p>
             </div>
           </section>
@@ -1097,7 +1105,7 @@ function SuperAdmin() {
                   {filteredUsers.map((user) => (
                     <tr key={user._id}>
                       <td>{user.name}</td>
-                      <td>{user.email}</td>
+                      <td>{user.email || user.mobile || user.username || "—"}</td>
                       <td>
                         <span className={`badge ${user.role === "candidate" ? "Candidate" : "admin"}`}>
                           {user.customRole || user.role}
