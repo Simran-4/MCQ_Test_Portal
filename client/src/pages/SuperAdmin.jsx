@@ -35,6 +35,12 @@ const ADMIN_RIGHTS = [
   { key: "canBulkMail", label: "Mail candidates", detail: "Can prepare bulk emails and certificate emails" },
   { key: "canViewUsers", label: "View users", detail: "Can see candidate/admin lists within scope" },
 ];
+const CONTROL_MODES = [
+  { key: "rights", label: "User rights" },
+  { key: "roles", label: "Users, roles & assignment" },
+  { key: "org", label: "Projects & departments" },
+  { key: "mail", label: "Bulk mail" },
+];
 
 function normalizeRights(user) {
   const saved = user?.adminPermissions || {};
@@ -99,6 +105,45 @@ function resultTestName(result, suitesById) {
 function resultStatus(result) {
   if (typeof result.passed === "boolean") return result.passed ? "Pass" : "Fail";
   return resultPct(result) >= 50 ? "Pass" : "Fail";
+}
+
+function userNameKey(user) {
+  return String(user?.name || "").trim().toLowerCase();
+}
+
+function userContact(user) {
+  return String(user?.email || user?.mobile || user?.username || "").trim();
+}
+
+function userOptionLabel(user) {
+  const name = user?.name || user?.username || user?.email || user?.mobile || "Unnamed user";
+  const contact = userContact(user);
+  return contact ? `${name} - ${contact}` : name;
+}
+
+function roleAssignmentUsers(users) {
+  const namesWithEmail = new Set(
+    users
+      .filter(user => String(user?.email || "").trim())
+      .map(userNameKey)
+      .filter(Boolean)
+  );
+  const seen = new Set();
+
+  return users.filter(user => {
+    const contact = userContact(user);
+    const nameKey = userNameKey(user);
+    const email = String(user?.email || "").trim();
+    if (!contact) return false;
+    if (!email && nameKey && namesWithEmail.has(nameKey)) return false;
+
+    const uniqueKey = email
+      ? `email:${email.toLowerCase()}`
+      : `contact:${contact.toLowerCase()}`;
+    if (seen.has(uniqueKey)) return false;
+    seen.add(uniqueKey);
+    return true;
+  });
 }
 
 function saveReportsExcel(results, suitesById, reportType) {
@@ -559,6 +604,7 @@ function SuperAdmin() {
   const createUserProjectNames = Object.keys(orgOptions).sort((a, b) => a.localeCompare(b));
   const createUserDepartments = createUserForm.project ? orgOptions[createUserForm.project] || [] : [];
   const assignableRoles = roles.filter(role => role.name !== "superadmin");
+  const roleUsers = roleAssignmentUsers(users);
 
   const getSectionTitle = () => {
     if (activeNav === "Candidates") return "Candidates";
@@ -758,15 +804,24 @@ function SuperAdmin() {
         )}
 
         {activeNav === "management" && (
-          <section className="card">
+          <section className="card controls-card">
             <div className="section-header">
               <h2>🧩 Controls</h2>
-              <select value={controlMode} onChange={e => setControlMode(e.target.value)}>
-                <option value="rights">User rights</option>
-                <option value="roles">Users, roles & assignment</option>
-                <option value="org">Projects & departments</option>
-                <option value="mail">Bulk mail</option>
-              </select>
+            </div>
+
+            <div className="control-tabs" role="tablist" aria-label="Super admin controls">
+              {CONTROL_MODES.map(mode => (
+                <button
+                  key={mode.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={controlMode === mode.key}
+                  className={controlMode === mode.key ? "active" : ""}
+                  onClick={() => setControlMode(mode.key)}
+                >
+                  {mode.label}
+                </button>
+              ))}
             </div>
 
             {controlMode === "rights" && (
@@ -955,7 +1010,11 @@ function SuperAdmin() {
                   <h3>Add People To Role</h3>
                   <select value={assignUserId} onChange={e => setAssignUserId(e.target.value)}>
                     <option value="">Select user</option>
-                    {users.map(user => <option key={user._id} value={user._id}>{user.name} - {user.email}</option>)}
+                    {roleUsers.map(user => (
+                      <option key={user._id} value={user._id}>
+                        {userOptionLabel(user)}
+                      </option>
+                    ))}
                   </select>
                   <select value={assignRole} onChange={e => setAssignRole(e.target.value)}>
                     {assignableRoles.map(role => <option key={role.name} value={role.name}>{role.name}</option>)}
