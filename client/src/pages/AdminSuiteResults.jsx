@@ -145,12 +145,12 @@ export default function AdminSuiteResults() {
     finally { setDownloading(false); setDlType(""); }
   };
 
-  const handleEmailCertificate = (result) => {
+  const handleEmailCertificate = async (result, language) => {
     if (!canSendCertificates) return alert("Certificate email permission is disabled for your account.");
     const passed = typeof result.passed === "boolean" ? result.passed : result.pct >= 50;
     if (!passed) return alert("Certificate can be sent only for passed candidates.");
     try {
-      openCertificateEmail(result, suite);
+      await openCertificateEmail(result, suite, language);
     } catch (err) {
       alert(err.message || "Unable to prepare certificate email.");
     }
@@ -398,14 +398,24 @@ export default function AdminSuiteResults() {
                       </td>
                       <td style={{ padding:"12px 14px", textAlign:"center" }}>
                         {passed ? (
-                          <button
-                            type="button"
-                            onClick={() => handleEmailCertificate(r)}
-                            disabled={!canSendCertificates}
-                            style={{ padding:"7px 10px", borderRadius:"9px", border:`1px solid ${GREEN}`, background: canSendCertificates ? WHITE : "#f3f4f6", color: canSendCertificates ? GREEN_DARK : "#999", fontSize:"11px", fontWeight:"800", cursor: canSendCertificates ? "pointer" : "not-allowed" }}
-                          >
-                            Email
-                          </button>
+                          <div style={{ display:"flex", gap:"6px", justifyContent:"center", flexWrap:"wrap" }}>
+                            <button
+                              type="button"
+                              onClick={() => handleEmailCertificate(r, "english")}
+                              disabled={!canSendCertificates}
+                              style={{ padding:"7px 9px", borderRadius:"9px", border:`1px solid ${GREEN}`, background: canSendCertificates ? WHITE : "#f3f4f6", color: canSendCertificates ? GREEN_DARK : "#999", fontSize:"11px", fontWeight:"800", cursor: canSendCertificates ? "pointer" : "not-allowed" }}
+                            >
+                              Email EN
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEmailCertificate(r, "marathi")}
+                              disabled={!canSendCertificates}
+                              style={{ padding:"7px 9px", borderRadius:"9px", border:`1px solid ${GREEN}`, background: canSendCertificates ? "#f0faf5" : "#f3f4f6", color: canSendCertificates ? GREEN_DARK : "#999", fontSize:"11px", fontWeight:"800", cursor: canSendCertificates ? "pointer" : "not-allowed" }}
+                            >
+                              Email MR
+                            </button>
+                          </div>
                         ) : (
                           <span style={{ color:"#aaa", fontSize:"12px" }}>-</span>
                         )}

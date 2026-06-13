@@ -314,7 +314,7 @@ export default function StudentTest() {
     const catStats   = buildCategoryStats(questions, answers);
     const catEntries = Object.entries(catStats);
 
-    const handleDownloadCertificate = () => {
+    const handleDownloadCertificate = (language) => {
       downloadCertificatePDF({
         ...result,
         CandidateName: user.name,
@@ -323,7 +323,7 @@ export default function StudentTest() {
         project: user.project || "",
         designation: user.designation || "",
         submittedAt: new Date().toISOString(),
-      }, suite);
+      }, suite, language);
     };
 
     return (
@@ -360,9 +360,14 @@ export default function StudentTest() {
             )}
 
             {passed && (
-              <button onClick={handleDownloadCertificate} style={{ width:"100%", padding:"12px", background: GREEN, color: WHITE, border:"none", borderRadius:"12px", cursor:"pointer", marginBottom:"12px" }}>
-                🎓 Download Certificate
-              </button>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"12px" }}>
+                <button onClick={() => handleDownloadCertificate("english")} style={{ width:"100%", padding:"12px", background: GREEN, color: WHITE, border:"none", borderRadius:"12px", cursor:"pointer" }}>
+                  English Certificate
+                </button>
+                <button onClick={() => handleDownloadCertificate("marathi")} style={{ width:"100%", padding:"12px", background: WHITE, color: GREEN_DARK, border:`1px solid ${GREEN}`, borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}>
+                  Marathi Certificate
+                </button>
+              </div>
             )}
             <button onClick={() => navigate("/candidate")} style={{ width:"100%", padding:"12px", background:"#f3f4f6", color:"#555", border:"none", borderRadius:"12px", cursor:"pointer" }}>
               Back to Tests

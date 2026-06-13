@@ -152,13 +152,22 @@ export default function CandidateDashboard() {
                       {res.passed ? "✓ PASSED" : "✗ FAILED"}
                     </div>
                     {res.passed ? (
-                      <button
-                        type="button"
-                        onClick={() => downloadCertificatePDF(res)}
-                        style={{ padding: "8px 12px", border: "none", borderRadius: "9px", background: GREEN, color: WHITE, fontSize: "12px", fontWeight: "800", cursor: "pointer" }}
-                      >
-                        Download Certificate
-                      </button>
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <button
+                          type="button"
+                          onClick={() => downloadCertificatePDF(res, {}, "english")}
+                          style={{ padding: "8px 12px", border: "none", borderRadius: "9px", background: GREEN, color: WHITE, fontSize: "12px", fontWeight: "800", cursor: "pointer" }}
+                        >
+                          English Certificate
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => downloadCertificatePDF(res, {}, "marathi")}
+                          style={{ padding: "8px 12px", border: `1px solid ${GREEN}`, borderRadius: "9px", background: WHITE, color: GREEN_DARK, fontSize: "12px", fontWeight: "800", cursor: "pointer" }}
+                        >
+                          Marathi Certificate
+                        </button>
+                      </div>
                     ) : historySuiteId ? (
                       <button
                         type="button"
