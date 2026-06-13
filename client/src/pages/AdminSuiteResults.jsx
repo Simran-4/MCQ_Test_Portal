@@ -374,8 +374,8 @@ export default function AdminSuiteResults() {
               </thead>
               <tbody>
                 {filtered.map((r, i) => {
-                  const status = r.pct >= 50 ? "Pass" : "Fail";
-                  const passed = typeof r.passed === "boolean" ? r.passed : status === "Pass";
+                  const passed = typeof r.passed === "boolean" ? r.passed : r.pct >= 50;
+                  const status = passed ? "Pass" : "Fail";
                   return (
                     <tr key={r._id} style={{ borderBottom:"1px solid #f0f0ea", background: i % 2 === 0 ? WHITE : "#fafaf8" }}>
                       <td style={{ padding:"12px 14px", color:"#aaa", textAlign:"center" }}>{i + 1}</td>

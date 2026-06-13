@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import "../styles/quiz.css";
-import { getAuthHeaders } from "../utils/auth";
+import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
+import { openCertificateEmail } from "../utils/certificate";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -13,6 +14,8 @@ export default function ViewResults() {
   const [searchQuery, setSearchQuery]   = useState("");
   const [loading, setLoading]           = useState(true);
   const [suiteMap, setSuiteMap]         = useState({});
+  const currentUser = getCurrentUser();
+  const canSendCertificates = canAdmin("canBulkMail", currentUser);
 
   useEffect(() => {
     fetchProjects();
@@ -71,6 +74,27 @@ export default function ViewResults() {
     fetchResults();
   };
 
+  const hasPassed = (res) => {
+    if (typeof res.passed === "boolean") return res.passed;
+    return res.totalMarks > 0 && Math.round((res.score / res.totalMarks) * 100) >= 50;
+  };
+
+  const handleEmailCertificate = (res) => {
+    if (!canSendCertificates) {
+      alert("Certificate email permission is disabled for your account.");
+      return;
+    }
+    if (!hasPassed(res)) {
+      alert("Certificate can be sent only for passed candidates.");
+      return;
+    }
+    try {
+      openCertificateEmail(res, { name: getResultTestName(res) });
+    } catch (err) {
+      alert(err.message || "Unable to prepare certificate email.");
+    }
+  };
+
   return (
     <div style={{ padding: "40px 20px", background: "#EEE9E0", minHeight: "100vh" }}>
       <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
@@ -117,6 +141,7 @@ export default function ViewResults() {
                   <th style={{ padding: "18px" }}>Score</th>
                   <th style={{ padding: "18px" }}>Percentage</th>
                   <th style={{ padding: "18px" }}>Status</th>
+                  <th style={{ padding: "18px" }}>Certificate</th>
                   <th style={{ padding: "18px" }}>Date</th>
                 </tr>
               </thead>
@@ -125,6 +150,7 @@ export default function ViewResults() {
                   const pct = res.totalMarks > 0
                     ? Math.round((res.score / res.totalMarks) * 100)
                     : 0;
+                  const passed = hasPassed(res);
                   return (
                     <tr key={res._id} style={{ borderBottom: "1px solid #F0F0F0" }}>
                       <td style={{ padding: "18px" }}>
@@ -146,11 +172,33 @@ export default function ViewResults() {
                         <span style={{
                           padding: "5px 12px", borderRadius: "20px",
                           fontSize: "12px", fontWeight: "700",
-                          background: res.passed ? "#E8F2EC" : "#FDECEC",
-                          color: res.passed ? "#2D5F3F" : "#C53030"
+                          background: passed ? "#E8F2EC" : "#FDECEC",
+                          color: passed ? "#2D5F3F" : "#C53030"
                         }}>
-                          {res.passed ? "PASS" : "FAIL"}
+                          {passed ? "PASS" : "FAIL"}
                         </span>
+                      </td>
+                      <td style={{ padding: "18px" }}>
+                        {passed ? (
+                          <button
+                            type="button"
+                            onClick={() => handleEmailCertificate(res)}
+                            disabled={!canSendCertificates}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: "8px",
+                              border: "1px solid #2D5F3F",
+                              background: canSendCertificates ? "#FFFFFF" : "#F3F4F6",
+                              color: canSendCertificates ? "#1A3D28" : "#999",
+                              fontWeight: "700",
+                              cursor: canSendCertificates ? "pointer" : "not-allowed"
+                            }}
+                          >
+                            Email
+                          </button>
+                        ) : (
+                          <span style={{ color: "#AAA" }}>-</span>
+                        )}
                       </td>
                       <td style={{ padding: "18px", fontSize: "13px", color: "#666" }}>
                         {new Date(res.submittedAt).toLocaleDateString()}
