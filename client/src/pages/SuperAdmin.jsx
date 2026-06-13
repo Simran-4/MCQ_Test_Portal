@@ -32,7 +32,7 @@ const ADMIN_RIGHTS = [
   { key: "canManageQuestions", label: "Manage questions", detail: "Can add, import, edit, and delete questions" },
   { key: "canAssignTests", label: "Assign tests", detail: "Can assign test suites to candidates" },
   { key: "canManageSettings", label: "Exam settings", detail: "Can change duration and global settings" },
-  { key: "canBulkMail", label: "Bulk mail", detail: "Can prepare bulk candidate emails" },
+  { key: "canBulkMail", label: "Mail candidates", detail: "Can prepare bulk emails and certificate emails" },
   { key: "canViewUsers", label: "View users", detail: "Can see candidate/admin lists within scope" },
 ];
 

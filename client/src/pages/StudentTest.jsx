@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { getAuthHeaders } from "../utils/auth";
+import { downloadCertificatePDF } from "../utils/certificate";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -314,24 +315,15 @@ export default function StudentTest() {
     const catEntries = Object.entries(catStats);
 
     const handleDownloadCertificate = () => {
-      const win = window.open("", "_blank");
-      win.document.write(`
-        <html>
-        <body style="font-family:Georgia,serif;text-align:center;padding:80px;color:#1A3D28;background:#fff;">
-          <div style="border:10px double #2D5F3F;padding:50px;">
-            <h1>Certificate of Completion</h1>
-            <p>This certifies that</p>
-            <h2>${user.name}</h2>
-            <p>has passed the assessment</p>
-            <h3>${suite?.name}</h3>
-            <p style="font-size:24px;">Score: ${pct}%</p>
-            <p>Date: ${new Date().toLocaleDateString()}</p>
-          </div>
-          <script>window.print();</script>
-        </body>
-        </html>
-      `);
-      win.document.close();
+      downloadCertificatePDF({
+        ...result,
+        CandidateName: user.name,
+        CandidateEmail: user.email || user.mobile || user.username || "",
+        testName: suite?.name || "",
+        project: user.project || "",
+        designation: user.designation || "",
+        submittedAt: new Date().toISOString(),
+      }, suite);
     };
 
     return (

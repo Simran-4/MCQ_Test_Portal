@@ -68,9 +68,9 @@ function Register() {
     if (!gender)
       return alert("Please select your gender");
     if (!project)
-      return alert("Please select your project");
+      return alert("Please select your project/department");
     if (!designation)
-      return alert("Please select your department");
+      return alert("Please select your designation");
 
     setLoading(true);
     try {
@@ -207,7 +207,7 @@ function Register() {
           </p>
 
           <div>
-            <label style={labelStyle}>Project *</label>
+            <label style={labelStyle}>Project/Department *</label>
             <select
               style={selectStyle}
               value={project}
@@ -216,7 +216,7 @@ function Register() {
                 setDesignation("");
               }}
             >
-              <option value="" style={{ color: "#333", background: WHITE }}>Select project</option>
+              <option value="" style={{ color: "#333", background: WHITE }}>Select project/department</option>
               {projectNames.map(projectName => (
                 <option key={projectName} value={projectName} style={{ color: "#333", background: WHITE }}>
                   {projectName}
@@ -226,7 +226,7 @@ function Register() {
           </div>
 
           <div>
-            <label style={labelStyle}>Department *</label>
+            <label style={labelStyle}>Designation *</label>
             <select
               style={project ? selectStyle : disabledSelectStyle}
               value={designation}
@@ -234,7 +234,7 @@ function Register() {
               onChange={(e) => setDesignation(e.target.value)}
             >
               <option value="" style={{ color: "#333", background: WHITE }}>
-                {project ? "Select department" : "Select project first"}
+                {project ? "Select designation" : "Select project/department first"}
               </option>
               {departmentOptions.map(department => (
                 <option key={department} value={department} style={{ color: "#333", background: WHITE }}>

@@ -4,6 +4,7 @@ import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { downloadResultsPDF, downloadResultsExcel } from "../utils/downloadResults";
 import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
+import { openCertificateEmail } from "../utils/certificate";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -79,7 +80,9 @@ export default function AdminSuiteResults() {
   const [error, setError]           = useState("");
   const [search, setSearch]         = useState("");
   const [suiteStatus, setSuiteStatus] = useState(null);
-  const canDownloadReports = canAdmin("canDownloadReports", getCurrentUser());
+  const currentUser = getCurrentUser();
+  const canDownloadReports = canAdmin("canDownloadReports", currentUser);
+  const canSendCertificates = canAdmin("canBulkMail", currentUser);
 
   // ✅ FIXED: flatten multi-category arrays to get all unique categories
   const allCats = [...new Set(
@@ -140,6 +143,17 @@ export default function AdminSuiteResults() {
     try { downloadResultsExcel(suite, questions, results, { reportType }); }
     catch (err) { console.error(err); alert("Failed to generate Excel."); }
     finally { setDownloading(false); setDlType(""); }
+  };
+
+  const handleEmailCertificate = (result) => {
+    if (!canSendCertificates) return alert("Certificate email permission is disabled for your account.");
+    const passed = typeof result.passed === "boolean" ? result.passed : result.pct >= 50;
+    if (!passed) return alert("Certificate can be sent only for passed candidates.");
+    try {
+      openCertificateEmail(result, suite);
+    } catch (err) {
+      alert(err.message || "Unable to prepare certificate email.");
+    }
   };
 
   // ✅ FIXED: Per-result stats now correctly handles multi-category questions
@@ -351,7 +365,7 @@ export default function AdminSuiteResults() {
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"13px" }}>
               <thead>
                 <tr style={{ background: GREEN_DARK }}>
-                  {["#", "Candidate", "Email", "Project", "Department", "Score", "%", "Result", ...allCats].map((h, i) => (
+                  {["#", "Candidate", "Email", "Project", "Department", "Score", "%", "Result", "Certificate", ...allCats].map((h, i) => (
                     <th key={i} style={{ padding:"12px 14px", color: WHITE, fontWeight:"700", textAlign: i >= 5 ? "center" : "left", whiteSpace:"nowrap", fontSize:"12px" }}>
                       {h}
                     </th>
@@ -361,6 +375,7 @@ export default function AdminSuiteResults() {
               <tbody>
                 {filtered.map((r, i) => {
                   const status = r.pct >= 50 ? "Pass" : "Fail";
+                  const passed = typeof r.passed === "boolean" ? r.passed : status === "Pass";
                   return (
                     <tr key={r._id} style={{ borderBottom:"1px solid #f0f0ea", background: i % 2 === 0 ? WHITE : "#fafaf8" }}>
                       <td style={{ padding:"12px 14px", color:"#aaa", textAlign:"center" }}>{i + 1}</td>
@@ -380,6 +395,20 @@ export default function AdminSuiteResults() {
                         <span style={{ padding:"3px 12px", borderRadius:"999px", fontSize:"12px", fontWeight:"600", ...STATUS_COLOR[status] }}>
                           {status}
                         </span>
+                      </td>
+                      <td style={{ padding:"12px 14px", textAlign:"center" }}>
+                        {passed ? (
+                          <button
+                            type="button"
+                            onClick={() => handleEmailCertificate(r)}
+                            disabled={!canSendCertificates}
+                            style={{ padding:"7px 10px", borderRadius:"9px", border:`1px solid ${GREEN}`, background: canSendCertificates ? WHITE : "#f3f4f6", color: canSendCertificates ? GREEN_DARK : "#999", fontSize:"11px", fontWeight:"800", cursor: canSendCertificates ? "pointer" : "not-allowed" }}
+                          >
+                            Email
+                          </button>
+                        ) : (
+                          <span style={{ color:"#aaa", fontSize:"12px" }}>-</span>
+                        )}
                       </td>
                       {/* ✅ FIXED: category columns now correctly use allCats */}
                       {allCats.map(cat => {

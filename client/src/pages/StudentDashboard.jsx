@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { getAuthHeaders } from "../utils/auth";
+import { downloadCertificatePDF } from "../utils/certificate";
 
 const API        = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const GREEN      = "#2D5F3F";
@@ -136,19 +137,37 @@ export default function CandidateDashboard() {
               <p style={{ color: "#888" }}>No results yet. Complete a test to see it here!</p>
             ) : pastResults.map(res => {
               const pct = res.totalMarks > 0 ? Math.round((res.score / res.totalMarks) * 100) : 0;
+              const historySuiteId = typeof res.suiteId === "string" ? res.suiteId : res.suiteId?._id;
               return (
-                <div key={res._id} style={{ background: WHITE, padding: "16px 24px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div key={res._id} style={{ background: WHITE, padding: "16px 24px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
                   <div>
                     <h4 style={{ margin: 0, color: GREEN_DARK }}>{res.suiteId?.name || "Assessment"}</h4>
                     <span style={{ fontSize: "12px", color: "#888" }}>{new Date(res.submittedAt).toLocaleDateString()}</span>
                   </div>
-                  <div style={{ textAlign: "right" }}>
+                  <div style={{ textAlign: "right", display: "grid", gap: "8px", justifyItems: "end" }}>
                     <div style={{ fontWeight: "700", color: res.passed ? GREEN : "#C0392B" }}>
                       {res.score} / {res.totalMarks} ({pct}%)
                     </div>
                     <div style={{ fontSize: "11px", fontWeight: "800", color: res.passed ? GREEN : "#C0392B" }}>
                       {res.passed ? "✓ PASSED" : "✗ FAILED"}
                     </div>
+                    {res.passed ? (
+                      <button
+                        type="button"
+                        onClick={() => downloadCertificatePDF(res)}
+                        style={{ padding: "8px 12px", border: "none", borderRadius: "9px", background: GREEN, color: WHITE, fontSize: "12px", fontWeight: "800", cursor: "pointer" }}
+                      >
+                        Download Certificate
+                      </button>
+                    ) : historySuiteId ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/test/${historySuiteId}`)}
+                        style={{ padding: "8px 12px", border: "1px solid #C0392B", borderRadius: "9px", background: WHITE, color: "#C0392B", fontSize: "12px", fontWeight: "800", cursor: "pointer" }}
+                      >
+                        Retest
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               );
