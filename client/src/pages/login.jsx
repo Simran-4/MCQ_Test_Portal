@@ -13,29 +13,51 @@ function Login() {
   const [password, setPassword] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginChoiceUser, setLoginChoiceUser] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const nextPath = getSafeNextPath(searchParams.get("next"));
 
   const handleLogin = async () => {
-  try {
-    const res = await axios.post(
-      `${API_AUTH}/login`,
-      { identifier, email: identifier, password }
-    );
+    setLoginLoading(true);
+    try {
+      const res = await axios.post(
+        `${API_AUTH}/login`,
+        { identifier, email: identifier, password }
+      );
 
-    // ✅ Save token WITH Bearer prefix so all API calls work
-    localStorage.setItem("token", `Bearer ${res.data.token}`);
-    localStorage.setItem("user", JSON.stringify(res.data.user));
+      localStorage.setItem("token", `Bearer ${res.data.token}`);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
 
-    if (res.data.user.role === "admin")           navigate("/dashboard");
-    else if (res.data.user.role === "superadmin") navigate("/superadmin");
-    else if (nextPath.startsWith("/test/"))        navigate(nextPath);
-    else                                          navigate("/candidate");
-  } catch (err) {
-    alert(err.response?.data?.message || "Login Failed");
-  }
-};
+      if (["admin", "superadmin"].includes(res.data.user.role)) {
+        setLoginChoiceUser(res.data.user);
+        return;
+      }
+
+      if (nextPath.startsWith("/test/")) navigate(nextPath);
+      else navigate("/candidate");
+    } catch (err) {
+      alert(err.response?.data?.message || "Login Failed");
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const goToCandidateArea = () => {
+    navigate(nextPath.startsWith("/test/") ? nextPath : "/candidate");
+  };
+
+  const goToAdminArea = () => {
+    navigate(loginChoiceUser?.role === "superadmin" ? "/superadmin" : "/dashboard");
+  };
+
+  const cancelRoleChoice = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setLoginChoiceUser(null);
+    setPassword("");
+  };
 
   const handleForgotPassword = async () => {
     const targetIdentifier = identifier.trim();
@@ -100,6 +122,88 @@ function Login() {
         boxShadow: "0 24px 64px rgba(0,0,0,0.3)",
       }}>
 
+        {loginChoiceUser ? (
+          <>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "28px" }}>
+              <div style={{
+                width: "72px", height: "72px", borderRadius: "50%",
+                background: WHITE,
+                border: "0.5px solid rgba(255,255,255,0.4)",
+                overflow: "hidden", display: "flex", alignItems: "center",
+                justifyContent: "center", marginBottom: "12px",
+              }}>
+                <img
+                  src={`${import.meta.env.BASE_URL}Logo.png`}
+                  alt="Snehalaya"
+                  style={{ width: "64px", height: "64px", objectFit: "contain" }}
+                  onError={e => { e.target.style.display = "none"; }}
+                />
+              </div>
+              <h1 style={{ fontSize: "22px", fontWeight: "700", color: WHITE, margin: 0, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>
+                Choose login area
+              </h1>
+              <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.78)", margin: "6px 0 0", textAlign: "center", lineHeight: 1.5 }}>
+                Welcome, {loginChoiceUser.name || "Admin"}. Select where you want to continue.
+              </p>
+            </div>
+
+            <div style={{ display: "grid", gap: "12px" }}>
+              <button
+                type="button"
+                onClick={goToCandidateArea}
+                style={{
+                  width: "100%",
+                  padding: "13px 14px",
+                  borderRadius: "16px",
+                  border: "1px solid rgba(255,255,255,0.38)",
+                  background: "rgba(255,255,255,0.22)",
+                  color: WHITE,
+                  fontWeight: "800",
+                  fontSize: "15px",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                Attempt tests as candidate
+                <span style={{ display: "block", marginTop: "4px", fontSize: "12px", fontWeight: "500", color: "rgba(255,255,255,0.75)" }}>
+                  Open assigned tests and submit assessments.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={goToAdminArea}
+                style={{
+                  width: "100%",
+                  padding: "13px 14px",
+                  borderRadius: "16px",
+                  border: "none",
+                  background: GREEN,
+                  color: WHITE,
+                  fontWeight: "800",
+                  fontSize: "15px",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  boxShadow: "0 4px 16px rgba(45,95,63,0.4)",
+                }}
+              >
+                Go to {loginChoiceUser.role === "superadmin" ? "super admin" : "admin"} dashboard
+                <span style={{ display: "block", marginTop: "4px", fontSize: "12px", fontWeight: "500", color: "rgba(255,255,255,0.78)" }}>
+                  Manage test suites, reports and users.
+                </span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={cancelRoleChoice}
+              style={{ width: "100%", marginTop: "16px", padding: "10px", border: "none", background: "transparent", color: WHITE, fontSize: "12px", fontWeight: "700", textDecoration: "underline", cursor: "pointer" }}
+            >
+              Use another account
+            </button>
+          </>
+        ) : (
+          <>
         {/* Logo */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "28px" }}>
           <div style={{
@@ -161,17 +265,19 @@ function Login() {
 
         <button
           onClick={handleLogin}
+          disabled={loginLoading}
           style={{
             width: "100%", marginTop: "20px", padding: "12px",
             fontSize: "15px", fontWeight: "700",
             background: GREEN, color: WHITE,
-            border: "none", borderRadius: "22px", cursor: "pointer",
+            border: "none", borderRadius: "22px", cursor: loginLoading ? "wait" : "pointer",
             boxShadow: "0 4px 16px rgba(45,95,63,0.4)",
+            opacity: loginLoading ? 0.75 : 1,
           }}
-          onMouseEnter={e => e.currentTarget.style.background = GREEN_DARK}
-          onMouseLeave={e => e.currentTarget.style.background = GREEN}
+          onMouseEnter={e => { if (!loginLoading) e.currentTarget.style.background = GREEN_DARK; }}
+          onMouseLeave={e => { if (!loginLoading) e.currentTarget.style.background = GREEN; }}
         >
-          Login
+          {loginLoading ? "Logging in..." : "Login"}
         </button>
 
         <p
@@ -181,6 +287,8 @@ function Login() {
           Don't have an account?{" "}
           <span style={{ color: WHITE, fontWeight: "700", textDecoration: "underline" }}>Register</span>
         </p>
+          </>
+        )}
       </div>
 
       {/* Contact footer */}
