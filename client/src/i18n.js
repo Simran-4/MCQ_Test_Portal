@@ -12,7 +12,6 @@ i18n.use(initReactI18next).init({
         viewQuestions: "View Questions",
         viewResults: "View Results",
         logout: "Logout",
-        examSettings: "Exam Settings",
       },
     },
 
@@ -25,7 +24,6 @@ i18n.use(initReactI18next).init({
         viewQuestions: "प्रश्न देखें",
         viewResults: "परिणाम देखें",
         logout: "लॉगआउट",
-        examSettings: "परीक्षा सेटिंग्स",
       },
     },
 
@@ -38,7 +36,6 @@ i18n.use(initReactI18next).init({
         viewQuestions: "प्रश्न पहा",
         viewResults: "निकाल पहा",
         logout: "लॉगआउट",
-        examSettings: "परीक्षा सेटिंग्ज",
       },
     },
   },
