@@ -110,6 +110,31 @@ function pctColor(pct) {
   return "#dc2626";
 }
 
+function gradeInfo(pct) {
+  if (pct >= 70) {
+    return {
+      label: "High",
+      color: GREEN,
+      bg: "#ecfdf3",
+      message: "Excellent performance. Keep maintaining this level and continue building consistency.",
+    };
+  }
+  if (pct >= 40) {
+    return {
+      label: "Moderate",
+      color: "#f59e0b",
+      bg: "#fff7ed",
+      message: "You have a moderate level of accuracy. Keep practicing to improve your skills and aim for a high score.",
+    };
+  }
+  return {
+    label: "Low",
+    color: "#dc2626",
+    bg: "#fef2f2",
+    message: "More practice is recommended. Review the answers carefully and try again to improve your score.",
+  };
+}
+
 function formatTime(secs) {
   const m = Math.floor(secs / 60).toString().padStart(2, "0");
   const s = (secs % 60).toString().padStart(2, "0");
@@ -322,6 +347,7 @@ export default function StudentTest() {
   if (submitted && result) {
     const pct    = Math.round((result.score / result.totalMarks) * 100) || 0;
     const passed = pct >= passingPct;
+    const overallGrade = gradeInfo(pct);
     const catStats   = buildCategoryStats(questions, answers);
     const catEntries = Object.entries(catStats);
 
@@ -345,6 +371,14 @@ export default function StudentTest() {
               <div style={{ textAlign:"center" }}>
                 <div style={{ fontSize:"48px" }}>{passed ? "🎉" : "📚"}</div>
                 <h1 style={{ color: GREEN_DARK }}>{passed ? "Passed!" : "Try Again"}</h1>
+                <div style={{ margin:"-8px auto 18px", maxWidth:"420px" }}>
+                  <p style={{ margin:"0 0 6px", color: overallGrade.color, fontSize:"18px", fontWeight:"900" }}>
+                    Recommendation: {overallGrade.label}
+                  </p>
+                  <p style={{ margin:0, color: GREEN_DARK, fontSize:"14px", lineHeight:1.5 }}>
+                    {overallGrade.message}
+                  </p>
+                </div>
                 <div style={{ background: BG, borderRadius:"14px", padding:"20px", margin:"20px 0" }}>
                   <p style={{ fontSize:"12px", color:"#888", textTransform:"uppercase" }}>Your Result</p>
                   <p style={{ fontSize:"40px", fontWeight:"800", color: GREEN_DARK, margin:0 }}>{result.score} / {result.totalMarks}</p>
@@ -384,14 +418,17 @@ export default function StudentTest() {
                 <p style={{ fontSize:"12px", color:"#888", textTransform:"uppercase", marginBottom:"10px", textAlign:"center" }}>Category Breakdown</p>
                 {catEntries.map(([cat, s]) => {
                   const catPct = s.marks > 0 ? Math.round((s.earnedMarks / s.marks) * 100) : 0;
+                  const catGrade = gradeInfo(catPct);
                   return (
                     <div key={cat} style={{ marginBottom:"10px" }}>
                       <div style={{ display:"flex", justifyContent:"space-between", fontSize:"13px", marginBottom:"4px" }}>
                         <span style={{ fontWeight:"600", color: GREEN_DARK }}>{cat}</span>
-                        <span style={{ color: pctColor(catPct), fontWeight:"700" }}>{catPct}% ({s.correct}/{s.total})</span>
+                        <span style={{ color: catGrade.color, fontWeight:"800" }}>
+                          {catGrade.label} ({catPct}% {s.correct}/{s.total})
+                        </span>
                       </div>
                       <div style={{ height:"6px", background:"#eee", borderRadius:"99px" }}>
-                        <div style={{ height:"6px", width:`${catPct}%`, background: pctColor(catPct), borderRadius:"99px", transition:"width 0.6s ease" }} />
+                        <div style={{ height:"6px", width:`${catPct}%`, background: catGrade.color, borderRadius:"99px", transition:"width 0.6s ease" }} />
                       </div>
                     </div>
                   );
