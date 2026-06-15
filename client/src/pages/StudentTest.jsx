@@ -58,6 +58,16 @@ function scoreQuestion(q, selectedArr) {
   return best;
 }
 
+function getReviewCorrectOptions(q) {
+  if (isTheoryQuestion(q)) return [];
+  const allCorrect = new Set(uniqueIndexes(Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer]));
+  const answerMap = getCategoryAnswerMap(q);
+  Object.values(answerMap || {}).forEach(indexes => {
+    uniqueIndexes(indexes).forEach(index => allCorrect.add(index));
+  });
+  return [...allCorrect].sort((a, b) => a - b);
+}
+
 function getSingleSelectedOption(answer) {
   return Array.isArray(answer) && Number.isInteger(answer[0]) ? answer[0] : null;
 }
@@ -118,6 +128,7 @@ export default function StudentTest() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult]         = useState(null);
   const [error, setError]           = useState("");
+  const [showReviewAnswers, setShowReviewAnswers] = useState(false);
 
   const [markedForReview, setMarkedForReview] = useState([]);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -328,14 +339,43 @@ export default function StudentTest() {
 
     return (
       <div style={{ minHeight:"100vh", background: BG, padding:"24px 16px" }}>
-        <div style={{ maxWidth:"520px", margin:"0 auto" }}>
-          <div style={{ background: WHITE, borderRadius:"20px", padding:"32px", textAlign:"center", boxShadow:"0 8px 32px rgba(0,0,0,0.08)" }}>
-            <div style={{ fontSize:"48px" }}>{passed ? "🎉" : "📚"}</div>
-            <h1 style={{ color: GREEN_DARK }}>{passed ? "Passed!" : "Try Again"}</h1>
-            <div style={{ background: BG, borderRadius:"14px", padding:"20px", margin:"20px 0" }}>
-              <p style={{ fontSize:"12px", color:"#888", textTransform:"uppercase" }}>Your Result</p>
-              <p style={{ fontSize:"40px", fontWeight:"800", color: GREEN_DARK, margin:0 }}>{result.score} / {result.totalMarks}</p>
-              <p style={{ fontSize:"24px", color: pctColor(pct), margin:0 }}>{pct}%</p>
+        <div style={{ maxWidth:"980px", margin:"0 auto" }}>
+          <div style={{ background: WHITE, borderRadius:"20px", padding:"32px", boxShadow:"0 8px 32px rgba(0,0,0,0.08)" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"minmax(260px, 1fr) minmax(260px, 0.9fr)", gap:"22px", alignItems:"stretch" }}>
+              <div style={{ textAlign:"center" }}>
+                <div style={{ fontSize:"48px" }}>{passed ? "🎉" : "📚"}</div>
+                <h1 style={{ color: GREEN_DARK }}>{passed ? "Passed!" : "Try Again"}</h1>
+                <div style={{ background: BG, borderRadius:"14px", padding:"20px", margin:"20px 0" }}>
+                  <p style={{ fontSize:"12px", color:"#888", textTransform:"uppercase" }}>Your Result</p>
+                  <p style={{ fontSize:"40px", fontWeight:"800", color: GREEN_DARK, margin:0 }}>{result.score} / {result.totalMarks}</p>
+                  <p style={{ fontSize:"24px", color: pctColor(pct), margin:0 }}>{pct}%</p>
+                </div>
+              </div>
+
+              <div style={{ background:"#f8faf8", border:"1px solid #e5eee8", borderRadius:"16px", padding:"18px", display:"flex", flexDirection:"column", justifyContent:"center", gap:"10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowReviewAnswers(prev => !prev)}
+                  style={{ width:"100%", padding:"12px", background: showReviewAnswers ? GREEN_DARK : GREEN, color: WHITE, border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"800" }}
+                >
+                  {showReviewAnswers ? "Hide Review" : "Review Answers"}
+                </button>
+
+                {passed && (
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px" }}>
+                    <button onClick={() => handleDownloadCertificate("english")} style={{ width:"100%", padding:"12px", background: GREEN, color: WHITE, border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"800" }}>
+                      English Certificate
+                    </button>
+                    <button onClick={() => handleDownloadCertificate("marathi")} style={{ width:"100%", padding:"12px", background: WHITE, color: GREEN_DARK, border:`1px solid ${GREEN}`, borderRadius:"12px", cursor:"pointer", fontWeight:"800" }}>
+                      Marathi Certificate
+                    </button>
+                  </div>
+                )}
+
+                <button onClick={() => navigate("/candidate")} style={{ width:"100%", padding:"12px", background:"#eef1ef", color:"#555", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}>
+                  Back to Tests
+                </button>
+              </div>
             </div>
 
             {/* Category breakdown */}
@@ -359,19 +399,74 @@ export default function StudentTest() {
               </div>
             )}
 
-            {passed && (
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"12px" }}>
-                <button onClick={() => handleDownloadCertificate("english")} style={{ width:"100%", padding:"12px", background: GREEN, color: WHITE, border:"none", borderRadius:"12px", cursor:"pointer" }}>
-                  English Certificate
-                </button>
-                <button onClick={() => handleDownloadCertificate("marathi")} style={{ width:"100%", padding:"12px", background: WHITE, color: GREEN_DARK, border:`1px solid ${GREEN}`, borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}>
-                  Marathi Certificate
-                </button>
+            {showReviewAnswers && (
+              <div style={{ marginTop:"22px", borderTop:"1px solid #edf0ed", paddingTop:"20px" }}>
+                <h2 style={{ margin:"0 0 14px", color: GREEN_DARK, fontSize:"22px" }}>Answer Review</h2>
+                <div style={{ display:"grid", gap:"14px", textAlign:"left" }}>
+                  {questions.map((q, idx) => {
+                    const theory = isTheoryQuestion(q);
+                    const selectedOption = getSingleSelectedOption(answers[q._id]);
+                    const correctOptions = getReviewCorrectOptions(q);
+                    const selectedText = theory
+                      ? String(answers[q._id] || "").trim() || "No answer"
+                      : selectedOption === null ? "Not answered" : q.options[selectedOption] || `Option ${selectedOption + 1}`;
+
+                    return (
+                      <div key={q._id} style={{ border:"1px solid #e5eee8", borderRadius:"14px", padding:"16px", background:"#fff" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", gap:"12px", marginBottom:"10px", flexWrap:"wrap" }}>
+                          <strong style={{ color: GREEN_DARK }}>Q{idx + 1}. {q.questionText}</strong>
+                          <span style={{ background: theory ? "#dbeafe" : "#dcfce7", color: theory ? "#1d4ed8" : "#166534", padding:"3px 10px", borderRadius:"999px", fontSize:"12px", fontWeight:"800" }}>
+                            {theory ? "Theory" : "MCQ"}
+                          </span>
+                        </div>
+
+                        {theory ? (
+                          <div style={{ display:"grid", gap:"8px" }}>
+                            <div style={{ padding:"10px 12px", borderRadius:"10px", background:"#f8faf8", color:"#333" }}>
+                              <strong>Your answer: </strong>{selectedText}
+                            </div>
+                            <div style={{ padding:"10px 12px", borderRadius:"10px", background:"#fff7ed", color:"#9a3412" }}>
+                              Theory answers are reviewed manually by the admin.
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display:"grid", gap:"8px" }}>
+                            {q.options.map((opt, optionIdx) => {
+                              const isSelected = selectedOption === optionIdx;
+                              const isCorrect = correctOptions.includes(optionIdx);
+                              let background = "#f9fafb";
+                              let border = "1px solid #e5e7eb";
+                              let label = "";
+                              if (isCorrect) {
+                                background = "#ecfdf3";
+                                border = "1px solid #22c55e";
+                                label = "Correct";
+                              }
+                              if (isSelected && !isCorrect) {
+                                background = "#fef2f2";
+                                border = "1px solid #ef4444";
+                                label = "Your answer";
+                              }
+                              if (isSelected && isCorrect) label = "Your answer • Correct";
+
+                              return (
+                                <div key={optionIdx} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"12px", padding:"10px 12px", borderRadius:"10px", background, border }}>
+                                  <span>{opt}</span>
+                                  {label && <span style={{ fontSize:"12px", fontWeight:"800", color: isCorrect ? "#166534" : "#b91c1c", whiteSpace:"nowrap" }}>{label}</span>}
+                                </div>
+                              );
+                            })}
+                            <div style={{ fontSize:"12px", color:"#6b7280", marginTop:"2px" }}>
+                              Selected: {selectedText}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
-            <button onClick={() => navigate("/candidate")} style={{ width:"100%", padding:"12px", background:"#f3f4f6", color:"#555", border:"none", borderRadius:"12px", cursor:"pointer" }}>
-              Back to Tests
-            </button>
           </div>
         </div>
       </div>
@@ -429,7 +524,7 @@ export default function StudentTest() {
       <div style={{ maxWidth:"1100px", margin:"24px auto", padding:"0 16px 120px", display:"flex", gap:"24px", alignItems:"flex-start" }}>
 
         {/* Question Navigation Panel */}
-        <div style={{ width:"220px", flexShrink:0, background: WHITE, borderRadius:"16px", padding:"20px", boxShadow:"0 4px 16px rgba(0,0,0,0.06)", position:"sticky", top:"80px" }}>
+        <div style={{ width:"220px", flexShrink:0, background: WHITE, borderRadius:"16px", padding:"20px", boxShadow:"0 4px 16px rgba(0,0,0,0.06)", position:"sticky", top:"80px", maxHeight:"calc(100vh - 160px)", overflowY:"auto" }}>
           <h3 style={{ margin:"0 0 16px", fontSize:"15px", fontWeight:"700", color: GREEN_DARK }}>Questions</h3>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"8px", marginBottom:"20px" }}>
             {questions.map((q, idx) => {
@@ -474,7 +569,6 @@ export default function StudentTest() {
           {questions.map((q, idx) => {
             const isMarked   = markedForReview.includes(idx);
             const isSelected = isQuestionAnswered(q, answers);
-            const qCats      = getQuestionCats(q);
             const theory     = isTheoryQuestion(q);
 
             return (
@@ -498,12 +592,6 @@ export default function StudentTest() {
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"12px" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
                     <span style={{ fontWeight:"bold", color:"#aaa" }}>Q{idx + 1}</span>
-                    {/* Category tags */}
-                    {qCats.map(cat => (
-                      <span key={cat} style={{ background:"#f0faf5", color: GREEN_DARK, padding:"2px 10px", borderRadius:"999px", fontSize:"11px", fontWeight:"600", border:`1px solid #c6e2d0` }}>
-                        {cat}
-                      </span>
-                    ))}
                     <span style={{ background: theory ? "#dbeafe" : "#dcfce7", color: theory ? "#1d4ed8" : "#166534", padding:"2px 10px", borderRadius:"999px", fontSize:"11px", fontWeight:"700", border:`1px solid ${theory ? "#bfdbfe" : "#bbf7d0"}` }}>
                       {theory ? "Theory" : "MCQ"}
                     </span>
