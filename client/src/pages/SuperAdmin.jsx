@@ -38,7 +38,7 @@ const ADMIN_RIGHTS = [
 const CONTROL_MODES = [
   { key: "rights", label: "User rights" },
   { key: "roles", label: "Users, roles & assignment" },
-  { key: "org", label: "Projects & departments" },
+  { key: "org", label: "Projects/Departments & designations" },
   { key: "mail", label: "Bulk mail" },
 ];
 
@@ -148,7 +148,7 @@ function roleAssignmentUsers(users) {
 
 function saveReportsExcel(results, suitesById, reportType) {
   const wb = XLSX.utils.book_new();
-  const summaryHeaders = ["Test Name", "Candidate", "Email", "Project", "Department", "Score", "Percentage", "Result", "Submitted At"];
+  const summaryHeaders = ["Test Name", "Candidate", "Email", "Project/Department", "Designation", "Score", "Percentage", "Result", "Submitted At"];
   const summaryRows = results.map(result => [
     resultTestName(result, suitesById),
     candidateName(result),
@@ -206,7 +206,7 @@ function saveReportsPDF(results, suitesById, reportType) {
 
   autoTable(doc, {
     startY: 30,
-    head: [["#", "Test Name", "Candidate", "Email", "Project", "Department", "Score", "%", "Result", "Date"]],
+    head: [["#", "Test Name", "Candidate", "Email", "Project/Department", "Designation", "Score", "%", "Result", "Date"]],
     body: results.map((result, index) => [
       index + 1,
       resultTestName(result, suitesById),
@@ -383,8 +383,8 @@ function SuperAdmin() {
     if (!createUserForm.password || createUserForm.password.length < 6) return alert("Password must be at least 6 characters.");
     if (!createUserForm.age || Number(createUserForm.age) < 10 || Number(createUserForm.age) > 100) return alert("Enter a valid age between 10 and 100.");
     if (!createUserForm.gender) return alert("Select gender.");
-    if (!createUserForm.project) return alert("Select project.");
-    if (!createUserForm.designation) return alert("Select department.");
+    if (!createUserForm.project) return alert("Select project/department.");
+    if (!createUserForm.designation) return alert("Select designation.");
 
     setCreatingUser(true);
     try {
@@ -544,7 +544,7 @@ function SuperAdmin() {
 
   const addProject = async () => {
     const name = projectName.trim();
-    if (!name) return alert("Enter a project name.");
+    if (!name) return alert("Enter a project/department name.");
     try {
       const res = await axios.post(`${API_URL}/superadmin/org-options/projects`, { name }, { headers: getAuthHeaders() });
       setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
@@ -558,7 +558,7 @@ function SuperAdmin() {
   const addDepartment = async () => {
     const project = departmentProject.trim();
     const department = departmentName.trim();
-    if (!project || !department) return alert("Select a project and enter a department.");
+    if (!project || !department) return alert("Select a project/department and enter a designation.");
     try {
       const res = await axios.post(`${API_URL}/superadmin/org-options/departments`, { project, department }, { headers: getAuthHeaders() });
       setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
@@ -566,7 +566,7 @@ function SuperAdmin() {
       const nextOptions = mergeOrgOptions(orgOptions, { [project]: [...(orgOptions[project] || []), department] });
       writeLocalOrgOptions(nextOptions);
       setOrgOptions(nextOptions);
-      alert("Department saved locally. Redeploy Railway backend to save it for everyone.");
+      alert("Designation saved locally. Redeploy Railway backend to save it for everyone.");
     }
     setDepartmentName("");
   };
@@ -755,8 +755,8 @@ function SuperAdmin() {
                       <th>Test Name</th>
                       <th>Candidate</th>
                       <th>Email</th>
-                      <th>Project</th>
-                      <th>Department</th>
+                      <th>Project/Department</th>
+                      <th>Designation</th>
                       <th>Score</th>
                       <th>%</th>
                       <th>Result</th>
@@ -844,7 +844,7 @@ function SuperAdmin() {
                     ))}
                   </select>
                   <select value={rightsProject} onChange={e => setRightsProject(e.target.value)}>
-                    <option value="">All projects</option>
+                    <option value="">All project/departments</option>
                     {Object.keys(orgOptions).sort((a, b) => a.localeCompare(b)).map(project => (
                       <option key={project} value={project}>{project}</option>
                     ))}
@@ -861,16 +861,16 @@ function SuperAdmin() {
                       <span>{selectedRightsUser.email || selectedRightsUser.mobile || selectedRightsUser.username}</span>
                     </div>
                     <p>
-                      Project scope: {rightsProject || "All projects"} · Department scope: {rightsForm.scopeDepartments.length ? rightsForm.scopeDepartments.join(", ") : "All departments"}
+                      Project/Department scope: {rightsProject || "All project/departments"} · Designation scope: {rightsForm.scopeDepartments.length ? rightsForm.scopeDepartments.join(", ") : "All designations"}
                     </p>
                   </div>
                 )}
 
                 {rightsProject && (
                   <div className="rights-departments">
-                    <span>Departments</span>
+                    <span>Designations</span>
                     {rightsDepartments.length === 0 ? (
-                      <p>No departments found for this project.</p>
+                      <p>No designations found for this project/department.</p>
                     ) : rightsDepartments.map(department => (
                       <button
                         key={department}
@@ -950,7 +950,7 @@ function SuperAdmin() {
                       <option value="Other">Other</option>
                     </select>
                     <select value={createUserForm.project} onChange={e => updateCreateUserForm("project", e.target.value)}>
-                      <option value="">Select project</option>
+                      <option value="">Select project/department</option>
                       {createUserProjectNames.map(project => (
                         <option key={project} value={project}>{project}</option>
                       ))}
@@ -960,7 +960,7 @@ function SuperAdmin() {
                       onChange={e => updateCreateUserForm("designation", e.target.value)}
                       disabled={!createUserForm.project}
                     >
-                      <option value="">{createUserForm.project ? "Select department" : "Select project first"}</option>
+                      <option value="">{createUserForm.project ? "Select designation" : "Select project/department first"}</option>
                       {createUserDepartments.map(department => (
                         <option key={department} value={department}>{department}</option>
                       ))}
@@ -1040,29 +1040,29 @@ function SuperAdmin() {
             {controlMode === "org" && (
               <div className="control-grid">
                 <div className="control-panel">
-                  <h3>Add Project</h3>
-                  <input value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Project name" />
-                  <button type="button" onClick={addProject}>Add Project</button>
+                  <h3>Add Project/Department</h3>
+                  <input value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Project/Department name" />
+                  <button type="button" onClick={addProject}>Add Project/Department</button>
                 </div>
 
                 <div className="control-panel">
-                  <h3>Add Department</h3>
+                  <h3>Add Designation</h3>
                   <select value={departmentProject} onChange={e => setDepartmentProject(e.target.value)}>
-                    <option value="">Select project</option>
+                    <option value="">Select project/department</option>
                     {Object.keys(orgOptions).sort((a, b) => a.localeCompare(b)).map(project => (
                       <option key={project} value={project}>{project}</option>
                     ))}
                   </select>
-                  <input value={departmentName} onChange={e => setDepartmentName(e.target.value)} placeholder="Department name" />
-                  <button type="button" onClick={addDepartment}>Add Department</button>
+                  <input value={departmentName} onChange={e => setDepartmentName(e.target.value)} placeholder="Designation name" />
+                  <button type="button" onClick={addDepartment}>Add Designation</button>
                 </div>
 
                 <div className="control-panel wide">
-                  <h3>Current Projects</h3>
+                  <h3>Current Project/Departments</h3>
                   <div className="project-list">
                     {Object.entries(orgOptions).sort(([a], [b]) => a.localeCompare(b)).map(([project, departments]) => (
                       <details key={project}>
-                        <summary>{project} <span>{departments.length} departments</span></summary>
+                        <summary>{project} <span>{departments.length} designations</span></summary>
                         <div>{departments.map(dept => <span key={dept}>{dept}</span>)}</div>
                       </details>
                     ))}

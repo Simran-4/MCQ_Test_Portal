@@ -28,6 +28,18 @@ function fitFontSize(text, base, min, thresholds = []) {
   return matched ? Math.max(min, matched.size) : base;
 }
 
+function fittedCanvasFont(ctx, text, { weight = 700, size, minSize, family, maxWidth }) {
+  let nextSize = size;
+  do {
+    ctx.font = `${weight} ${nextSize}px ${family}`;
+    if (ctx.measureText(String(text || "")).width <= maxWidth || nextSize <= minSize) {
+      return nextSize;
+    }
+    nextSize -= 2;
+  } while (nextSize >= minSize);
+  return minSize;
+}
+
 function basePath() {
   return import.meta.env.BASE_URL || "/";
 }
@@ -577,44 +589,68 @@ async function tryTemplateCertificatePDF(data, language) {
     const isMarathi = language === "marathi";
     const bg = "#fffdf6";
     const scale = width / 1600;
-    const testFontPx = fitFontSize(data.testName, 80, 48, [
-      { length: 42, size: 48 },
-      { length: 30, size: 58 },
-      { length: 22, size: 68 },
-    ]);
-    const nameFontPx = fitFontSize(data.candidateName, isMarathi ? 94 : 82, 52, [
-      { length: 45, size: 52 },
-      { length: 34, size: 64 },
-      { length: 24, size: 74 },
-    ]);
+    const headingFamily = `"Noto Sans Devanagari", "Kohinoor Devanagari", Arial, sans-serif`;
+    const serifFamily = `"Noto Sans Devanagari", "Kohinoor Devanagari", Georgia, "Times New Roman", serif`;
+    const testName = `[${data.testName}]`;
+    const displayName = isMarathi ? data.candidateName : data.candidateName.toUpperCase();
 
     ctx.fillStyle = bg;
-    ctx.fillRect(mmX(74), mmY(32), mmX(150), mmY(20));
-    ctx.fillRect(mmX(23), mmY(isMarathi ? 72 : 73), mmX(251), mmY(isMarathi ? 26 : 20));
+    ctx.fillRect(mmX(80), mmY(31), mmX(137), mmY(22));
+    ctx.fillRect(mmX(24), mmY(isMarathi ? 72 : 73), mmX(249), mmY(isMarathi ? 26 : 20));
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#ef59b5";
-    ctx.font = `900 ${testFontPx * scale}px Georgia, "Times New Roman", serif`;
-    ctx.fillText(`[${data.testName}]`, mmX(148.5), mmY(43), mmX(145));
+    const topTitleSize = fittedCanvasFont(ctx, testName, {
+      weight: 900,
+      size: 58 * scale,
+      minSize: 28 * scale,
+      family: headingFamily,
+      maxWidth: mmX(120),
+    });
+    ctx.font = `900 ${topTitleSize}px ${headingFamily}`;
+    ctx.fillText(testName, mmX(148.5), mmY(42.5));
 
     ctx.fillStyle = "#b40428";
-    ctx.font = `900 ${nameFontPx * scale}px "Noto Sans Devanagari", "Kohinoor Devanagari", Arial, sans-serif`;
-    ctx.fillText(isMarathi ? data.candidateName : data.candidateName.toUpperCase(), mmX(148.5), mmY(isMarathi ? 86 : 84), mmX(245));
+    const candidateSize = fittedCanvasFont(ctx, displayName, {
+      weight: 900,
+      size: (isMarathi ? 82 : 78) * scale,
+      minSize: 42 * scale,
+      family: headingFamily,
+      maxWidth: mmX(230),
+    });
+    ctx.font = `900 ${candidateSize}px ${headingFamily}`;
+    ctx.fillText(displayName, mmX(148.5), mmY(isMarathi ? 86 : 84));
 
     ctx.fillStyle = "#230c08";
-    ctx.font = `400 ${(isMarathi ? 34 : 30) * scale}px "Noto Sans Devanagari", "Kohinoor Devanagari", Georgia, serif`;
+    const bodyTestName = `"${data.testName}"`;
     ctx.textAlign = "left";
     if (isMarathi) {
       ctx.fillStyle = bg;
-      ctx.fillRect(mmX(181), mmY(102), mmX(42), mmY(8));
+      ctx.fillRect(mmX(181), mmY(101), mmX(55), mmY(10));
       ctx.fillStyle = "#230c08";
-      ctx.fillText(`"${data.testName}"`, mmX(183), mmY(106), mmX(40));
+      const bodySize = fittedCanvasFont(ctx, bodyTestName, {
+        weight: 400,
+        size: 24 * scale,
+        minSize: 13 * scale,
+        family: serifFamily,
+        maxWidth: mmX(52),
+      });
+      ctx.font = `400 ${bodySize}px ${serifFamily}`;
+      ctx.fillText(bodyTestName, mmX(183), mmY(106));
     } else {
       ctx.fillStyle = bg;
-      ctx.fillRect(mmX(208), mmY(96), mmX(48), mmY(7));
+      ctx.fillRect(mmX(208), mmY(95), mmX(52), mmY(9));
       ctx.fillStyle = "#230c08";
-      ctx.fillText(`"${data.testName}"`, mmX(211), mmY(99.5), mmX(42));
+      const bodySize = fittedCanvasFont(ctx, bodyTestName, {
+        weight: 400,
+        size: 22 * scale,
+        minSize: 12 * scale,
+        family: serifFamily,
+        maxWidth: mmX(48),
+      });
+      ctx.font = `400 ${bodySize}px ${serifFamily}`;
+      ctx.fillText(bodyTestName, mmX(211), mmY(99.5));
     }
 
     doc.addImage(canvas.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, 297, 210);
