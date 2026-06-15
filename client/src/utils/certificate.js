@@ -28,6 +28,10 @@ function fitFontSize(text, base, min, thresholds = []) {
   return matched ? Math.max(min, matched.size) : base;
 }
 
+function basePath() {
+  return import.meta.env.BASE_URL || "/";
+}
+
 export function certificateDataFromResult(result, fallbackSuite = {}) {
   const score = Number(result?.score || 0);
   const totalMarks = Number(result?.totalMarks || 0);
@@ -46,7 +50,26 @@ export function certificateDataFromResult(result, fallbackSuite = {}) {
 }
 
 function logoSrc() {
-  return `${import.meta.env.BASE_URL || "/"}Logo.png`;
+  return `${basePath()}Logo.png`;
+}
+
+function templateBaseName(language) {
+  return `certificate-${language === "marathi" ? "marathi" : "english"}`;
+}
+
+function templateSources(language) {
+  const name = templateBaseName(language);
+  return ["png", "jpg", "jpeg"].map(extension => `${basePath()}${name}.${extension}`);
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = `${src}${src.includes("?") ? "&" : "?"}v=${Date.now()}`;
+  });
 }
 
 function signatureBlock(language, signature, name, title) {
@@ -466,15 +489,21 @@ async function renderCertificateCanvas(data, language) {
   const { default: html2canvas } = await import("html2canvas");
   const wrapper = document.createElement("div");
   wrapper.style.position = "fixed";
-  wrapper.style.left = "-10000px";
+  wrapper.style.left = "0";
   wrapper.style.top = "0";
   wrapper.style.width = "1600px";
   wrapper.style.height = "1131px";
   wrapper.style.background = "#fff";
+  wrapper.style.pointerEvents = "none";
+  wrapper.style.zIndex = "-1";
+  wrapper.style.transform = "translateZ(0)";
   wrapper.innerHTML = `<style>${certificateStyles()}</style>${certificateMarkup(data, language)}`;
   document.body.appendChild(wrapper);
 
   try {
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
     await Promise.all(
       Array.from(wrapper.querySelectorAll("img")).map(img => (
         img.complete
@@ -490,16 +519,125 @@ async function renderCertificateCanvas(data, language) {
       scale: 2,
       useCORS: true,
       logging: false,
+      windowWidth: 1600,
+      windowHeight: 1131,
+      scrollX: 0,
+      scrollY: 0,
     });
   } finally {
     wrapper.remove();
   }
 }
 
+function canvasLooksBlank(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return false;
+  const sampleWidth = Math.min(canvas.width, 240);
+  const sampleHeight = Math.min(canvas.height, 160);
+  const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight).data;
+  let nonWhitePixels = 0;
+  for (let i = 0; i < imageData.length; i += 4) {
+    const r = imageData[i];
+    const g = imageData[i + 1];
+    const b = imageData[i + 2];
+    const a = imageData[i + 3];
+    if (a > 0 && (r < 245 || g < 245 || b < 245)) {
+      nonWhitePixels++;
+      if (nonWhitePixels > 20) return false;
+    }
+  }
+  return true;
+}
+
+async function tryTemplateCertificatePDF(data, language) {
+  try {
+    let image = null;
+    for (const source of templateSources(language)) {
+      try {
+        image = await loadImage(source);
+        break;
+      } catch {
+        image = null;
+      }
+    }
+    if (!image) return null;
+
+    const canvas = document.createElement("canvas");
+    const width = image.naturalWidth || 1600;
+    const height = image.naturalHeight || 1131;
+    const mmX = value => (value / 297) * width;
+    const mmY = value => (value / 210) * height;
+    const ctx = canvas.getContext("2d");
+    canvas.width = width;
+    canvas.height = height;
+    ctx.drawImage(image, 0, 0, width, height);
+
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+    const isMarathi = language === "marathi";
+    const bg = "#fffdf6";
+    const scale = width / 1600;
+    const testFontPx = fitFontSize(data.testName, 80, 48, [
+      { length: 42, size: 48 },
+      { length: 30, size: 58 },
+      { length: 22, size: 68 },
+    ]);
+    const nameFontPx = fitFontSize(data.candidateName, isMarathi ? 94 : 82, 52, [
+      { length: 45, size: 52 },
+      { length: 34, size: 64 },
+      { length: 24, size: 74 },
+    ]);
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(mmX(74), mmY(32), mmX(150), mmY(20));
+    ctx.fillRect(mmX(23), mmY(isMarathi ? 72 : 73), mmX(251), mmY(isMarathi ? 26 : 20));
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ef59b5";
+    ctx.font = `900 ${testFontPx * scale}px Georgia, "Times New Roman", serif`;
+    ctx.fillText(`[${data.testName}]`, mmX(148.5), mmY(43), mmX(145));
+
+    ctx.fillStyle = "#b40428";
+    ctx.font = `900 ${nameFontPx * scale}px "Noto Sans Devanagari", "Kohinoor Devanagari", Arial, sans-serif`;
+    ctx.fillText(isMarathi ? data.candidateName : data.candidateName.toUpperCase(), mmX(148.5), mmY(isMarathi ? 86 : 84), mmX(245));
+
+    ctx.fillStyle = "#230c08";
+    ctx.font = `400 ${(isMarathi ? 34 : 30) * scale}px "Noto Sans Devanagari", "Kohinoor Devanagari", Georgia, serif`;
+    ctx.textAlign = "left";
+    if (isMarathi) {
+      ctx.fillStyle = bg;
+      ctx.fillRect(mmX(181), mmY(102), mmX(42), mmY(8));
+      ctx.fillStyle = "#230c08";
+      ctx.fillText(`"${data.testName}"`, mmX(183), mmY(106), mmX(40));
+    } else {
+      ctx.fillStyle = bg;
+      ctx.fillRect(mmX(208), mmY(96), mmX(48), mmY(7));
+      ctx.fillStyle = "#230c08";
+      ctx.fillText(`"${data.testName}"`, mmX(211), mmY(99.5), mmX(42));
+    }
+
+    doc.addImage(canvas.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, 297, 210);
+    return doc;
+  } catch {
+    return null;
+  }
+}
+
 export async function downloadCertificatePDF(result, fallbackSuite = {}, language = "english") {
   const normalizedLanguage = language === "marathi" ? "marathi" : "english";
   const data = certificateDataFromResult(result, fallbackSuite);
+
+  const templateDoc = await tryTemplateCertificatePDF(data, normalizedLanguage);
+  if (templateDoc) {
+    templateDoc.save(`certificate_${cleanName(data.candidateName)}_${cleanName(data.testName)}_${normalizedLanguage}.pdf`);
+    return;
+  }
+
   const canvas = await renderCertificateCanvas(data, normalizedLanguage);
+  if (!canvas.width || !canvas.height || canvasLooksBlank(canvas)) {
+    throw new Error("Certificate preview could not be rendered. Please try again after refreshing the page.");
+  }
   const image = canvas.toDataURL("image/jpeg", 0.98);
 
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
