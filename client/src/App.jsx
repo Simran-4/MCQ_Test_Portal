@@ -10,7 +10,6 @@ import AddQuestion    from "./pages/AddQuestion";
 import ViewQuestions  from "./pages/ViewQuestions";
 import Test           from "./pages/Test";
 import ViewResults    from "./pages/ViewResults";
-import AdminSettings  from "./pages/AdminSettings";
 import SuperAdmin     from "./pages/SuperAdmin";
 import TestSuiteDetail from "./pages/TestSuiteDetail";
 import AdminSuiteResults from "./pages/AdminSuiteResults";
@@ -78,8 +77,7 @@ function App() {
         <Route path="/admin/results"              element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><AdminSuiteResults /></ProtectedRoute>} />
         <Route path="/admin-results/:suiteId"     element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><AdminSuiteResults /></ProtectedRoute>} />
 
-        {/* Settings & System */}
-        <Route path="/settings"                   element={<ProtectedRoute allowedRoles={["admin", "superadmin"]}><AdminSettings /></ProtectedRoute>} />
+        {/* System */}
         <Route path="/superadmin"                 element={<ProtectedRoute allowedRoles={["superadmin"]}><SuperAdmin /></ProtectedRoute>} />
 
         {/* ── Catch all ── */}

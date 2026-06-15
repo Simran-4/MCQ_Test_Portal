@@ -199,17 +199,16 @@ export default function StudentTest() {
       try {
         const headers = getAuthHeaders();
 
-        const [suiteRes, qRes, settingsRes] = await Promise.all([
+        const [suiteRes, qRes] = await Promise.all([
           axios.get(`${API}/api/test-suites/${suiteId}`, { headers }),
           axios.get(`${API}/api/questions/${suiteId}/random`, { headers }),
-          axios.get(`${API}/api/settings`),
         ]);
 
         setSuite(suiteRes.data);
         setQuestions(qRes.data);
 
-        const durationMins = settingsRes.data?.examDuration     || 30;
-        const passing      = suiteRes.data?.passingPercentage ?? settingsRes.data?.passingPercentage ?? 50;
+        const durationMins = Number(suiteRes.data?.duration) || 30;
+        const passing      = suiteRes.data?.passingPercentage ?? 50;
         setTimeLeft(durationMins * 60);
         setPassingPct(passing);
       } catch (err) {

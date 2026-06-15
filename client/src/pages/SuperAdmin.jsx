@@ -31,7 +31,6 @@ const ADMIN_RIGHTS = [
   { key: "canManageSuites", label: "Create / edit test suites", detail: "Can create, edit, activate, deactivate, and delete suites" },
   { key: "canManageQuestions", label: "Manage questions", detail: "Can add, import, edit, and delete questions" },
   { key: "canAssignTests", label: "Assign tests", detail: "Can assign test suites to candidates" },
-  { key: "canManageSettings", label: "Exam settings", detail: "Can change duration and global settings" },
   { key: "canBulkMail", label: "Mail candidates", detail: "Can prepare bulk emails and certificate emails" },
   { key: "canViewUsers", label: "View users", detail: "Can see candidate/admin lists within scope" },
 ];
@@ -652,7 +651,6 @@ function SuperAdmin() {
     if (activeNav === "administrators") return "Administrators";
     if (activeNav === "reports") return "Reports";
     if (activeNav === "management") return "Controls";
-    if (activeNav === "settings") return "Settings";
     return "User Management";
   };
 
@@ -702,13 +700,6 @@ function SuperAdmin() {
             onClick={() => { setActiveNav("management"); setSearch(""); }}
           >
             🧩 Controls
-          </button>
-          <button
-            type="button"
-            className={activeNav === "settings" ? "active" : ""}
-            onClick={() => { setActiveNav("settings"); setSearch(""); }}
-          >
-            ⚙️ Settings
           </button>
           <button type="button" onClick={logout}>
             🚪 Logout
@@ -817,30 +808,6 @@ function SuperAdmin() {
                 {filteredReports.length === 0 && <p className="empty-message">No reports found.</p>}
               </div>
             )}
-          </section>
-        )}
-
-        {activeNav === "settings" && (
-          <section className="card">
-            <div className="section-header">
-              <h2>⚙️ Settings</h2>
-            </div>
-            <div style={{ textAlign: "center", padding: "60px 0", color: "#888" }}>
-              <div style={{ fontSize: "60px", marginBottom: "20px" }}>⚙️</div>
-              <h3 style={{ fontSize: "22px", color: "#2d5d50", marginBottom: "10px" }}>Exam Settings</h3>
-              <p style={{ color: "#aaa", marginBottom: "24px" }}>Configure exam duration and question limits</p>
-              <button
-                onClick={() => navigate("/settings")}
-                style={{
-                  padding: "12px 30px",
-                  background: "linear-gradient(135deg, #1f4037, #2c7744)",
-                  color: "white", border: "none", borderRadius: "12px",
-                  fontSize: "16px", cursor: "pointer",
-                }}
-              >
-                Go to Exam Settings →
-              </button>
-            </div>
           </section>
         )}
 

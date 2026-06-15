@@ -272,7 +272,6 @@ export default function Dashboard() {
   const canManageSuites = canAdmin("canManageSuites", user);
   const canAssignTests = canAdmin("canAssignTests", user);
   const canBulkMail = canAdmin("canBulkMail", user);
-  const canManageSettings = canAdmin("canManageSettings", user);
 
   const fetchSuites = async () => {
     try {
@@ -591,9 +590,6 @@ export default function Dashboard() {
                 <button type="button" onClick={() => setActivePanel("assignments")}>
                   ♙ Assign Test Suites
                 </button>
-              )}
-              {canManageSettings && (
-                <button type="button" onClick={() => navigate("/settings")}>⚙ Exam Settings</button>
               )}
             </div>
           </div>

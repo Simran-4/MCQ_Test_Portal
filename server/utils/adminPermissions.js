@@ -4,7 +4,6 @@ const ADMIN_PERMISSION_DEFAULTS = {
   canManageSuites: true,
   canManageQuestions: true,
   canAssignTests: true,
-  canManageSettings: true,
   canBulkMail: true,
   canViewUsers: true,
 };
@@ -15,7 +14,6 @@ const ADMIN_PERMISSION_LABELS = [
   { key: "canManageSuites", label: "Create / edit test suites" },
   { key: "canManageQuestions", label: "Add / import / delete questions" },
   { key: "canAssignTests", label: "Assign tests to candidates" },
-  { key: "canManageSettings", label: "Change exam settings" },
   { key: "canBulkMail", label: "Send bulk mail" },
   { key: "canViewUsers", label: "See users" },
 ];

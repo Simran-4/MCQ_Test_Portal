@@ -17,7 +17,6 @@ export const ADMIN_PERMISSION_DEFAULTS = {
   canManageSuites: true,
   canManageQuestions: true,
   canAssignTests: true,
-  canManageSettings: true,
   canBulkMail: true,
   canViewUsers: true,
 };
