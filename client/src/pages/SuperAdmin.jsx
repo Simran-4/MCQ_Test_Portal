@@ -5,7 +5,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import "./superadmin.css";
-import { ADMIN_PERMISSION_DEFAULTS, getAuthHeaders } from "../utils/auth";
+import { ADMIN_PERMISSION_DEFAULTS, getAuthHeaders, getCurrentUser } from "../utils/auth";
 import BulkMailPanel from "../components/BulkMailPanel";
 import { apiProjectsToMap, defaultOrgOptions, mergeOrgOptions, readLocalOrgOptions, writeLocalOrgOptions } from "../utils/orgOptions";
 
@@ -254,6 +254,7 @@ function saveReportsPDF(results, suitesById, reportType) {
 
 function SuperAdmin() {
   const navigate = useNavigate();
+  const currentUser = getCurrentUser();
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(emptyStats);
   const [search, setSearch] = useState("");
@@ -533,6 +534,38 @@ function SuperAdmin() {
       alert(err.response?.data?.message || "Unable to reset password. Railway backend may need redeploy.");
     } finally {
       setResetSaving(false);
+    }
+  };
+
+  const deleteUserAccount = async (targetUser) => {
+    if (!targetUser?._id) return;
+    if (targetUser._id === currentUser?._id) {
+      return alert("You cannot delete your own account.");
+    }
+
+    const contact = targetUser.email || targetUser.mobile || targetUser.username || "no contact";
+    const confirmation = window.prompt(
+      `Delete user ${targetUser.name || "this user"} (${contact})?\n\nThis removes their login account. Type DELETE to confirm.`
+    );
+    if (confirmation !== "DELETE") return;
+
+    try {
+      const res = await axios.delete(`${API_URL}/superadmin/users/${targetUser._id}`, {
+        headers: getAuthHeaders(),
+      });
+      setUsers(prev => prev.filter(user => user._id !== targetUser._id));
+      if (assignUserId === targetUser._id) setAssignUserId("");
+      if (rightsUserId === targetUser._id) {
+        setRightsUserId("");
+        setRightsForm(normalizeRights());
+      }
+      if (resetUser?._id === targetUser._id) {
+        setResetUser(null);
+        setResetPassword("");
+      }
+      alert(res.data?.message || "User deleted successfully.");
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to delete user.");
     }
   };
 
@@ -1123,13 +1156,24 @@ function SuperAdmin() {
                         </label>
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="small-action-btn"
-                          onClick={() => openResetPassword(user)}
-                        >
-                          Reset Password
-                        </button>
+                        <div className="user-actions">
+                          <button
+                            type="button"
+                            className="small-action-btn"
+                            onClick={() => openResetPassword(user)}
+                          >
+                            Reset Password
+                          </button>
+                          <button
+                            type="button"
+                            className="small-action-btn danger"
+                            onClick={() => deleteUserAccount(user)}
+                            disabled={user._id === currentUser?._id}
+                            title={user._id === currentUser?._id ? "You cannot delete your own account" : "Delete user"}
+                          >
+                            Delete User
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -346,6 +346,38 @@ router.put("/superadmin/users/:id/password", authMiddleware, requireSuperAdmin, 
     }
 });
 
+// ── DELETE USER ACCOUNT ──────────────────────────────────────
+router.delete("/superadmin/users/:id", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        if (req.user.id === req.params.id) {
+            return res.status(400).json({ message: "You cannot delete your own account" });
+        }
+
+        const user = await User.findById(req.params.id).select("_id name role");
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (user.role === "superadmin") {
+            const otherSuperAdmins = await User.countDocuments({
+                role: "superadmin",
+                _id: { $ne: user._id },
+            });
+            if (otherSuperAdmins === 0) {
+                return res.status(400).json({ message: "At least one super admin account must remain" });
+            }
+        }
+
+        await User.findByIdAndDelete(user._id);
+        res.json({
+            message: "User deleted successfully",
+            deletedUserId: user._id,
+        });
+    } catch (err) {
+        res.status(500).json({ message: "Error deleting user" });
+    }
+});
+
 // ── ADMIN USER LIST FOR MAIL / ASSIGNMENT ─────────────────────
 router.get("/users", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
     try {

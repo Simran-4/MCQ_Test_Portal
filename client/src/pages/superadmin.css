@@ -693,9 +693,35 @@ tbody tr:last-child td {
   white-space: nowrap;
 }
 
+.user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .small-action-btn:hover {
   background: var(--admin-primary-light);
   border-color: var(--admin-primary);
+}
+
+.small-action-btn.danger {
+  border-color: #fecaca;
+  color: #b91c1c;
+  background: #fff7f7;
+}
+
+.small-action-btn.danger:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+.small-action-btn:disabled,
+.small-action-btn:disabled:hover {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #6b7280;
 }
 
 .modal-backdrop {
