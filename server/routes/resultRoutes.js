@@ -101,6 +101,40 @@ function andQuery(base, extra) {
   return { $and: clauses };
 }
 
+async function userResultFilter(userId) {
+  const user = await User.findById(userId).select("name username email mobile");
+  if (!user) return { _id: null };
+  const tokens = [user.email, user.mobile, user.username, user.name].filter(Boolean);
+  if (tokens.length === 0) return { _id: null };
+  return {
+    $or: tokens.flatMap(token => {
+      const regex = new RegExp(String(token).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      return [
+        { userName: regex },
+        { userEmail: regex },
+        { CandidateName: regex },
+        { CandidateEmail: regex },
+      ];
+    }),
+  };
+}
+
+function dateRangeQuery(fromDate, toDate) {
+  const submittedAt = {};
+  if (fromDate) {
+    const start = new Date(fromDate);
+    if (!Number.isNaN(start.getTime())) submittedAt.$gte = start;
+  }
+  if (toDate) {
+    const end = new Date(toDate);
+    if (!Number.isNaN(end.getTime())) {
+      end.setHours(23, 59, 59, 999);
+      submittedAt.$lte = end;
+    }
+  }
+  return Object.keys(submittedAt).length ? { submittedAt } : {};
+}
+
 // ══════════════════════════════════════════════════════════════
 // POST /api/results
 // Full graded submission logic
@@ -357,6 +391,35 @@ router.get("/projects", authMiddleware, requireAdminOrSuperAdmin, async (req, re
     res.json(projects.filter(Boolean));
   } catch (err) {
     res.status(500).json({ message: "Error Fetching Projects" });
+  }
+});
+
+// Delete results for one suite, optionally filtered by date range and user.
+router.delete("/suite/:suiteId", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
+  try {
+    const requester = await getRequester(req.user.id);
+    if (requester?.role === "admin" && !hasAdminPermission(requester, "canManageSuites")) {
+      return res.status(403).json({ message: "Result deletion access denied" });
+    }
+
+    const { fromDate, toDate, userId } = req.body || {};
+    let query = andQuery(
+      { suiteId: req.params.suiteId },
+      requester?.role === "admin" ? scopedResultQuery(requester) : {}
+    );
+    query = andQuery(query, dateRangeQuery(fromDate, toDate));
+    if (userId) {
+      query = andQuery(query, await userResultFilter(userId));
+    }
+
+    const deletion = await Result.deleteMany(query);
+    res.json({
+      message: "Results deleted successfully",
+      deletedCount: deletion.deletedCount || 0,
+    });
+  } catch (err) {
+    console.error("Result deletion error:", err);
+    res.status(500).json({ message: "Error deleting results" });
   }
 });
 

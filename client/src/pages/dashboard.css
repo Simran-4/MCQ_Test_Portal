@@ -836,6 +836,12 @@ body {
   color: var(--admin-red);
 }
 
+.admin-results-delete-btn {
+  border-color: #f1caca;
+  color: #9f1d1d;
+  background: #fffafa;
+}
+
 .admin-impact-card {
   min-height: 104px;
   display: flex;
@@ -971,6 +977,56 @@ body {
 .suite-modal-actions .admin-primary-btn,
 .suite-modal-actions .admin-secondary-btn {
   min-height: 42px;
+}
+
+.result-delete-modal {
+  width: min(560px, 100%);
+}
+
+.result-delete-note {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.result-delete-note strong {
+  color: var(--admin-green-dark);
+}
+
+.result-delete-count {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #f1caca;
+  border-radius: 10px;
+  background: #fff7f7;
+  color: #7f1d1d;
+}
+
+.result-delete-count strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.result-delete-count span {
+  color: #7a4b4b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.result-delete-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.result-delete-confirm {
+  min-height: 42px;
+  padding: 0 18px;
+  border-color: #f1caca;
+  background: #fff7f7;
 }
 
 /* Legacy classes used by older admin question pages. */

@@ -1,5 +1,5 @@
 // src/pages/Dashboard.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import jsPDF from "jspdf";
@@ -59,6 +59,10 @@ function matchesUserResult(result, user) {
     result.userName,
   ].filter(Boolean).join(" ").toLowerCase();
   return tokens.some(token => haystack.includes(token));
+}
+
+function resultSuiteId(result) {
+  return String(result.suiteId?._id || result.suiteId || "");
 }
 
 function formatDate(value) {
@@ -159,6 +163,84 @@ function SuiteModal({ suite, onClose, onSave }) {
   );
 }
 
+function DeleteResultsModal({ suite, users, resultCount, loading, onClose, onDelete }) {
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [userId, setUserId] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+
+  const filteredUsers = users.filter(item =>
+    userLabel(item).toLowerCase().includes(userSearch.toLowerCase()) ||
+    (item.project || "").toLowerCase().includes(userSearch.toLowerCase()) ||
+    (item.designation || "").toLowerCase().includes(userSearch.toLowerCase())
+  );
+  const selectedUser = users.find(item => item._id === userId);
+
+  const handleDelete = () => {
+    onDelete({
+      suiteId: suite._id,
+      suiteName: suite.name,
+      fromDate,
+      toDate,
+      userId,
+      userLabel: selectedUser ? userLabel(selectedUser) : "",
+    });
+  };
+
+  return (
+    <div className="suite-modal-backdrop">
+      <div className="suite-modal result-delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-results-title">
+        <h2 id="delete-results-title">Delete Results</h2>
+        <p className="result-delete-note">
+          Delete submitted results for <strong>{suite.name}</strong>. Leave filters empty to delete all results for this test suite.
+        </p>
+
+        <div className="result-delete-count">
+          <strong>{resultCount}</strong>
+          <span>result(s) currently loaded for this suite</span>
+        </div>
+
+        <div className="result-delete-grid">
+          <label>
+            From date
+            <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
+          </label>
+          <label>
+            To date
+            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
+          </label>
+        </div>
+
+        <label>
+          Search user
+          <input
+            value={userSearch}
+            onChange={e => setUserSearch(e.target.value)}
+            placeholder="Search by name, email, mobile, username..."
+          />
+        </label>
+
+        <label>
+          Specific user
+          <select value={userId} onChange={e => setUserId(e.target.value)}>
+            <option value="">All users</option>
+            {filteredUsers.slice(0, 80).map(item => (
+              <option key={item._id} value={item._id}>{userLabel(item)}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="suite-modal-actions">
+          <button type="button" className="admin-secondary-btn" onClick={onClose} disabled={loading}>Cancel</button>
+          <button type="button" className="admin-delete-btn result-delete-confirm" onClick={handleDelete} disabled={loading}>
+            {loading ? "Deleting..." : "Delete Results"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [suites, setSuites] = useState([]);
@@ -175,6 +257,8 @@ export default function Dashboard() {
   const [reportSearch, setReportSearch] = useState("");
   const [reportUserId, setReportUserId] = useState("");
   const [activePanel, setActivePanel] = useState("dashboard");
+  const [deleteResultsSuite, setDeleteResultsSuite] = useState(null);
+  const [deletingResults, setDeletingResults] = useState(false);
 
   const user = useMemo(() => {
     try {
@@ -207,27 +291,25 @@ export default function Dashboard() {
     fetchSuites();
   }, []);
 
+  const fetchAdminData = useCallback(async () => {
+    try {
+      const headers = getAuthHeaders();
+      const [usersRes, resultsRes] = await Promise.all([
+        axios.get(`${API}/api/auth/users`, { headers }),
+        canViewReports
+          ? axios.get(`${API}/api/results/all`, { headers })
+          : Promise.resolve({ data: [] }),
+      ]);
+      setUsers(usersRes.data);
+      setReportResults(resultsRes.data);
+    } catch (err) {
+      console.error("Failed to fetch admin data:", err);
+    }
+  }, [canViewReports]);
+
   useEffect(() => {
-    let ignore = false;
-    const fetchAdminData = async () => {
-      try {
-        const headers = getAuthHeaders();
-        const [usersRes, resultsRes] = await Promise.all([
-          axios.get(`${API}/api/auth/users`, { headers }),
-          canViewReports
-            ? axios.get(`${API}/api/results/all`, { headers })
-            : Promise.resolve({ data: [] }),
-        ]);
-        if (ignore) return;
-        setUsers(usersRes.data);
-        setReportResults(resultsRes.data);
-      } catch (err) {
-        console.error("Failed to fetch admin data:", err);
-      }
-    };
     fetchAdminData();
-    return () => { ignore = true; };
-  }, []);
+  }, [fetchAdminData]);
 
   const totalQuestions = suites.reduce((sum, suite) => sum + (suite.questionCount ?? 0), 0);
   const activeSuites = suites.filter(suite => suite.status === "active").length;
@@ -248,6 +330,9 @@ export default function Dashboard() {
     ? reportResults.filter(result => matchesUserResult(result, selectedReportUser))
     : [];
 
+  const suiteResultCount = (suiteId) =>
+    reportResults.filter(result => resultSuiteId(result) === String(suiteId)).length;
+
   const handleModalSave = (suite, action) => {
     if (action === "create") {
       setSuites(prev => [{ ...suite, questionCount: 0 }, ...prev]);
@@ -267,6 +352,37 @@ export default function Dashboard() {
       setSuites(prev => prev.filter(suite => suite._id !== suiteId));
     } catch (err) {
       alert("Delete failed: " + (err.response?.data?.message || "Check your permissions."));
+    }
+  };
+
+  const handleDeleteSuiteResults = async ({ suiteId, suiteName, fromDate, toDate, userId, userLabel: selectedUserLabel }) => {
+    if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
+      alert("From date cannot be after To date.");
+      return;
+    }
+
+    const filters = [
+      fromDate ? `from ${formatDate(fromDate)}` : "",
+      toDate ? `to ${formatDate(toDate)}` : "",
+      selectedUserLabel ? `for ${selectedUserLabel}` : "",
+    ].filter(Boolean).join(", ");
+    const target = filters || "all dates and all users";
+    const confirmation = `Delete results for "${suiteName}" (${target})?\n\nThis cannot be undone. Type DELETE to confirm.`;
+    if (window.prompt(confirmation) !== "DELETE") return;
+
+    setDeletingResults(true);
+    try {
+      const res = await axios.delete(`${API}/api/results/suite/${suiteId}`, {
+        headers: getAuthHeaders(),
+        data: { fromDate, toDate, userId },
+      });
+      alert(`${res.data?.deletedCount || 0} result(s) deleted.`);
+      setDeleteResultsSuite(null);
+      await fetchAdminData();
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to delete results.");
+    } finally {
+      setDeletingResults(false);
     }
   };
 
@@ -719,6 +835,9 @@ export default function Dashboard() {
                         <button type="button" className="admin-row-btn" onClick={() => { setEditingSuite(suite); setShowModal(true); }}>
                           ✎ Edit
                         </button>
+                        <button type="button" className="admin-row-btn admin-results-delete-btn" onClick={() => setDeleteResultsSuite(suite)}>
+                          ▧ Delete Results
+                        </button>
                         <button type="button" className="admin-delete-btn" onClick={(e) => handleDelete(suite._id, suite.name, e)}>
                           ⌫ Delete
                         </button>
@@ -750,6 +869,17 @@ export default function Dashboard() {
           suite={editingSuite}
           onClose={() => setShowModal(false)}
           onSave={handleModalSave}
+        />
+      )}
+
+      {deleteResultsSuite && (
+        <DeleteResultsModal
+          suite={deleteResultsSuite}
+          users={users}
+          resultCount={suiteResultCount(deleteResultsSuite._id)}
+          loading={deletingResults}
+          onClose={() => setDeleteResultsSuite(null)}
+          onDelete={handleDeleteSuiteResults}
         />
       )}
     </div>
