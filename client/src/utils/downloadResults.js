@@ -663,9 +663,11 @@ async function renderHtmlToCanvas(html) {
   const { default: html2canvas } = await import("html2canvas");
   const wrapper = document.createElement("div");
   wrapper.style.position = "fixed";
-  wrapper.style.left = "-10000px";
+  wrapper.style.left = "0";
   wrapper.style.top = "0";
   wrapper.style.width = "1120px";
+  wrapper.style.background = "#f8f7f4";
+  wrapper.style.overflow = "visible";
   wrapper.style.pointerEvents = "none";
   wrapper.style.zIndex = "-1";
   wrapper.innerHTML = html;
@@ -673,6 +675,7 @@ async function renderHtmlToCanvas(html) {
 
   try {
     if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     await Promise.all(
       Array.from(wrapper.querySelectorAll("img")).map(img => (
         img.complete
@@ -689,22 +692,59 @@ async function renderHtmlToCanvas(html) {
       scale: 1.6,
       useCORS: true,
       logging: false,
-      windowWidth: 1120,
-      scrollX: 0,
-      scrollY: 0,
-    });
+        windowWidth: 1120,
+        windowHeight: Math.ceil(wrapper.firstElementChild?.scrollHeight || wrapper.scrollHeight || 1200),
+        scrollX: 0,
+        scrollY: 0,
+      });
   } finally {
     wrapper.remove();
   }
 }
 
-function addCanvasPagesToPdf(canvas, suite, reportType) {
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+function splitDescriptiveReportHtml(html) {
+  const template = document.createElement("template");
+  template.innerHTML = html.trim();
+  const style = template.content.querySelector("style")?.outerHTML || "";
+  const report = template.content.querySelector(".descriptive-report");
+  if (!report) return [html];
+
+  const sectionOverride = `
+    <style>
+      .descriptive-report { min-height: auto; }
+      .candidate-section { page-break-before: auto !important; break-before: auto !important; margin-bottom: 0; }
+      .report-block { margin-bottom: 0; }
+    </style>
+  `;
+  const introSelectors = [".report-header", ".metric-grid", ".report-block"];
+  const introHtml = introSelectors
+    .map(selector => report.querySelector(selector)?.outerHTML || "")
+    .join("");
+  const candidateSections = Array.from(report.querySelectorAll(".candidate-section"));
+  const chunks = [];
+
+  if (introHtml.trim()) {
+    chunks.push(`${style}${sectionOverride}<div class="descriptive-report">${introHtml}</div>`);
+  }
+
+  candidateSections.forEach(section => {
+    chunks.push(`${style}${sectionOverride}<div class="descriptive-report">${section.outerHTML}</div>`);
+  });
+
+  return chunks.length > 0 ? chunks : [html];
+}
+
+function appendCanvasPagesToPdf(doc, canvas, addFirstPage = false) {
+  if (!canvas?.width || !canvas?.height) {
+    throw new Error("Unable to render descriptive report content. Please try again.");
+  }
+
   const pageWidthMm = doc.internal.pageSize.getWidth();
   const pageHeightMm = doc.internal.pageSize.getHeight();
   const sliceHeight = Math.floor(canvas.width * (pageHeightMm / pageWidthMm));
   const pageCanvas = document.createElement("canvas");
   const pageCtx = pageCanvas.getContext("2d");
+  if (!pageCtx) throw new Error("Unable to prepare PDF page canvas.");
   pageCanvas.width = canvas.width;
 
   let page = 0;
@@ -724,18 +764,26 @@ function addCanvasPagesToPdf(canvas, suite, reportType) {
       currentSliceHeight
     );
 
-    if (page > 0) doc.addPage();
+    if (addFirstPage || page > 0) doc.addPage();
     const imageHeightMm = (currentSliceHeight / canvas.width) * pageWidthMm;
     doc.addImage(pageCanvas.toDataURL("image/png"), "PNG", 0, 0, pageWidthMm, imageHeightMm);
     page += 1;
   }
 
-  savePdf(doc, suite, reportType);
+  return page > 0;
 }
 
 async function downloadDescriptivePdfAsImages(suite, stats, logoDataUrl) {
-  const canvas = await renderHtmlToCanvas(buildDescriptiveReportHtml(stats, logoDataUrl));
-  addCanvasPagesToPdf(canvas, suite, "descriptive");
+  const chunks = splitDescriptiveReportHtml(buildDescriptiveReportHtml(stats, logoDataUrl));
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  let hasContent = false;
+
+  for (const chunk of chunks) {
+    const canvas = await renderHtmlToCanvas(chunk);
+    hasContent = appendCanvasPagesToPdf(doc, canvas, hasContent) || hasContent;
+  }
+
+  savePdf(doc, suite, "descriptive");
 }
 
 function buildWorkbookSummary(wb, stats) {
