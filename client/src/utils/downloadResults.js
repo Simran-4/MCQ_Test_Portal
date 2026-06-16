@@ -63,6 +63,15 @@ function safeName(name) {
   return String(name || "results").replace(/[^a-z0-9]/gi, "_").toLowerCase();
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function candidateName(r) {
   return r.CandidateName || r.userName || "Unknown";
 }
@@ -297,6 +306,438 @@ function savePdf(doc, suite, reportType) {
   doc.save(`${reportType}_results_${safeName(suite?.name)}_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
+function gradeClass(grade) {
+  return String(grade || "").toLowerCase();
+}
+
+function buildDescriptiveReportHtml(stats, logoDataUrl) {
+  const generatedDate = new Date().toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+  const summaryRows = stats.results.map((r, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td><strong>${escapeHtml(candidateName(r))}</strong><br><span>${escapeHtml(candidateEmail(r))}</span></td>
+      <td>${escapeHtml(r.project || "-")}<br><span>${escapeHtml(r.designation || "-")}</span></td>
+      <td><strong>${escapeHtml(`${r.score ?? 0}/${r.totalMarks ?? 0}`)}</strong></td>
+      <td class="pct pct-${r.pct >= 75 ? "high" : r.pct >= 50 ? "moderate" : "low"}">${r.pct}%</td>
+      <td>${escapeHtml(resultStatus(r, stats.suite))}</td>
+      <td>${categoryRowsForResult(r, stats.allCats).map(row => `
+        <div class="mini-cat">
+          <span>${escapeHtml(row.category)}</span>
+          <b>${row.correct}/${row.total} (${row.pct}%)</b>
+        </div>
+      `).join("")}</td>
+    </tr>
+  `).join("");
+
+  const candidateSections = stats.results.map((r, idx) => {
+    const categoryRows = categoryRowsForResult(r, stats.allCats).map(row => `
+      <tr>
+        <td>${escapeHtml(row.category)}</td>
+        <td>${row.correct}/${row.total}</td>
+        <td>${row.earned}/${row.marks}</td>
+        <td class="pct pct-${row.pct >= 75 ? "high" : row.pct >= 50 ? "moderate" : "low"}">${row.pct}%</td>
+        <td><span class="grade ${gradeClass(row.grade)}">${escapeHtml(row.grade)}</span></td>
+      </tr>
+    `).join("");
+
+    const questionRows = questionRowsForResult(r, stats.questions).map(row => `
+      <tr>
+        <td class="q-no">${row.number}</td>
+        <td class="q-text">${escapeHtml(row.question)}</td>
+        <td>${escapeHtml(row.categories)}</td>
+        <td>${escapeHtml(row.selected)}</td>
+        <td>${escapeHtml(row.correct)}</td>
+        <td>${escapeHtml(row.score)}</td>
+      </tr>
+    `).join("");
+
+    return `
+      <section class="candidate-section">
+        <div class="candidate-card">
+          <div>
+            <div class="candidate-index">Candidate ${idx + 1}</div>
+            <h2>${escapeHtml(candidateName(r))}</h2>
+            <p>${escapeHtml(candidateEmail(r))} • ${escapeHtml(r.project || "-")} • ${escapeHtml(r.designation || "-")}</p>
+          </div>
+          <div class="score-pill ${r.pct >= 75 ? "high" : r.pct >= 50 ? "moderate" : "low"}">
+            <strong>${r.pct}%</strong>
+            <span>${escapeHtml(`${r.score ?? 0}/${r.totalMarks ?? 0}`)}</span>
+          </div>
+        </div>
+
+        <h3>Category Breakdown</h3>
+        <table class="report-table compact">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Correct / Total</th>
+              <th>Marks</th>
+              <th>%</th>
+              <th>Level</th>
+            </tr>
+          </thead>
+          <tbody>${categoryRows}</tbody>
+        </table>
+
+        <h3>Question-wise Detail</h3>
+        <table class="report-table questions">
+          <thead>
+            <tr>
+              <th>Q</th>
+              <th>Question</th>
+              <th>Category</th>
+              <th>Selected</th>
+              <th>Correct Answer</th>
+              <th>Category Score</th>
+            </tr>
+          </thead>
+          <tbody>${questionRows}</tbody>
+        </table>
+      </section>
+    `;
+  }).join("");
+
+  return `
+    <style>
+      .descriptive-report {
+        width: 1120px;
+        box-sizing: border-box;
+        padding: 28px;
+        background: #f8f7f4;
+        color: #1b1f1d;
+        font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Mangal", "Arial Unicode MS", Arial, sans-serif;
+      }
+      .report-header {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 18px;
+        align-items: center;
+        background: #1a3d28;
+        color: white;
+        border-radius: 18px;
+        padding: 18px 22px;
+        margin-bottom: 18px;
+      }
+      .report-header img {
+        width: 62px;
+        height: 62px;
+        object-fit: contain;
+        background: white;
+        border-radius: 14px;
+        padding: 5px;
+      }
+      .report-header h1 {
+        margin: 0 0 5px;
+        font-size: 25px;
+        line-height: 1.15;
+      }
+      .report-header p,
+      .report-header span {
+        margin: 0;
+        font-size: 14px;
+        opacity: 0.9;
+      }
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .metric-card {
+        background: white;
+        border: 1px solid #dfe7e2;
+        border-radius: 14px;
+        padding: 14px 16px;
+      }
+      .metric-card span {
+        display: block;
+        color: #6b716f;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .metric-card strong {
+        display: block;
+        color: #1a3d28;
+        font-size: 27px;
+        margin-top: 6px;
+      }
+      .report-block,
+      .candidate-section {
+        background: white;
+        border: 1px solid #dfe7e2;
+        border-radius: 18px;
+        padding: 18px;
+        margin-bottom: 18px;
+        break-inside: avoid;
+      }
+      .candidate-section {
+        page-break-before: always;
+      }
+      .candidate-card {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: center;
+        background: #e8f2ec;
+        border-radius: 14px;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+      }
+      .candidate-index {
+        color: #4f6b59;
+        font-size: 12px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+      .candidate-card h2 {
+        margin: 3px 0;
+        color: #1a3d28;
+        font-size: 22px;
+      }
+      .candidate-card p {
+        margin: 0;
+        color: #56625c;
+        font-size: 13px;
+      }
+      .score-pill {
+        min-width: 92px;
+        border-radius: 14px;
+        padding: 10px 12px;
+        text-align: center;
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .score-pill.high {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .score-pill.low {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      .score-pill strong,
+      .score-pill span {
+        display: block;
+      }
+      .score-pill strong {
+        font-size: 24px;
+      }
+      h2, h3 {
+        color: #1a3d28;
+      }
+      h3 {
+        margin: 14px 0 8px;
+        font-size: 16px;
+      }
+      .report-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 12px;
+      }
+      .report-table th {
+        background: #1a3d28;
+        color: white;
+        padding: 9px 8px;
+        text-align: left;
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+      .report-table td {
+        border: 1px solid #e2e8e4;
+        padding: 8px;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+        line-height: 1.45;
+      }
+      .report-table tbody tr:nth-child(even) td {
+        background: #fbfaf8;
+      }
+      .summary-table th:nth-child(1),
+      .summary-table td:nth-child(1),
+      .report-table .q-no {
+        text-align: center;
+        width: 36px;
+      }
+      .summary-table th:nth-child(2) { width: 170px; }
+      .summary-table th:nth-child(3) { width: 165px; }
+      .summary-table th:nth-child(4) { width: 80px; }
+      .summary-table th:nth-child(5) { width: 62px; }
+      .questions th:nth-child(1) { width: 34px; }
+      .questions th:nth-child(2) { width: 310px; }
+      .questions th:nth-child(3) { width: 130px; }
+      .questions th:nth-child(4) { width: 150px; }
+      .questions th:nth-child(5) { width: 230px; }
+      .questions th:nth-child(6) { width: 200px; }
+      .q-text {
+        font-weight: 800;
+        color: #123323;
+      }
+      .report-table span,
+      .mini-cat span {
+        color: #69736f;
+        font-size: 11px;
+      }
+      .pct {
+        font-weight: 900;
+      }
+      .pct-high { color: #166534; }
+      .pct-moderate { color: #92400e; }
+      .pct-low { color: #991b1b; }
+      .grade {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-weight: 900;
+        font-size: 11px;
+      }
+      .grade.high {
+        color: #166534;
+        background: #dcfce7;
+      }
+      .grade.moderate {
+        color: #92400e;
+        background: #fef3c7;
+      }
+      .grade.low {
+        color: #991b1b;
+        background: #fee2e2;
+      }
+      .mini-cat {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid #eef2ef;
+        padding: 3px 0;
+      }
+      .mini-cat:last-child {
+        border-bottom: 0;
+      }
+    </style>
+    <div class="descriptive-report">
+      <header class="report-header">
+        ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Snehalaya logo" />` : ""}
+        <div>
+          <h1>Descriptive Results Report</h1>
+          <p>${escapeHtml(stats.suite?.name || "Test Suite")}</p>
+        </div>
+        <span>${escapeHtml(generatedDate)}</span>
+      </header>
+
+      <section class="metric-grid">
+        <div class="metric-card"><span>Candidates</span><strong>${stats.results.length}</strong></div>
+        <div class="metric-card"><span>Questions</span><strong>${stats.questions.length}</strong></div>
+        <div class="metric-card"><span>Total Marks</span><strong>${stats.totalMarksAll}</strong></div>
+        <div class="metric-card"><span>Categories</span><strong>${stats.allCats.length}</strong></div>
+      </section>
+
+      <section class="report-block">
+        <h2>Candidate Summary</h2>
+        <table class="report-table summary-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Candidate</th>
+              <th>Project / Designation</th>
+              <th>Score</th>
+              <th>%</th>
+              <th>Result</th>
+              <th>Category Summary</th>
+            </tr>
+          </thead>
+          <tbody>${summaryRows}</tbody>
+        </table>
+      </section>
+
+      ${candidateSections}
+    </div>
+  `;
+}
+
+async function renderHtmlToCanvas(html) {
+  const { default: html2canvas } = await import("html2canvas");
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "fixed";
+  wrapper.style.left = "-10000px";
+  wrapper.style.top = "0";
+  wrapper.style.width = "1120px";
+  wrapper.style.pointerEvents = "none";
+  wrapper.style.zIndex = "-1";
+  wrapper.innerHTML = html;
+  document.body.appendChild(wrapper);
+
+  try {
+    if (document.fonts?.ready) await document.fonts.ready;
+    await Promise.all(
+      Array.from(wrapper.querySelectorAll("img")).map(img => (
+        img.complete
+          ? Promise.resolve()
+          : new Promise(resolve => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            })
+      ))
+    );
+
+    return await html2canvas(wrapper.firstElementChild, {
+      backgroundColor: "#f8f7f4",
+      scale: 1.6,
+      useCORS: true,
+      logging: false,
+      windowWidth: 1120,
+      scrollX: 0,
+      scrollY: 0,
+    });
+  } finally {
+    wrapper.remove();
+  }
+}
+
+function addCanvasPagesToPdf(canvas, suite, reportType) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidthMm = doc.internal.pageSize.getWidth();
+  const pageHeightMm = doc.internal.pageSize.getHeight();
+  const sliceHeight = Math.floor(canvas.width * (pageHeightMm / pageWidthMm));
+  const pageCanvas = document.createElement("canvas");
+  const pageCtx = pageCanvas.getContext("2d");
+  pageCanvas.width = canvas.width;
+
+  let page = 0;
+  for (let sourceY = 0; sourceY < canvas.height; sourceY += sliceHeight) {
+    const currentSliceHeight = Math.min(sliceHeight, canvas.height - sourceY);
+    pageCanvas.height = currentSliceHeight;
+    pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+    pageCtx.drawImage(
+      canvas,
+      0,
+      sourceY,
+      canvas.width,
+      currentSliceHeight,
+      0,
+      0,
+      pageCanvas.width,
+      currentSliceHeight
+    );
+
+    if (page > 0) doc.addPage();
+    const imageHeightMm = (currentSliceHeight / canvas.width) * pageWidthMm;
+    doc.addImage(pageCanvas.toDataURL("image/png"), "PNG", 0, 0, pageWidthMm, imageHeightMm);
+    page += 1;
+  }
+
+  savePdf(doc, suite, reportType);
+}
+
+async function downloadDescriptivePdfAsImages(suite, stats, logoDataUrl) {
+  const canvas = await renderHtmlToCanvas(buildDescriptiveReportHtml(stats, logoDataUrl));
+  addCanvasPagesToPdf(canvas, suite, "descriptive");
+}
+
 function buildWorkbookSummary(wb, stats) {
   const headers = [
     "#",
@@ -438,6 +879,11 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
   const reportTitle = reportType === "descriptive" ? "Descriptive Results Report" : "Summary Results Report";
   const stats = buildStats(suite, questions, results);
   const logoDataUrl = await loadImageAsDataUrl(`${window.location.origin}/Logo.png`);
+
+  if (reportType === "descriptive") {
+    await downloadDescriptivePdfAsImages(suite, stats, logoDataUrl);
+    return;
+  }
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
