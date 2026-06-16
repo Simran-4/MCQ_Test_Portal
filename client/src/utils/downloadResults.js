@@ -270,11 +270,12 @@ function drawMetricCards(doc, stats, y, pageWidth) {
   });
 }
 
-function addStyledTable(doc, config) {
+function addStyledTable(doc, config, fontName = "helvetica") {
+  const { styles: customStyles = {}, ...tableConfig } = config;
   autoTable(doc, {
     margin: { left: 14, right: 14 },
     styles: {
-      font: "helvetica",
+      font: fontName,
       fontSize: 7.5,
       cellPadding: 2.4,
       textColor: [30, 30, 30],
@@ -282,6 +283,7 @@ function addStyledTable(doc, config) {
       lineWidth: 0.2,
       overflow: "linebreak",
       valign: "middle",
+      ...customStyles,
     },
     headStyles: {
       fillColor: GREEN_DARK,
@@ -290,7 +292,7 @@ function addStyledTable(doc, config) {
       halign: "center",
     },
     alternateRowStyles: { fillColor: BG_SOFT },
-    ...config,
+    ...tableConfig,
   });
 }
 
@@ -299,6 +301,33 @@ function addPageNumbers(doc, pageWidth, pageHeight) {
   for (let page = 1; page <= totalPages; page++) {
     doc.setPage(page);
     drawFooter(doc, page, totalPages, pageWidth, pageHeight);
+  }
+}
+
+const DEVANAGARI_FONT_NAME = "NotoSansDevanagari";
+const DEVANAGARI_FONT_FILE = "NotoSansDevanagari-Regular.ttf";
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function addDevanagariFont(doc) {
+  try {
+    const res = await fetch(`${window.location.origin}/fonts/${DEVANAGARI_FONT_FILE}`);
+    if (!res.ok) throw new Error("Font file unavailable");
+    const fontBase64 = arrayBufferToBase64(await res.arrayBuffer());
+    doc.addFileToVFS(DEVANAGARI_FONT_FILE, fontBase64);
+    doc.addFont(DEVANAGARI_FONT_FILE, DEVANAGARI_FONT_NAME, "normal");
+    return DEVANAGARI_FONT_NAME;
+  } catch (err) {
+    console.warn("Unable to load Devanagari PDF font. Falling back to Helvetica.", err);
+    return "helvetica";
   }
 }
 
@@ -968,11 +997,16 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
   const logoDataUrl = await loadImageAsDataUrl(`${window.location.origin}/Logo.png`);
 
   if (reportType === "descriptive") {
-    await downloadDescriptivePdfAsImages(suite, stats, logoDataUrl);
-    return;
+    try {
+      await downloadDescriptivePdfAsImages(suite, stats, logoDataUrl);
+      return;
+    } catch (err) {
+      console.warn("Image-based descriptive PDF failed. Using text fallback.", err);
+    }
   }
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const tableFont = reportType === "descriptive" ? await addDevanagariFont(doc) : "helvetica";
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
@@ -1018,7 +1052,7 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
       if (data.column.index === 4) data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0], 10));
       if (data.column.index === 5) data.cell.styles.textColor = data.cell.text[0] === "Pass" ? [22, 101, 52] : [185, 28, 28];
     },
-  });
+  }, tableFont);
 
   if (reportType === "descriptive") {
     stats.results.forEach((r, idx) => {
@@ -1062,7 +1096,7 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
             data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0], 10));
           }
         },
-      });
+      }, tableFont);
 
       detailY = doc.lastAutoTable.finalY + 10;
       doc.setTextColor(...GREEN_DARK);
@@ -1091,7 +1125,7 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
           4: { cellWidth: 38 },
           5: { cellWidth: 40 },
         },
-      });
+      }, tableFont);
     });
   }
 
