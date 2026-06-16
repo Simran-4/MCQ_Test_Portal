@@ -662,14 +662,14 @@ function buildDescriptiveReportHtml(stats, logoDataUrl) {
 async function renderHtmlToCanvas(html) {
   const { default: html2canvas } = await import("html2canvas");
   const wrapper = document.createElement("div");
-  wrapper.style.position = "fixed";
+  wrapper.style.position = "absolute";
   wrapper.style.left = "0";
-  wrapper.style.top = "0";
+  wrapper.style.top = `${window.scrollY || 0}px`;
   wrapper.style.width = "1120px";
   wrapper.style.background = "#f8f7f4";
   wrapper.style.overflow = "visible";
   wrapper.style.pointerEvents = "none";
-  wrapper.style.zIndex = "-1";
+  wrapper.style.zIndex = "2147483647";
   wrapper.innerHTML = html;
   document.body.appendChild(wrapper);
 
@@ -736,7 +736,7 @@ function splitDescriptiveReportHtml(html) {
     const questionTable = section.querySelector(".report-table.questions");
     const questionHead = questionTable?.querySelector("thead")?.outerHTML || "";
     const questionRows = Array.from(questionTable?.querySelectorAll("tbody tr") || []);
-    const rowsPerChunk = 8;
+    const rowsPerChunk = 2;
 
     if (questionRows.length === 0) {
       chunks.push(`${style}${sectionOverride}<div class="descriptive-report">${section.outerHTML}</div>`);
