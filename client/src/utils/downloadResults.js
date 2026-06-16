@@ -689,14 +689,14 @@ async function renderHtmlToCanvas(html) {
 
     return await html2canvas(wrapper.firstElementChild, {
       backgroundColor: "#f8f7f4",
-      scale: 1.6,
+      scale: 1.15,
       useCORS: true,
       logging: false,
-        windowWidth: 1120,
-        windowHeight: Math.ceil(wrapper.firstElementChild?.scrollHeight || wrapper.scrollHeight || 1200),
-        scrollX: 0,
-        scrollY: 0,
-      });
+      windowWidth: 1120,
+      windowHeight: Math.ceil(wrapper.firstElementChild?.scrollHeight || wrapper.scrollHeight || 1200),
+      scrollX: 0,
+      scrollY: 0,
+    });
   } finally {
     wrapper.remove();
   }
@@ -728,7 +728,46 @@ function splitDescriptiveReportHtml(html) {
   }
 
   candidateSections.forEach(section => {
-    chunks.push(`${style}${sectionOverride}<div class="descriptive-report">${section.outerHTML}</div>`);
+    const candidateCard = section.querySelector(".candidate-card")?.outerHTML || "";
+    const headings = Array.from(section.querySelectorAll("h3"));
+    const categoryHeading = headings.find(heading => heading.textContent?.includes("Category"))?.outerHTML || "";
+    const questionHeading = headings.find(heading => heading.textContent?.includes("Question"))?.outerHTML || "";
+    const categoryTable = section.querySelector(".report-table.compact")?.outerHTML || "";
+    const questionTable = section.querySelector(".report-table.questions");
+    const questionHead = questionTable?.querySelector("thead")?.outerHTML || "";
+    const questionRows = Array.from(questionTable?.querySelectorAll("tbody tr") || []);
+    const rowsPerChunk = 8;
+
+    if (questionRows.length === 0) {
+      chunks.push(`${style}${sectionOverride}<div class="descriptive-report">${section.outerHTML}</div>`);
+      return;
+    }
+
+    for (let start = 0; start < questionRows.length; start += rowsPerChunk) {
+      const end = Math.min(start + rowsPerChunk, questionRows.length);
+      const rowsHtml = questionRows.slice(start, end).map(row => row.outerHTML).join("");
+      const includeSummary = start === 0;
+      const chunkLabel = questionRows.length > rowsPerChunk
+        ? `<div class="candidate-index">Questions ${start + 1}-${end} of ${questionRows.length}</div>`
+        : "";
+
+      chunks.push(`
+        ${style}
+        ${sectionOverride}
+        <div class="descriptive-report">
+          <section class="candidate-section">
+            ${candidateCard}
+            ${includeSummary ? `${categoryHeading}${categoryTable}` : ""}
+            ${questionHeading}
+            ${chunkLabel}
+            <table class="report-table questions">
+              ${questionHead}
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </section>
+        </div>
+      `);
+    }
   });
 
   return chunks.length > 0 ? chunks : [html];
