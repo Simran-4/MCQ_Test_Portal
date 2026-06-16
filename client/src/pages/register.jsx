@@ -26,6 +26,7 @@ function Register() {
   const [email,       setEmail]       = useState("");
   const [mobile,      setMobile]      = useState("");
   const [password,    setPassword]    = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [age,         setAge]         = useState("");
   const [gender,      setGender]      = useState("");
   const [project,     setProject]     = useState("");
@@ -130,6 +131,28 @@ function Register() {
     ...selectStyle,
     opacity: 0.62,
     cursor: "not-allowed",
+  };
+
+  const passwordInputStyle = {
+    ...inputStyle,
+    paddingRight: "44px",
+  };
+
+  const passwordToggleStyle = {
+    position: "absolute",
+    right: "8px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    width: "30px",
+    height: "30px",
+    border: "none",
+    borderRadius: "999px",
+    background: "rgba(255,255,255,0.18)",
+    color: WHITE,
+    cursor: "pointer",
+    display: "grid",
+    placeItems: "center",
+    fontSize: "15px",
   };
 
   return (
@@ -295,7 +318,23 @@ function Register() {
 
           <div>
             <label style={labelStyle}>Password *</label>
-            <input type="password" placeholder="Min 6 characters" style={inputStyle} value={password} onChange={(e) => setPassword(e.target.value)} />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Min 6 characters"
+                style={passwordInputStyle}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowPassword(prev => !prev)}
+                style={passwordToggleStyle}
+              >
+                {showPassword ? "🙈" : "👁"}
+              </button>
+            </div>
           </div>
 
           <p style={{ margin: "-2px 0 0", color: "rgba(255,255,255,0.66)", fontSize: "11px", lineHeight: 1.4 }}>

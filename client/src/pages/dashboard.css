@@ -196,9 +196,12 @@ body {
 }
 
 .admin-date-card {
-  min-height: 44px;
+  min-height: 54px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
   padding: 0 16px;
   border: 1px solid var(--admin-border);
   border-radius: 6px;
@@ -206,6 +209,12 @@ body {
   color: var(--admin-text);
   font-size: 13px;
   font-weight: 700;
+}
+
+.admin-date-card strong {
+  color: var(--admin-green);
+  font-size: 12px;
+  line-height: 1;
 }
 
 .admin-logout-btn,

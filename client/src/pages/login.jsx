@@ -11,6 +11,7 @@ const API_AUTH = "https://charismatic-happiness-production-dc36.up.railway.app/a
 function Login() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
@@ -87,6 +88,28 @@ function Login() {
     boxSizing: "border-box", fontFamily: "inherit",
     background: "rgba(255,255,255,0.2)", color: WHITE,
     backdropFilter: "blur(4px)",
+  };
+
+  const passwordInputStyle = {
+    ...inputStyle,
+    paddingRight: "44px",
+  };
+
+  const passwordToggleStyle = {
+    position: "absolute",
+    right: "8px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    width: "30px",
+    height: "30px",
+    border: "none",
+    borderRadius: "999px",
+    background: "rgba(255,255,255,0.18)",
+    color: WHITE,
+    cursor: "pointer",
+    display: "grid",
+    placeItems: "center",
+    fontSize: "15px",
   };
 
   return (
@@ -238,14 +261,24 @@ function Login() {
           </div>
           <div>
             <label style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)", display: "block", marginBottom: "5px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Password</label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              style={inputStyle}
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleLogin()}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                style={passwordInputStyle}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleLogin()}
+              />
+              <button
+                type="button"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowPassword(prev => !prev)}
+                style={passwordToggleStyle}
+              >
+                {showPassword ? "🙈" : "👁"}
+              </button>
+            </div>
             <button
               type="button"
               onClick={handleForgotPassword}

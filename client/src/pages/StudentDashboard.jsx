@@ -22,6 +22,14 @@ const getAvailability = (suite) => {
   return { available: true, reason: "" };
 };
 
+const getResultSuiteId = (result) => String(result?.suiteId?._id || result?.suiteId || "");
+
+const getResultPercentage = (result) =>
+  result?.totalMarks > 0 ? Math.round(((result.score || 0) / result.totalMarks) * 100) : 0;
+
+const isPassedResult = (result) =>
+  typeof result?.passed === "boolean" ? result.passed : getResultPercentage(result) >= 50;
+
 export default function CandidateDashboard() {
   const navigate = useNavigate();
   const [suites, setSuites]           = useState([]);
@@ -90,8 +98,14 @@ export default function CandidateDashboard() {
               <p style={{ color: "#888" }}>No active tests available right now.</p>
             ) : suites.map(suite => {
               const { available, reason } = getAvailability(suite);
+              const passedAttempt = pastResults.find(res =>
+                getResultSuiteId(res) === String(suite._id) && isPassedResult(res)
+              );
+              const failedAttempt = pastResults.find(res =>
+                getResultSuiteId(res) === String(suite._id) && !isPassedResult(res)
+              );
               return (
-                <div key={suite._id} style={{ background: WHITE, padding: "24px", borderRadius: "16px", boxShadow: "0 4px 12px rgba(0,0,0,0.03)", opacity: available ? 1 : 0.75 }}>
+                <div key={suite._id} style={{ background: WHITE, padding: "24px", borderRadius: "16px", boxShadow: "0 4px 12px rgba(0,0,0,0.03)", opacity: available && !passedAttempt ? 1 : 0.75 }}>
                   <h3 style={{ margin: "0 0 8px", color: GREEN_DARK }}>{suite.name}</h3>
                   {suite.description && (
                     <p style={{ fontSize: "14px", color: "#666", marginBottom: "12px" }}>{suite.description}</p>
@@ -119,12 +133,16 @@ export default function CandidateDashboard() {
                     <div style={{ width: "100%", padding: "12px", background: "#f3f4f6", color: "#888", borderRadius: "8px", fontWeight: "600", fontSize: "13px", textAlign: "center" }}>
                       🔒 {reason}
                     </div>
+                  ) : passedAttempt ? (
+                    <div style={{ width: "100%", padding: "12px", background: "#eef8f1", color: GREEN_DARK, border: "1px solid #c6e2d0", borderRadius: "8px", fontWeight: "700", fontSize: "13px", textAlign: "center" }}>
+                      You already attempted this test.
+                    </div>
                   ) : (
                     <button
                       onClick={() => navigate(`/test/${suite._id}`)}
                       style={{ width: "100%", padding: "12px", background: GREEN, color: WHITE, border: "none", borderRadius: "8px", fontWeight: "600", cursor: "pointer" }}
                     >
-                      Start Assessment →
+                      {failedAttempt ? "Retest Assessment →" : "Start Assessment →"}
                     </button>
                   )}
                 </div>
@@ -136,8 +154,9 @@ export default function CandidateDashboard() {
             {pastResults.length === 0 ? (
               <p style={{ color: "#888" }}>No results yet. Complete a test to see it here!</p>
             ) : pastResults.map(res => {
-              const pct = res.totalMarks > 0 ? Math.round((res.score / res.totalMarks) * 100) : 0;
+              const pct = getResultPercentage(res);
               const historySuiteId = typeof res.suiteId === "string" ? res.suiteId : res.suiteId?._id;
+              const passed = isPassedResult(res);
               return (
                 <div key={res._id} style={{ background: WHITE, padding: "16px 24px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
                   <div>
@@ -145,13 +164,13 @@ export default function CandidateDashboard() {
                     <span style={{ fontSize: "12px", color: "#888" }}>{new Date(res.submittedAt).toLocaleDateString()}</span>
                   </div>
                   <div style={{ textAlign: "right", display: "grid", gap: "8px", justifyItems: "end" }}>
-                    <div style={{ fontWeight: "700", color: res.passed ? GREEN : "#C0392B" }}>
+                    <div style={{ fontWeight: "700", color: passed ? GREEN : "#C0392B" }}>
                       {res.score} / {res.totalMarks} ({pct}%)
                     </div>
-                    <div style={{ fontSize: "11px", fontWeight: "800", color: res.passed ? GREEN : "#C0392B" }}>
-                      {res.passed ? "✓ PASSED" : "✗ FAILED"}
+                    <div style={{ fontSize: "11px", fontWeight: "800", color: passed ? GREEN : "#C0392B" }}>
+                      {passed ? "✓ PASSED" : "✗ FAILED"}
                     </div>
-                    {res.passed ? (
+                    {passed ? (
                       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
                         <button
                           type="button"

@@ -259,6 +259,7 @@ export default function Dashboard() {
   const [activePanel, setActivePanel] = useState("dashboard");
   const [deleteResultsSuite, setDeleteResultsSuite] = useState(null);
   const [deletingResults, setDeletingResults] = useState(false);
+  const [now, setNow] = useState(() => new Date());
 
   const user = useMemo(() => {
     try {
@@ -288,6 +289,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchSuites();
+  }, []);
+
+  useEffect(() => {
+    const clock = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(clock);
   }, []);
 
   const fetchAdminData = useCallback(async () => {
@@ -558,11 +564,19 @@ export default function Dashboard() {
           </div>
 
           <div className="admin-top-actions">
-            <div className="admin-date-card">▣ {new Date().toLocaleDateString("en-IN", {
-              day: "2-digit",
-              month: "long",
-              year: "numeric",
-            })}</div>
+            <div className="admin-date-card">
+              <span>▣ {now.toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+              })}</span>
+              <strong>{now.toLocaleTimeString("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: true,
+              })}</strong>
+            </div>
             <div className="admin-profile-card">
               <div>{(user.name || "Admin").charAt(0).toUpperCase()}</div>
               <p>

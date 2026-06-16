@@ -135,6 +135,18 @@ function gradeInfo(pct) {
   };
 }
 
+function getResultSuiteId(result) {
+  return String(result?.suiteId?._id || result?.suiteId || "");
+}
+
+function getResultPercentage(result) {
+  return result?.totalMarks > 0 ? Math.round(((result.score || 0) / result.totalMarks) * 100) : 0;
+}
+
+function isPassedResult(result) {
+  return typeof result?.passed === "boolean" ? result.passed : getResultPercentage(result) >= 50;
+}
+
 function formatTime(secs) {
   const m = Math.floor(secs / 60).toString().padStart(2, "0");
   const s = (secs % 60).toString().padStart(2, "0");
@@ -154,6 +166,7 @@ export default function StudentTest() {
   const [result, setResult]         = useState(null);
   const [error, setError]           = useState("");
   const [showReviewAnswers, setShowReviewAnswers] = useState(false);
+  const [blockedResult, setBlockedResult] = useState(null);
 
   const [markedForReview, setMarkedForReview] = useState([]);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -198,19 +211,35 @@ export default function StudentTest() {
     const fetchData = async () => {
       try {
         const headers = getAuthHeaders();
+        const userSearch = user.email || user.mobile || user.username || user.name || "";
 
-        const [suiteRes, qRes] = await Promise.all([
+        const [suiteRes, resultsRes] = await Promise.all([
           axios.get(`${API}/api/test-suites/${suiteId}`, { headers }),
-          axios.get(`${API}/api/questions/${suiteId}/random`, { headers }),
+          userSearch
+            ? axios.get(`${API}/api/results/all`, { headers, params: { search: userSearch } })
+            : Promise.resolve({ data: [] }),
         ]);
 
         setSuite(suiteRes.data);
-        setQuestions(qRes.data);
 
         const durationMins = Number(suiteRes.data?.duration) || 30;
         const passing      = suiteRes.data?.passingPercentage ?? 50;
-        setTimeLeft(durationMins * 60);
         setPassingPct(passing);
+
+        const passedAttempt = (resultsRes.data || []).find(res =>
+          getResultSuiteId(res) === String(suiteId) && isPassedResult(res)
+        );
+
+        if (passedAttempt) {
+          setBlockedResult(passedAttempt);
+          setQuestions([]);
+          setTimeLeft(null);
+          return;
+        }
+
+        const qRes = await axios.get(`${API}/api/questions/${suiteId}/random`, { headers });
+        setQuestions(qRes.data);
+        setTimeLeft(durationMins * 60);
       } catch (err) {
         console.error("Failed to load test:", err);
         setError("Could not load this test. Please go back and try again.");
@@ -219,7 +248,7 @@ export default function StudentTest() {
       }
     };
     fetchData();
-  }, [suiteId]);
+  }, [suiteId, user.email, user.mobile, user.username, user.name]);
 
   useEffect(() => {
     if (timeLeft === null || submitted) return;
@@ -236,14 +265,14 @@ export default function StudentTest() {
   const autoSubmit = () => { setShowWarning(false); handleSubmitInternal(true); };
 
   const handleSelect = (questionId, optionIndex) => {
-    if (submitted) return;
+    if (submitted || blockedResult) return;
     setAnswers(prev => {
       return { ...prev, [questionId]: [optionIndex] };
     });
   };
 
   const handleTheoryAnswer = (questionId, value) => {
-    if (submitted) return;
+    if (submitted || blockedResult) return;
     setAnswers(prev => ({ ...prev, [questionId]: value }));
   };
 
@@ -270,6 +299,7 @@ export default function StudentTest() {
   };
 
   const handleSubmitInternal = async (isAuto = false) => {
+    if (blockedResult) return;
     setShowConfirm(false);
     clearInterval(timerRef.current);
     setSubmitting(true);
@@ -335,6 +365,27 @@ export default function StudentTest() {
           <h2 style={{ color: GREEN_DARK }}>Unable to load test</h2>
           <p style={{ color: "#666" }}>{error}</p>
           <button onClick={() => navigate("/candidate")} style={{ padding: "10px 18px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", cursor: "pointer" }}>
+            Back to Tests
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (blockedResult) {
+    const blockedPct = getResultPercentage(blockedResult);
+    return (
+      <div style={{ minHeight: "100vh", background: BG, display: "grid", placeItems: "center", padding: "20px", fontFamily: "'Segoe UI', sans-serif" }}>
+        <div style={{ background: WHITE, borderRadius: "18px", padding: "30px", maxWidth: "460px", width: "100%", textAlign: "center", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" }}>
+          <div style={{ fontSize: "42px", marginBottom: "8px" }}>✓</div>
+          <h2 style={{ color: GREEN_DARK, margin: "0 0 8px" }}>You already attempted this test.</h2>
+          <p style={{ color: "#666", margin: "0 0 18px", lineHeight: 1.5 }}>
+            You passed this assessment earlier, so another attempt is not allowed.
+          </p>
+          <div style={{ background: "#eef8f1", border: "1px solid #c6e2d0", borderRadius: "12px", padding: "14px", marginBottom: "18px", color: GREEN_DARK, fontWeight: "800" }}>
+            Score: {blockedResult.score || 0} / {blockedResult.totalMarks || 0} ({blockedPct}%)
+          </div>
+          <button onClick={() => navigate("/candidate")} style={{ width: "100%", padding: "12px 18px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", cursor: "pointer", fontWeight: "800" }}>
             Back to Tests
           </button>
         </div>
