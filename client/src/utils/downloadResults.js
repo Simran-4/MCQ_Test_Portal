@@ -304,8 +304,8 @@ function addPageNumbers(doc, pageWidth, pageHeight) {
   }
 }
 
-const DEVANAGARI_FONT_NAME = "NotoSansDevanagari";
-const DEVANAGARI_FONT_FILE = "NotoSansDevanagari-Regular.ttf";
+const DEVANAGARI_FONT_NAME = "Sarala";
+const DEVANAGARI_FONT_FILE = "Sarala-Regular.ttf";
 
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
@@ -1105,27 +1105,41 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
       doc.text("Question-wise Detail", 14, detailY);
       detailY += 5;
 
-      addStyledTable(doc, {
-        startY: detailY,
-        head: [["Q", "Question", "Category", "Selected", "Correct Answer", "Category Score"]],
-        body: questionRowsForResult(r, stats.questions).map(row => [
-          row.number,
-          row.question,
-          row.categories,
-          row.selected,
-          row.correct,
-          row.score,
-        ]),
-        styles: { fontSize: 6.7, cellPadding: 2, overflow: "linebreak", valign: "top" },
-        columnStyles: {
-          0: { cellWidth: 8, halign: "center" },
-          1: { cellWidth: 44 },
-          2: { cellWidth: 25 },
-          3: { cellWidth: 22 },
-          4: { cellWidth: 38 },
-          5: { cellWidth: 40 },
-        },
-      }, tableFont);
+      questionRowsForResult(r, stats.questions).forEach(row => {
+        const body = [
+          ["Question", `Q${row.number}. ${row.question}`],
+          ["Category", row.categories || "-"],
+          ["Selected", row.selected || "-"],
+          ["Correct Answer", row.correct || "-"],
+          ["Category Score", row.score || "-"],
+        ];
+
+        addStyledTable(doc, {
+          startY: detailY,
+          head: [],
+          body,
+          theme: "grid",
+          tableWidth: pageWidth - 28,
+          styles: { fontSize: 7.2, cellPadding: 2.2, overflow: "linebreak", valign: "top" },
+          columnStyles: {
+            0: { cellWidth: 30, fontStyle: "bold", textColor: GREEN_DARK, fillColor: GREEN_SOFT },
+            1: { cellWidth: pageWidth - 58 },
+          },
+          didParseCell(data) {
+            if (data.section === "body" && data.column.index === 0) {
+              data.cell.styles.font = "helvetica";
+              data.cell.styles.fontStyle = "bold";
+            }
+          },
+        }, tableFont);
+
+        detailY = doc.lastAutoTable.finalY + 4;
+        if (detailY > pageHeight - 35) {
+          doc.addPage();
+          drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth);
+          detailY = 34;
+        }
+      });
     });
   }
 
