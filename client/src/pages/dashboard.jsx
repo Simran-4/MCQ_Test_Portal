@@ -45,6 +45,28 @@ function resultStatus(result) {
   return resultPct(result) >= 50 ? "Pass" : "Fail";
 }
 
+function resultGrade(result) {
+  const pct = resultPct(result);
+  if (pct >= 75) return "High";
+  if (pct >= 50) return "Moderate";
+  return "Low";
+}
+
+function categoryLabel(category) {
+  const pct = Number(category?.percentage || 0);
+  if (pct >= 75) return "High";
+  if (pct >= 50) return "Moderate";
+  return "Low";
+}
+
+function categoryRowsForResult(result) {
+  return Array.isArray(result.categoryResults) ? result.categoryResults : [];
+}
+
+function fileSafeName(value) {
+  return String(value || "user").replace(/[^a-z0-9]/gi, "_").toLowerCase();
+}
+
 function matchesUserResult(result, user) {
   const tokens = [
     user.email,
@@ -334,6 +356,12 @@ export default function Dashboard() {
   const selectedUserResults = selectedReportUser
     ? reportResults.filter(result => matchesUserResult(result, selectedReportUser))
     : [];
+  const selectedUserPassed = selectedUserResults.filter(result => resultStatus(result) === "Pass").length;
+  const selectedUserFailed = Math.max(0, selectedUserResults.length - selectedUserPassed);
+  const selectedUserAverage = selectedUserResults.length > 0
+    ? Math.round(selectedUserResults.reduce((sum, result) => sum + resultPct(result), 0) / selectedUserResults.length)
+    : 0;
+  const selectedUserLatest = selectedUserResults[0] || null;
 
   const suiteResultCount = (suiteId) =>
     reportResults.filter(result => resultSuiteId(result) === String(suiteId)).length;
@@ -466,6 +494,19 @@ export default function Dashboard() {
     if (!selectedReportUser) return alert("Select a user first.");
     if (selectedUserResults.length === 0) return alert("No reports found for this user.");
 
+    const overviewRows = [{
+      "Candidate": selectedReportUser.name || "-",
+      "Contact": userContact(selectedReportUser) || "-",
+      "Project": selectedReportUser.project || "-",
+      "Department": selectedReportUser.designation || "-",
+      "Total Reports": selectedUserResults.length,
+      "Passed": selectedUserPassed,
+      "Failed": selectedUserFailed,
+      "Average Percentage": `${selectedUserAverage}%`,
+      "Latest Test": selectedUserLatest ? resultTestName(selectedUserLatest) : "-",
+      "Latest Submitted": selectedUserLatest?.submittedAt ? new Date(selectedUserLatest.submittedAt).toLocaleString() : "-",
+    }];
+
     const rows = selectedUserResults.map(result => ({
       "Test Name": resultTestName(result),
       "Candidate": resultCandidateName(result),
@@ -473,15 +514,36 @@ export default function Dashboard() {
       "Project": result.project || "-",
       "Department": result.designation || "-",
       "Score": `${result.score || 0}/${result.totalMarks || 0}`,
+      "Correct Answers": result.correctAnswers ?? "-",
+      "Total Questions": result.totalQuestions ?? "-",
       "Percentage": `${resultPct(result)}%`,
+      "Grade": resultGrade(result),
       "Result": resultStatus(result),
       "Submitted At": result.submittedAt ? new Date(result.submittedAt).toLocaleString() : "-",
     }));
+    const categoryRows = selectedUserResults.flatMap(result =>
+      categoryRowsForResult(result).map(category => ({
+        "Test Name": resultTestName(result),
+        "Submitted At": result.submittedAt ? new Date(result.submittedAt).toLocaleString() : "-",
+        "Category": category.category || "-",
+        "Score": `${category.score ?? category.earnedMarks ?? 0}/${category.total ?? 0}`,
+        "Percentage": `${category.percentage || 0}%`,
+        "Grade": categoryLabel(category),
+      }))
+    );
     const wb = XLSX.utils.book_new();
+    const overviewWs = XLSX.utils.json_to_sheet(overviewRows);
     const ws = XLSX.utils.json_to_sheet(rows);
+    const categoryWs = XLSX.utils.json_to_sheet(categoryRows.length > 0 ? categoryRows : [{ "Category": "No category breakdown available" }]);
+    overviewWs["!cols"] = Object.keys(overviewRows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }));
     ws["!cols"] = Object.keys(rows[0]).map(key => ({ wch: Math.max(16, key.length + 4) }));
-    XLSX.utils.book_append_sheet(wb, ws, "Personal Report");
-    XLSX.writeFile(wb, `personal_report_${selectedReportUser.name.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.xlsx`);
+    categoryWs["!cols"] = categoryRows.length > 0
+      ? Object.keys(categoryRows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }))
+      : [{ wch: 34 }];
+    XLSX.utils.book_append_sheet(wb, overviewWs, "Overview");
+    XLSX.utils.book_append_sheet(wb, ws, "Test Attempts");
+    XLSX.utils.book_append_sheet(wb, categoryWs, "Category Details");
+    XLSX.writeFile(wb, `personal_report_${fileSafeName(selectedReportUser.name)}.xlsx`);
   };
 
   const downloadPersonalPDF = () => {
@@ -501,27 +563,55 @@ export default function Dashboard() {
     doc.text(`${selectedReportUser.name}  |  ${userContact(selectedReportUser) || "-"}`, 14, 17);
     doc.text(new Date().toLocaleDateString("en-IN"), 283, 15, { align: "right" });
 
+    doc.setTextColor(26, 61, 40);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Candidate Summary", 14, 34);
+
     autoTable(doc, {
-      startY: 32,
-      head: [["#", "Test Name", "Candidate", "Contact", "Project", "Department", "Score", "%", "Result", "Submitted"]],
+      startY: 38,
+      head: [["Project", "Department", "Reports", "Passed", "Failed", "Average", "Latest Test"]],
+      body: [[
+        selectedReportUser.project || "-",
+        selectedReportUser.designation || "-",
+        selectedUserResults.length,
+        selectedUserPassed,
+        selectedUserFailed,
+        `${selectedUserAverage}%`,
+        selectedUserLatest ? resultTestName(selectedUserLatest) : "-",
+      ]],
+      styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak" },
+      headStyles: { fillColor: [231, 244, 235], textColor: [26, 61, 40] },
+      bodyStyles: { textColor: [36, 48, 40] },
+    });
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 8,
+      head: [["#", "Test Name", "Score", "%", "Grade", "Result", "Submitted", "Category Breakdown"]],
       body: selectedUserResults.map((result, index) => [
         index + 1,
         resultTestName(result),
-        resultCandidateName(result),
-        resultCandidateContact(result),
-        result.project || "-",
-        result.designation || "-",
         `${result.score || 0}/${result.totalMarks || 0}`,
         `${resultPct(result)}%`,
+        resultGrade(result),
         resultStatus(result),
         result.submittedAt ? new Date(result.submittedAt).toLocaleDateString("en-IN") : "-",
+        categoryRowsForResult(result).length > 0
+          ? categoryRowsForResult(result)
+            .map(category => `${category.category || "-"}: ${category.percentage || 0}% (${categoryLabel(category)})`)
+            .join("\n")
+          : "-",
       ]),
-      styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak" },
+      styles: { fontSize: 7.6, cellPadding: 2, overflow: "linebreak" },
       headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
       alternateRowStyles: { fillColor: [248, 247, 244] },
+      columnStyles: {
+        1: { cellWidth: 54 },
+        7: { cellWidth: 72 },
+      },
     });
 
-    doc.save(`personal_report_${selectedReportUser.name.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.pdf`);
+    doc.save(`personal_report_${fileSafeName(selectedReportUser.name)}.pdf`);
   };
 
   const openNewSuite = () => {
@@ -613,7 +703,6 @@ export default function Dashboard() {
               <button type="button">▥ Results⌄</button>
               <div className="admin-nav-dropdown">
                 <button type="button" onClick={() => navigate("/view-results")}>☰ All Test Results</button>
-                <button type="button" onClick={() => navigate("/view-results")}>▥ Test Result</button>
                 <button type="button" onClick={() => setActivePanel("reports")}>
                   ▧ User Personal Reports
                 </button>
@@ -763,6 +852,73 @@ export default function Dashboard() {
               <strong>{selectedUserResults.length}</strong>
               <span>report(s) found</span>
             </div>
+
+            {selectedReportUser ? (
+              <div className="admin-personal-report">
+                <div className="admin-personal-profile">
+                  <div>
+                    <strong>{selectedReportUser.name || "Selected user"}</strong>
+                    <span>{userContact(selectedReportUser) || "No contact available"}</span>
+                  </div>
+                  <div>
+                    <span>Project/Department</span>
+                    <strong>{selectedReportUser.project || "-"}</strong>
+                  </div>
+                  <div>
+                    <span>Designation</span>
+                    <strong>{selectedReportUser.designation || "-"}</strong>
+                  </div>
+                </div>
+
+                <div className="admin-personal-stats">
+                  <div><strong>{selectedUserPassed}</strong><span>Passed</span></div>
+                  <div><strong>{selectedUserFailed}</strong><span>Failed</span></div>
+                  <div><strong>{selectedUserAverage}%</strong><span>Average</span></div>
+                  <div><strong>{selectedUserLatest ? formatDate(selectedUserLatest.submittedAt) : "-"}</strong><span>Latest</span></div>
+                </div>
+
+                <div className="admin-personal-attempts">
+                  {selectedUserResults.length > 0 ? selectedUserResults.map(result => (
+                    <article key={result._id} className="admin-personal-attempt">
+                      <div className="admin-personal-attempt-head">
+                        <div>
+                          <h4>{resultTestName(result)}</h4>
+                          <p>{result.submittedAt ? new Date(result.submittedAt).toLocaleString("en-IN") : "No date"}</p>
+                        </div>
+                        <div className={`admin-personal-status ${resultStatus(result).toLowerCase()}`}>
+                          {resultStatus(result)}
+                        </div>
+                      </div>
+                      <div className="admin-personal-score">
+                        <strong>{result.score || 0}/{result.totalMarks || 0}</strong>
+                        <span>{resultPct(result)}% · {resultGrade(result)}</span>
+                        <small>{result.correctAnswers ?? 0} correct of {result.totalQuestions ?? 0} questions</small>
+                      </div>
+                      {categoryRowsForResult(result).length > 0 && (
+                        <div className="admin-personal-categories">
+                          {categoryRowsForResult(result).map(category => (
+                            <div key={`${result._id}-${category.category}`} className="admin-personal-category">
+                              <div>
+                                <span>{category.category || "Uncategorized"}</span>
+                                <strong>{categoryLabel(category)} · {category.percentage || 0}%</strong>
+                              </div>
+                              <div className="admin-personal-bar">
+                                <span style={{ width: `${Math.max(0, Math.min(100, category.percentage || 0))}%` }} />
+                              </div>
+                              <small>{category.score ?? category.earnedMarks ?? 0}/{category.total ?? 0}</small>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </article>
+                  )) : (
+                    <p className="admin-personal-empty">No submitted tests found for this user.</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="admin-personal-empty">Select a user to view detailed personal reports.</p>
+            )}
 
             <div className="admin-report-actions">
               {canDownloadReports ? (

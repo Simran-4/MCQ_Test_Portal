@@ -75,6 +75,15 @@ function canAccessSuite(suite, user) {
   return (suite.assignedUsers || []).some(id => id.toString() === user.id);
 }
 
+function metaUserId(entry) {
+  return String(entry?.user?._id || entry?.user || "");
+}
+
+function assignmentDateForUser(suite, userId) {
+  const match = (suite?.assignedUsersMeta || []).find(entry => metaUserId(entry) === String(userId));
+  return match?.assignedAt ? new Date(match.assignedAt) : null;
+}
+
 async function candidateResultFilter(userId) {
   const user = await User.findById(userId).select("name username email mobile");
   if (!user) return { _id: null };
@@ -172,6 +181,20 @@ router.post("/", authMiddleware, async (req, res) => {
     if (!suite) return res.status(404).json({ message: "Test suite not found" });
     if (!canAccessSuite(suite, req.user)) {
       return res.status(403).json({ message: "This test is not assigned to this user" });
+    }
+
+    if (req.user.role === "candidate") {
+      const candidateFilter = await candidateResultFilter(req.user.id);
+      const latestPassed = await Result.findOne(andQuery(
+        { suiteId, passed: true },
+        candidateFilter
+      )).sort({ submittedAt: -1 });
+      const assignedAt = assignmentDateForUser(suite, req.user.id);
+      if (latestPassed && (!assignedAt || new Date(latestPassed.submittedAt) >= assignedAt)) {
+        return res.status(409).json({
+          message: "You already attempted this test and passed. Please contact the admin for a new assignment.",
+        });
+      }
     }
 
     const passingPct = suite?.passingPercentage ?? settings?.passingPercentage ?? 50;

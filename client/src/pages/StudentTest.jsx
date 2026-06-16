@@ -147,6 +147,24 @@ function isPassedResult(result) {
   return typeof result?.passed === "boolean" ? result.passed : getResultPercentage(result) >= 50;
 }
 
+function getUserId(user) {
+  return String(user?._id || user?.id || "");
+}
+
+function getAssignmentDateForUserId(suite, userId) {
+  if (!userId) return null;
+  const match = (suite?.assignedUsersMeta || []).find(entry =>
+    String(entry?.user?._id || entry?.user || "") === userId
+  );
+  return match?.assignedAt ? new Date(match.assignedAt) : null;
+}
+
+function latestPassedResultForSuite(results, suiteId) {
+  return (results || [])
+    .filter(res => getResultSuiteId(res) === String(suiteId) && isPassedResult(res))
+    .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))[0] || null;
+}
+
 function formatTime(secs) {
   const m = Math.floor(secs / 60).toString().padStart(2, "0");
   const s = (secs % 60).toString().padStart(2, "0");
@@ -206,12 +224,13 @@ export default function StudentTest() {
     try { return JSON.parse(localStorage.getItem("user")) || {}; }
     catch { return {}; }
   })();
+  const userId = getUserId(user);
+  const userSearch = user.email || user.mobile || user.username || user.name || "";
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const headers = getAuthHeaders();
-        const userSearch = user.email || user.mobile || user.username || user.name || "";
 
         const [suiteRes, resultsRes] = await Promise.all([
           axios.get(`${API}/api/test-suites/${suiteId}`, { headers }),
@@ -226,11 +245,10 @@ export default function StudentTest() {
         const passing      = suiteRes.data?.passingPercentage ?? 50;
         setPassingPct(passing);
 
-        const passedAttempt = (resultsRes.data || []).find(res =>
-          getResultSuiteId(res) === String(suiteId) && isPassedResult(res)
-        );
+        const passedAttempt = latestPassedResultForSuite(resultsRes.data, suiteId);
+        const assignmentDate = getAssignmentDateForUserId(suiteRes.data, userId);
 
-        if (passedAttempt) {
+        if (passedAttempt && (!assignmentDate || new Date(passedAttempt.submittedAt || 0) >= assignmentDate)) {
           setBlockedResult(passedAttempt);
           setQuestions([]);
           setTimeLeft(null);
@@ -248,7 +266,7 @@ export default function StudentTest() {
       }
     };
     fetchData();
-  }, [suiteId, user.email, user.mobile, user.username, user.name]);
+  }, [suiteId, userId, userSearch]);
 
   useEffect(() => {
     if (timeLeft === null || submitted) return;
@@ -344,7 +362,7 @@ export default function StudentTest() {
       setSubmitted(true);
     } catch (err) {
       console.error("Submit error:", err);
-      alert("Failed to submit. Please check your connection.");
+      alert(err.response?.data?.message || "Failed to submit. Please check your connection.");
     } finally {
       setSubmitting(false);
     }

@@ -136,6 +136,16 @@ function canAccessSuite(suite, user) {
   return (suite.assignedUsers || []).some(id => id.toString() === user.id);
 }
 
+function metaUserId(entry) {
+  return String(entry?.user?._id || entry?.user || "");
+}
+
+function assignedMetaById(suite) {
+  return new Map((suite.assignedUsersMeta || [])
+    .filter(entry => metaUserId(entry))
+    .map(entry => [metaUserId(entry), entry.assignedAt || new Date()]));
+}
+
 function requireAdmin(req, res, next) {
   if (!["admin", "superadmin"].includes(req.user.role)) {
     return res.status(403).json({ message: "Admin access required" });
@@ -370,9 +380,11 @@ router.put("/assignments/user/:userId", authMiddleware, requireAdminFeature("can
 
     const suites = await TestSuite.find();
     const updatedSuites = [];
+    const assignedAt = new Date();
     for (const suite of suites) {
       const shouldAssign = selectedSuiteIds.includes(String(suite._id));
       const currentAssigned = (suite.assignedUsers || []).map(id => String(id));
+      const currentMeta = assignedMetaById(suite);
       const nextAssigned = shouldAssign
         ? [...new Set([...currentAssigned, String(user._id)])]
         : currentAssigned.filter(id => id !== String(user._id));
@@ -389,6 +401,12 @@ router.put("/assignments/user/:userId", authMiddleware, requireAdminFeature("can
 
       suite.isPublic = shouldAssign ? false : suite.isPublic;
       suite.assignedUsers = nextAssigned;
+      suite.assignedUsersMeta = nextAssigned.map(id => ({
+        user: id,
+        assignedAt: shouldAssign && id === String(user._id)
+          ? assignedAt
+          : currentMeta.get(id) || assignedAt,
+      }));
       updatedSuites.push(await suite.save());
     }
 
@@ -420,17 +438,17 @@ router.put("/:id/assignments", authMiddleware, requireAdminFeature("canAssignTes
       ? req.body.assignedUsers.filter(Boolean)
       : [];
     const isPublic = req.body.isPublic !== false;
-    const updatedSuite = await TestSuite.findByIdAndUpdate(
-      req.params.id,
-      {
-        $set: {
-          isPublic,
-          assignedUsers: isPublic ? [] : assignedUsers,
-        },
-      },
-      { new: true }
-    );
-    if (!updatedSuite) return res.status(404).json({ message: "Suite not found" });
+    const assignedAt = new Date();
+    const suite = await TestSuite.findById(req.params.id);
+    if (!suite) return res.status(404).json({ message: "Suite not found" });
+    const currentMeta = assignedMetaById(suite);
+    suite.isPublic = isPublic;
+    suite.assignedUsers = isPublic ? [] : assignedUsers;
+    suite.assignedUsersMeta = isPublic ? [] : assignedUsers.map(id => ({
+      user: id,
+      assignedAt: currentMeta.get(String(id)) || assignedAt,
+    }));
+    const updatedSuite = await suite.save();
     res.json(updatedSuite);
   } catch (err) {
     res.status(500).json({ message: "Error updating suite assignments" });

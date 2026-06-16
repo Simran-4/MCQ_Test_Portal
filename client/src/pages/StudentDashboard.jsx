@@ -30,6 +30,25 @@ const getResultPercentage = (result) =>
 const isPassedResult = (result) =>
   typeof result?.passed === "boolean" ? result.passed : getResultPercentage(result) >= 50;
 
+const getUserId = (user) => String(user?._id || user?.id || "");
+
+const getAssignmentDateForUser = (suite, user) => {
+  const userId = getUserId(user);
+  if (!userId) return null;
+  const match = (suite.assignedUsersMeta || []).find(entry =>
+    String(entry?.user?._id || entry?.user || "") === userId
+  );
+  return match?.assignedAt ? new Date(match.assignedAt) : null;
+};
+
+const latestPassedResultForSuite = (results, suiteId) =>
+  results
+    .filter(res => getResultSuiteId(res) === String(suiteId) && isPassedResult(res))
+    .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))[0] || null;
+
+const blocksRetake = (result, assignmentDate) =>
+  Boolean(result && (!assignmentDate || new Date(result.submittedAt || 0) >= assignmentDate));
+
 export default function CandidateDashboard() {
   const navigate = useNavigate();
   const [suites, setSuites]           = useState([]);
@@ -98,12 +117,15 @@ export default function CandidateDashboard() {
               <p style={{ color: "#888" }}>No active tests available right now.</p>
             ) : suites.map(suite => {
               const { available, reason } = getAvailability(suite);
-              const passedAttempt = pastResults.find(res =>
-                getResultSuiteId(res) === String(suite._id) && isPassedResult(res)
-              );
+              const latestPassedAttempt = latestPassedResultForSuite(pastResults, suite._id);
+              const assignmentDate = getAssignmentDateForUser(suite, user);
+              const passedAttempt = blocksRetake(latestPassedAttempt, assignmentDate)
+                ? latestPassedAttempt
+                : null;
               const failedAttempt = pastResults.find(res =>
                 getResultSuiteId(res) === String(suite._id) && !isPassedResult(res)
               );
+              const reassignedAfterPass = latestPassedAttempt && assignmentDate && !passedAttempt;
               return (
                 <div key={suite._id} style={{ background: WHITE, padding: "24px", borderRadius: "16px", boxShadow: "0 4px 12px rgba(0,0,0,0.03)", opacity: available && !passedAttempt ? 1 : 0.75 }}>
                   <h3 style={{ margin: "0 0 8px", color: GREEN_DARK }}>{suite.name}</h3>
@@ -142,7 +164,7 @@ export default function CandidateDashboard() {
                       onClick={() => navigate(`/test/${suite._id}`)}
                       style={{ width: "100%", padding: "12px", background: GREEN, color: WHITE, border: "none", borderRadius: "8px", fontWeight: "600", cursor: "pointer" }}
                     >
-                      {failedAttempt ? "Retest Assessment →" : "Start Assessment →"}
+                      {reassignedAfterPass || failedAttempt ? "Retest Assessment →" : "Start Assessment →"}
                     </button>
                   )}
                 </div>
