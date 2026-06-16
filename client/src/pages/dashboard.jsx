@@ -655,17 +655,21 @@ export default function Dashboard() {
 
           <div className="admin-top-actions">
             <div className="admin-date-card">
-              <span>▣ {now.toLocaleDateString("en-IN", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric",
-              })}</span>
-              <strong>{now.toLocaleTimeString("en-IN", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: true,
-              })}</strong>
+              <div className="admin-date-icon">◷</div>
+              <div className="admin-date-copy">
+                <span>Today</span>
+                <strong>{now.toLocaleDateString("en-IN", {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                })}</strong>
+                <em>{now.toLocaleTimeString("en-IN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                  hour12: true,
+                })}</em>
+              </div>
             </div>
             <div className="admin-profile-card">
               <div>{(user.name || "Admin").charAt(0).toUpperCase()}</div>

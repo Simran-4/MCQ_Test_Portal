@@ -196,25 +196,60 @@ body {
 }
 
 .admin-date-card {
-  min-height: 54px;
+  min-height: 62px;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 0 16px;
-  border: 1px solid var(--admin-border);
-  border-radius: 6px;
-  background: #fff;
+  gap: 12px;
+  padding: 9px 16px 9px 10px;
+  border: 1px solid rgba(31, 107, 58, 0.16);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(240, 250, 245, 0.96), rgba(255, 255, 255, 0.96));
   color: var(--admin-text);
-  font-size: 13px;
-  font-weight: 700;
+  box-shadow: 0 14px 30px rgba(24, 55, 36, 0.08);
 }
 
-.admin-date-card strong {
+.admin-date-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--admin-green);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 900;
+  box-shadow: inset 0 -8px 16px rgba(0, 0, 0, 0.12);
+}
+
+.admin-date-copy {
+  min-width: 138px;
+  display: grid;
+  gap: 2px;
+  line-height: 1.15;
+}
+
+.admin-date-copy span {
+  color: var(--admin-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-date-copy strong {
+  color: var(--admin-green-dark);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.admin-date-copy em {
   color: var(--admin-green);
-  font-size: 12px;
-  line-height: 1;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .admin-logout-btn,
