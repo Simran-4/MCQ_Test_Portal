@@ -20,6 +20,11 @@ function userLabel(user) {
   return `${user.name}${contact ? ` - ${contact}` : ""}`;
 }
 
+function deletedByLabel(user) {
+  if (!user) return "-";
+  return user.name || user.email || user.username || "-";
+}
+
 function assignedUserIdsForSuite(suite) {
   return (suite.assignedUsers || []).map(item => String(item?._id || item));
 }
@@ -374,6 +379,9 @@ export default function Dashboard() {
   const [showModal, setShowModal] = useState(false);
   const [editingSuite, setEditingSuite] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
+  const [deletedSuites, setDeletedSuites] = useState([]);
+  const [trashLoading, setTrashLoading] = useState(false);
+  const [trashActionId, setTrashActionId] = useState(null);
   const [users, setUsers] = useState([]);
   const [reportResults, setReportResults] = useState([]);
   const [assignmentUserIds, setAssignmentUserIds] = useState([]);
@@ -401,6 +409,21 @@ export default function Dashboard() {
   const canAssignTests = canAdmin("canAssignTests", user);
   const canBulkMail = canAdmin("canBulkMail", user);
 
+  const fetchTrashedSuites = useCallback(async () => {
+    if (!canManageSuites) return;
+    setTrashLoading(true);
+    try {
+      const res = await axios.get(`${API}/api/test-suites/trash/list`, {
+        headers: getAuthHeaders(),
+      });
+      setDeletedSuites(res.data);
+    } catch (err) {
+      console.error("Failed to fetch deleted test suites:", err);
+    } finally {
+      setTrashLoading(false);
+    }
+  }, [canManageSuites]);
+
   const fetchSuites = async () => {
     try {
       const res = await axios.get(`${API}/api/test-suites`, {
@@ -417,6 +440,10 @@ export default function Dashboard() {
   useEffect(() => {
     fetchSuites();
   }, []);
+
+  useEffect(() => {
+    fetchTrashedSuites();
+  }, [fetchTrashedSuites]);
 
   useEffect(() => {
     const clock = setInterval(() => setNow(new Date()), 1000);
@@ -513,8 +540,47 @@ export default function Dashboard() {
         data: { password },
       });
       setSuites(prev => prev.filter(suite => suite._id !== suiteId));
+      await fetchTrashedSuites();
     } catch (err) {
       alert("Delete failed: " + (err.response?.data?.message || "Check your permissions."));
+    }
+  };
+
+  const handleRecoverSuite = async (suiteId, suiteName) => {
+    if (!window.confirm(`Recover "${suiteName}"? It will be restored as a draft test suite.`)) return;
+    setTrashActionId(suiteId);
+    try {
+      const res = await axios.put(
+        `${API}/api/test-suites/${suiteId}/recover`,
+        { status: "draft" },
+        { headers: getAuthHeaders() }
+      );
+      setDeletedSuites(prev => prev.filter(suite => suite._id !== suiteId));
+      setSuites(prev => [{ ...res.data, status: "draft" }, ...prev]);
+      await fetchSuites();
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to recover test suite.");
+    } finally {
+      setTrashActionId(null);
+    }
+  };
+
+  const handlePermanentDeleteSuite = async (suiteId, suiteName) => {
+    const password = window.prompt(`Enter your admin password to permanently delete "${suiteName}":`);
+    if (!password) return;
+    const confirmation = `Permanently delete "${suiteName}" and all its questions?\n\nThis cannot be undone. Type DELETE to confirm.`;
+    if (window.prompt(confirmation) !== "DELETE") return;
+    setTrashActionId(suiteId);
+    try {
+      await axios.delete(`${API}/api/test-suites/${suiteId}/permanent`, {
+        headers: getAuthHeaders(),
+        data: { password },
+      });
+      setDeletedSuites(prev => prev.filter(suite => suite._id !== suiteId));
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to permanently delete test suite.");
+    } finally {
+      setTrashActionId(null);
     }
   };
 
@@ -1021,6 +1087,13 @@ export default function Dashboard() {
               ▥ Test Report
             </button>
           )}
+
+          {canManageSuites && (
+            <button type="button" className={activePanel === "trash" ? "active" : ""} onClick={() => { setActivePanel("trash"); fetchTrashedSuites(); }}>
+              ⌫ Trash
+              {deletedSuites.length > 0 && <span className="admin-nav-count">{deletedSuites.length}</span>}
+            </button>
+          )}
         </nav>
 
         <section className="admin-stats-grid">
@@ -1361,6 +1434,70 @@ export default function Dashboard() {
                   </tbody>
                 </table>
                 {descriptiveTestRows.length === 0 && <p className="admin-personal-empty">No submitted test attempts yet.</p>}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activePanel === "trash" && canManageSuites && (
+          <section className="admin-test-report admin-trash-panel">
+            <div className="admin-panel-heading">
+              <h3>Trash</h3>
+              <p>Deleted test suites stay here until you recover them or permanently delete them.</p>
+            </div>
+
+            <div className="admin-test-report-table">
+              <div className="admin-test-report-table-head">
+                <h4>Deleted Test Suites</h4>
+                <span>{deletedSuites.length} suite(s)</span>
+              </div>
+              <div className="admin-table-scroll">
+                <table className="admin-trash-table">
+                  <thead>
+                    <tr>
+                      <th>Test Suite</th>
+                      <th>Questions</th>
+                      <th>Deleted Date</th>
+                      <th>Deleted By</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deletedSuites.map(suite => (
+                      <tr key={suite._id}>
+                        <td>
+                          <strong>{suite.name}</strong>
+                          <small>{suite.description || "No description"}</small>
+                        </td>
+                        <td>{suite.questionCount ?? 0}</td>
+                        <td>{formatDateTime(suite.deletedAt)}</td>
+                        <td>{deletedByLabel(suite.deletedBy)}</td>
+                        <td>
+                          <div className="admin-trash-actions">
+                            <button
+                              type="button"
+                              className="admin-row-btn"
+                              disabled={trashActionId === suite._id}
+                              onClick={() => handleRecoverSuite(suite._id, suite.name)}
+                            >
+                              Recover
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-delete-btn"
+                              disabled={trashActionId === suite._id}
+                              onClick={() => handlePermanentDeleteSuite(suite._id, suite.name)}
+                            >
+                              Delete Permanently
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {trashLoading && <p className="admin-personal-empty">Loading deleted test suites...</p>}
+                {!trashLoading && deletedSuites.length === 0 && <p className="admin-personal-empty">Trash is empty.</p>}
               </div>
             </div>
           </section>

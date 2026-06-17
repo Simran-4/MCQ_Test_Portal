@@ -130,6 +130,7 @@ function readOptionalUser(req) {
 
 function canAccessSuite(suite, user) {
   if (!suite) return false;
+  if (suite.deletedAt) return false;
   if (!user) return suite.status === "active" && suite.isPublic !== false;
   if (user.role !== "candidate") return true;
   if (suite.status !== "active") return false;
@@ -335,12 +336,14 @@ router.get("/", async (req, res) => {
       : user.role === "candidate"
         ? {
             status: "active",
+            deletedAt: null,
             $or: [
               { isPublic: { $ne: false } },
               { assignedUsers: user.id },
             ],
           }
-        : {};
+        : { deletedAt: null };
+    if (!user) query.deletedAt = null;
     const suites = await TestSuite.find(query).sort({ createdAt: -1 });
     const suitesWithCount = await Promise.all(
       suites.map(async (suite) => {
@@ -394,7 +397,7 @@ router.put("/assignments/user/:userId", authMiddleware, requireAdminFeature("can
         .filter(Boolean)
     )];
 
-    const suites = await TestSuite.find();
+    const suites = await TestSuite.find({ deletedAt: null });
     const updatedSuites = [];
     const assignedAt = new Date();
     for (const suite of suites) {
@@ -437,11 +440,12 @@ router.put("/assignments/user/:userId", authMiddleware, requireAdminFeature("can
 router.put("/:id", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
   try {
     const payload = sanitizeSuiteUpdatePayload(req.body);
-    const updatedSuite = await TestSuite.findByIdAndUpdate(
-      req.params.id,
+    const updatedSuite = await TestSuite.findOneAndUpdate(
+      { _id: req.params.id, deletedAt: null },
       { $set: payload },
       { new: true }
     );
+    if (!updatedSuite) return res.status(404).json({ message: "Suite not found" });
     res.json(updatedSuite);
   } catch (err) {
     res.status(500).json({ message: "Error updating suite" });
@@ -455,7 +459,7 @@ router.put("/:id/assignments", authMiddleware, requireAdminFeature("canAssignTes
       : [];
     const isPublic = req.body.isPublic !== false;
     const assignedAt = new Date();
-    const suite = await TestSuite.findById(req.params.id);
+    const suite = await TestSuite.findOne({ _id: req.params.id, deletedAt: null });
     if (!suite) return res.status(404).json({ message: "Suite not found" });
     const currentMeta = assignedMetaById(suite);
     suite.isPublic = isPublic;
@@ -475,11 +479,65 @@ router.put("/:id/assignments", authMiddleware, requireAdminFeature("canAssignTes
 router.delete("/:id", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
   try {
     if (!(await requireCurrentPassword(req, res))) return;
-    await Question.deleteMany({ testSuite: req.params.id });
-    await TestSuite.findByIdAndDelete(req.params.id);
-    res.json({ message: "Suite and associated questions deleted" });
+    const suite = await TestSuite.findOne({ _id: req.params.id, deletedAt: null });
+    if (!suite) return res.status(404).json({ message: "Suite not found" });
+    suite.status = "inactive";
+    suite.deletedAt = new Date();
+    suite.deletedBy = req.user.id;
+    await suite.save();
+    res.json({ message: "Suite moved to trash", suite });
   } catch (err) {
     res.status(500).json({ message: "Error deleting suite" });
+  }
+});
+
+// ── GET TRASHED SUITES ────────────────────────────────────────
+router.get("/trash/list", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
+  try {
+    const suites = await TestSuite.find({ deletedAt: { $ne: null } })
+      .populate("deletedBy", "name email username")
+      .sort({ deletedAt: -1 });
+    const suitesWithCount = await Promise.all(
+      suites.map(async (suite) => ({
+        ...suite.toObject(),
+        questionCount: await Question.countDocuments({ testSuite: suite._id }),
+      }))
+    );
+    res.json(suitesWithCount);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching trashed suites" });
+  }
+});
+
+// ── RECOVER TRASHED SUITE ─────────────────────────────────────
+router.put("/:id/recover", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
+  try {
+    const suite = await TestSuite.findOne({ _id: req.params.id, deletedAt: { $ne: null } });
+    if (!suite) return res.status(404).json({ message: "Trashed suite not found" });
+    suite.deletedAt = null;
+    suite.deletedBy = null;
+    suite.status = req.body?.status && ["draft", "active", "scheduled", "inactive"].includes(req.body.status)
+      ? req.body.status
+      : "draft";
+    const recovered = await suite.save();
+    const questionCount = await Question.countDocuments({ testSuite: recovered._id });
+    res.json({ ...recovered.toObject(), questionCount });
+  } catch (err) {
+    res.status(500).json({ message: "Error recovering suite" });
+  }
+});
+
+// ── PERMANENTLY DELETE TRASHED SUITE ──────────────────────────
+router.delete("/:id/permanent", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
+  try {
+    if (!(await requireCurrentPassword(req, res))) return;
+    const suite = await TestSuite.findOne({ _id: req.params.id, deletedAt: { $ne: null } });
+    if (!suite) return res.status(404).json({ message: "Trashed suite not found" });
+    await Question.deleteMany({ testSuite: req.params.id });
+    await TestSuite.findByIdAndDelete(req.params.id);
+    res.json({ message: "Suite permanently deleted" });
+  } catch (err) {
+    res.status(500).json({ message: "Error permanently deleting suite" });
   }
 });
 

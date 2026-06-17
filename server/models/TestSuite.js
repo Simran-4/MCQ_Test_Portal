@@ -76,6 +76,15 @@ const testSuiteSchema = new mongoose.Schema(
         default: Date.now,
       },
     }],
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true }
 );

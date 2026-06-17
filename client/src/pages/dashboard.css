@@ -320,6 +320,9 @@ body {
 .admin-top-nav > button,
 .admin-nav-menu > button {
   min-height: 56px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   padding: 0 18px;
   border: 0;
   border-radius: 0;
@@ -329,6 +332,19 @@ body {
   font-size: 14px;
   font-weight: 800;
   cursor: pointer;
+}
+
+.admin-nav-count {
+  min-width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .admin-top-nav > button:hover,
@@ -1063,6 +1079,51 @@ body {
   background: #fff;
   font-size: 12px;
   text-transform: uppercase;
+}
+
+.admin-trash-panel {
+  border-color: #e8d8d4;
+}
+
+.admin-trash-table td:first-child {
+  min-width: 260px;
+}
+
+.admin-trash-table td strong,
+.admin-trash-table td small {
+  display: block;
+}
+
+.admin-trash-table td strong {
+  color: var(--admin-green-dark);
+  font-size: 14px;
+}
+
+.admin-trash-table td small {
+  margin-top: 4px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.admin-trash-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-trash-actions .admin-row-btn,
+.admin-trash-actions .admin-delete-btn {
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.admin-trash-actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .admin-suite-list {
