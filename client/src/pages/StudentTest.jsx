@@ -195,6 +195,7 @@ export default function StudentTest() {
   const [showWarning, setShowWarning] = useState(false);
   const timerRef                      = useRef(null);
   const answersRef                    = useRef(answers);
+  const testStartedAtRef              = useRef(null);
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
 
@@ -257,6 +258,7 @@ export default function StudentTest() {
 
         const qRes = await axios.get(`${API}/api/questions/${suiteId}/random`, { headers });
         setQuestions(qRes.data);
+        testStartedAtRef.current = new Date();
         setTimeLeft(durationMins * 60);
       } catch (err) {
         console.error("Failed to load test:", err);
@@ -336,6 +338,15 @@ export default function StudentTest() {
       });
       const pct    = totalMarksCount > 0 ? Math.round((finalScore / totalMarksCount) * 100) : 0;
       const passed = pct >= passingPct;
+      const durationSeconds = (Number(suite?.duration) || 30) * 60;
+      const elapsedFromTimer = timeLeft === null ? null : durationSeconds - timeLeft;
+      const elapsedFromClock = testStartedAtRef.current
+        ? Math.round((Date.now() - testStartedAtRef.current.getTime()) / 1000)
+        : null;
+      const timeTakenSeconds = Math.max(0, Math.min(
+        durationSeconds,
+        Number.isFinite(elapsedFromTimer) ? elapsedFromTimer : elapsedFromClock || 0
+      ));
 
       const payload = {
         suiteId,
@@ -345,6 +356,8 @@ export default function StudentTest() {
         project:        user.project     || "General",
         designation:    user.designation || "",
         passed,
+        startedAt:      testStartedAtRef.current?.toISOString(),
+        timeTakenSeconds,
         answers: questions.map(q => ({
           questionId:      q._id,
           selectedOptions: isTheoryQuestion(q) ? [] : (() => {

@@ -30,7 +30,9 @@ const resultSchema = new mongoose.Schema({
   correctAnswers: { type: Number, default: 0 },
   totalQuestions: { type: Number, default: 0 },
   categoryResults:{ type: [categoryResultSchema], default: [] },
+  startedAt:      { type: Date },
   submittedAt:    { type: Date, default: Date.now },
+  timeTakenSeconds:{ type: Number, default: null },
 
   // ── NEW FIELDS ────────────────────────────────────
   project:        { type: String, default: "General" },

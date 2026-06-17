@@ -106,6 +106,86 @@ function formatDateTime(value) {
   }) : "-";
 }
 
+function resultTimeTakenSeconds(result) {
+  if (result?.timeTakenSeconds === null || result?.timeTakenSeconds === undefined || result?.timeTakenSeconds === "") {
+    if (!result?.startedAt || !result?.submittedAt) return null;
+  }
+  const explicit = Number(result?.timeTakenSeconds);
+  if (Number.isFinite(explicit) && explicit >= 0) return explicit;
+  if (result?.startedAt && result?.submittedAt) {
+    const started = new Date(result.startedAt).getTime();
+    const submitted = new Date(result.submittedAt).getTime();
+    if (!Number.isNaN(started) && !Number.isNaN(submitted) && submitted >= started) {
+      return Math.round((submitted - started) / 1000);
+    }
+  }
+  return null;
+}
+
+function formatDuration(seconds) {
+  const total = Number(seconds);
+  if (!Number.isFinite(total) || total < 0) return "-";
+  const rounded = Math.round(total);
+  const mins = Math.floor(rounded / 60);
+  const secs = rounded % 60;
+  if (mins >= 60) {
+    const hours = Math.floor(mins / 60);
+    const restMins = mins % 60;
+    return `${hours}h ${restMins}m ${secs}s`;
+  }
+  return `${mins}m ${secs.toString().padStart(2, "0")}s`;
+}
+
+function buildTestSummaryRows(results) {
+  const grouped = new Map();
+  results.forEach(result => {
+    const key = resultSuiteId(result) || resultTestName(result);
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        testName: resultTestName(result),
+        candidateKeys: new Set(),
+        passed: 0,
+        failed: 0,
+        attempts: [],
+        durations: [],
+      });
+    }
+    const item = grouped.get(key);
+    item.testName = item.testName || resultTestName(result);
+    item.candidateKeys.add(String(resultCandidateContact(result) || resultCandidateName(result)).toLowerCase());
+    if (resultStatus(result) === "Pass") item.passed += 1;
+    else item.failed += 1;
+    if (result.submittedAt) item.attempts.push(new Date(result.submittedAt));
+    const duration = resultTimeTakenSeconds(result);
+    if (duration !== null) item.durations.push(duration);
+  });
+
+  return [...grouped.values()]
+    .map((item) => {
+      const validAttempts = item.attempts.filter(date => !Number.isNaN(date.getTime()));
+      const latestAttempt = validAttempts.length
+        ? new Date(Math.max(...validAttempts.map(date => date.getTime())))
+        : null;
+      const firstAttempt = validAttempts.length
+        ? new Date(Math.min(...validAttempts.map(date => date.getTime())))
+        : null;
+      const averageTime = item.durations.length
+        ? Math.round(item.durations.reduce((sum, value) => sum + value, 0) / item.durations.length)
+        : null;
+      return {
+        testName: item.testName,
+        usersAttempted: item.candidateKeys.size,
+        passed: item.passed,
+        failed: item.failed,
+        totalAttempts: item.passed + item.failed,
+        firstAttempt,
+        latestAttempt,
+        averageTime,
+      };
+    })
+    .sort((a, b) => (b.latestAttempt?.getTime() || 0) - (a.latestAttempt?.getTime() || 0));
+}
+
 function SuiteModal({ suite, onClose, onSave }) {
   const [name, setName] = useState(suite?.name || "");
   const [description, setDescription] = useState(suite?.description || "");
@@ -388,6 +468,18 @@ export default function Dashboard() {
     ? Math.round(selectedUserResults.reduce((sum, result) => sum + resultPct(result), 0) / selectedUserResults.length)
     : 0;
   const selectedUserLatest = selectedUserResults[0] || null;
+  const testSummaryRows = useMemo(() => buildTestSummaryRows(reportResults), [reportResults]);
+  const descriptiveTestRows = useMemo(() => reportResults.map((result, index) => ({
+    index: index + 1,
+    testName: resultTestName(result),
+    candidate: resultCandidateName(result),
+    contact: resultCandidateContact(result),
+    attemptedAt: result.submittedAt,
+    timeTakenSeconds: resultTimeTakenSeconds(result),
+    score: `${result.score || 0}/${result.totalMarks || 0}`,
+    percentage: `${resultPct(result)}%`,
+    result: resultStatus(result),
+  })), [reportResults]);
   const filteredSuites = suites.filter(suite =>
     [
       suite.name,
@@ -568,6 +660,129 @@ export default function Dashboard() {
     } finally {
       setAssignmentSaving(false);
     }
+  };
+
+  const downloadTestSummaryExcel = () => {
+    if (!canDownloadReports) return alert("Download permission is disabled for your account.");
+    if (testSummaryRows.length === 0) return alert("No submitted test reports found.");
+    const rows = testSummaryRows.map((row, index) => ({
+      "Test Number": index + 1,
+      "Test Name": row.testName,
+      "Total Users Attempted": row.usersAttempted,
+      "Passed": row.passed,
+      "Failed": row.failed,
+      "Total Attempts": row.totalAttempts,
+      "First Attempted At": formatDateTime(row.firstAttempt),
+      "Latest Attempted At": formatDateTime(row.latestAttempt),
+      "Average Time Taken": formatDuration(row.averageTime),
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = Object.keys(rows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }));
+    XLSX.utils.book_append_sheet(wb, ws, "Summary Test Report");
+    XLSX.writeFile(wb, `summary_test_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const downloadTestSummaryPDF = () => {
+    if (!canDownloadReports) return alert("Download permission is disabled for your account.");
+    if (testSummaryRows.length === 0) return alert("No submitted test reports found.");
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    doc.setFillColor(26, 61, 40);
+    doc.rect(0, 0, 297, 24, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("Summary Test Report", 14, 10);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`Generated ${formatDateTime(new Date())}`, 14, 17);
+
+    autoTable(doc, {
+      startY: 32,
+      head: [["Test No.", "Test Name", "Users Attempted", "Passed", "Failed", "Total Attempts", "First Attempt", "Latest Attempt", "Avg Time Taken"]],
+      body: testSummaryRows.map((row, index) => [
+        index + 1,
+        row.testName,
+        row.usersAttempted,
+        row.passed,
+        row.failed,
+        row.totalAttempts,
+        formatDateTime(row.firstAttempt),
+        formatDateTime(row.latestAttempt),
+        formatDuration(row.averageTime),
+      ]),
+      styles: { fontSize: 7.3, cellPadding: 2, overflow: "linebreak" },
+      headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [248, 247, 244] },
+      columnStyles: {
+        1: { cellWidth: 58 },
+        6: { cellWidth: 32 },
+        7: { cellWidth: 32 },
+      },
+    });
+    doc.save(`summary_test_report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  const downloadDescriptiveTestExcel = () => {
+    if (!canDownloadReports) return alert("Download permission is disabled for your account.");
+    if (descriptiveTestRows.length === 0) return alert("No submitted test reports found.");
+    const rows = descriptiveTestRows.map(row => ({
+      "Test Number": row.index,
+      "Test Name": row.testName,
+      "Candidate": row.candidate,
+      "Contact": row.contact,
+      "Attempted Date & Time": formatDateTime(row.attemptedAt),
+      "Time Taken": formatDuration(row.timeTakenSeconds),
+      "Score": row.score,
+      "Percentage": row.percentage,
+      "Result": row.result,
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = Object.keys(rows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }));
+    XLSX.utils.book_append_sheet(wb, ws, "Descriptive Test Report");
+    XLSX.writeFile(wb, `descriptive_test_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const downloadDescriptiveTestPDF = () => {
+    if (!canDownloadReports) return alert("Download permission is disabled for your account.");
+    if (descriptiveTestRows.length === 0) return alert("No submitted test reports found.");
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    doc.setFillColor(26, 61, 40);
+    doc.rect(0, 0, 297, 24, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("Descriptive Test Report", 14, 10);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`Generated ${formatDateTime(new Date())}`, 14, 17);
+
+    autoTable(doc, {
+      startY: 32,
+      head: [["Test No.", "Test Name", "Candidate", "Contact", "Attempted Date & Time", "Time Taken", "Score", "%", "Result"]],
+      body: descriptiveTestRows.map(row => [
+        row.index,
+        row.testName,
+        row.candidate,
+        row.contact,
+        formatDateTime(row.attemptedAt),
+        formatDuration(row.timeTakenSeconds),
+        row.score,
+        row.percentage,
+        row.result,
+      ]),
+      styles: { fontSize: 7.2, cellPadding: 2, overflow: "linebreak" },
+      headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [248, 247, 244] },
+      columnStyles: {
+        1: { cellWidth: 46 },
+        2: { cellWidth: 36 },
+        3: { cellWidth: 38 },
+        4: { cellWidth: 34 },
+      },
+    });
+    doc.save(`descriptive_test_report_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   const downloadPersonalExcel = () => {
@@ -798,6 +1013,12 @@ export default function Dashboard() {
           {canBulkMail && (
             <button type="button" className={activePanel === "bulk-mail" ? "active" : ""} onClick={openBulkMail}>
               ✉ Bulk Mail
+            </button>
+          )}
+
+          {canViewReports && (
+            <button type="button" className={activePanel === "test-report" ? "active" : ""} onClick={() => setActivePanel("test-report")}>
+              ▥ Test Report
             </button>
           )}
         </nav>
@@ -1037,6 +1258,111 @@ export default function Dashboard() {
         {activePanel === "bulk-mail" && canBulkMail && (
           <section className="admin-bulk-mail">
             <BulkMailPanel compact />
+          </section>
+        )}
+
+        {activePanel === "test-report" && canViewReports && (
+          <section className="admin-test-report">
+            <div className="admin-panel-heading">
+              <h3>Test Report</h3>
+              <p>Download summary and descriptive reports for all submitted test attempts.</p>
+            </div>
+
+            <div className="admin-test-report-grid">
+              <article className="admin-test-report-card">
+                <div>
+                  <h4>Summary Test Report</h4>
+                  <p>Test number, test name, users attempted, passed, failed, attempt window, and average time taken.</p>
+                </div>
+                <div className="admin-report-actions inline">
+                  <button type="button" onClick={downloadTestSummaryPDF} disabled={!canDownloadReports || testSummaryRows.length === 0}>Summary PDF</button>
+                  <button type="button" onClick={downloadTestSummaryExcel} disabled={!canDownloadReports || testSummaryRows.length === 0}>Summary Excel</button>
+                </div>
+              </article>
+
+              <article className="admin-test-report-card">
+                <div>
+                  <h4>Descriptive Test Report</h4>
+                  <p>Candidate-wise attempt date and time, time taken, score, percentage, and pass/fail result.</p>
+                </div>
+                <div className="admin-report-actions inline">
+                  <button type="button" onClick={downloadDescriptiveTestPDF} disabled={!canDownloadReports || descriptiveTestRows.length === 0}>Descriptive PDF</button>
+                  <button type="button" onClick={downloadDescriptiveTestExcel} disabled={!canDownloadReports || descriptiveTestRows.length === 0}>Descriptive Excel</button>
+                </div>
+              </article>
+            </div>
+
+            <div className="admin-test-report-table">
+              <div className="admin-test-report-table-head">
+                <h4>Summary Preview</h4>
+                <span>{testSummaryRows.length} test(s)</span>
+              </div>
+              <div className="admin-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Test No.</th>
+                      <th>Test Name</th>
+                      <th>Users Attempted</th>
+                      <th>Passed</th>
+                      <th>Failed</th>
+                      <th>Latest Attempt</th>
+                      <th>Avg Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {testSummaryRows.slice(0, 12).map((row, index) => (
+                      <tr key={`${row.testName}-${index}`}>
+                        <td>{index + 1}</td>
+                        <td>{row.testName}</td>
+                        <td>{row.usersAttempted}</td>
+                        <td>{row.passed}</td>
+                        <td>{row.failed}</td>
+                        <td>{formatDateTime(row.latestAttempt)}</td>
+                        <td>{formatDuration(row.averageTime)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {testSummaryRows.length === 0 && <p className="admin-personal-empty">No submitted tests yet.</p>}
+              </div>
+            </div>
+
+            <div className="admin-test-report-table">
+              <div className="admin-test-report-table-head">
+                <h4>Descriptive Preview</h4>
+                <span>{descriptiveTestRows.length} attempt(s)</span>
+              </div>
+              <div className="admin-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Test No.</th>
+                      <th>Test Name</th>
+                      <th>Candidate</th>
+                      <th>Attempted Date & Time</th>
+                      <th>Time Taken</th>
+                      <th>Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {descriptiveTestRows.slice(0, 12).map(row => (
+                      <tr key={`${row.index}-${row.contact}-${row.attemptedAt || ""}`}>
+                        <td>{row.index}</td>
+                        <td>{row.testName}</td>
+                        <td>{row.candidate}</td>
+                        <td>{formatDateTime(row.attemptedAt)}</td>
+                        <td>{formatDuration(row.timeTakenSeconds)}</td>
+                        <td>
+                          <span className={`admin-personal-status ${row.result.toLowerCase()}`}>{row.result}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {descriptiveTestRows.length === 0 && <p className="admin-personal-empty">No submitted test attempts yet.</p>}
+              </div>
+            </div>
           </section>
         )}
 

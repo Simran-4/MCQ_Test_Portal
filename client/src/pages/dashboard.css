@@ -971,6 +971,100 @@ body {
   overflow: hidden;
 }
 
+.admin-test-report {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 18px;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.admin-test-report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-test-report-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: #f8fbf9;
+}
+
+.admin-test-report-card h4,
+.admin-test-report-table h4 {
+  margin: 0 0 6px;
+  color: var(--admin-green-dark);
+  font-size: 16px;
+}
+
+.admin-test-report-card p {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.admin-report-actions.inline {
+  flex: 0 0 auto;
+  margin-top: 0;
+  justify-content: flex-end;
+}
+
+.admin-test-report-table {
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.admin-test-report-table-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--admin-border);
+  background: #f8fbf9;
+}
+
+.admin-test-report-table-head span {
+  color: var(--admin-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-table-scroll {
+  overflow-x: auto;
+}
+
+.admin-test-report-table table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.admin-test-report-table th,
+.admin-test-report-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #edf2ee;
+  color: var(--admin-text);
+  font-size: 13px;
+  text-align: left;
+}
+
+.admin-test-report-table th {
+  color: var(--admin-green-dark);
+  background: #fff;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
 .admin-suite-list {
   display: grid;
   gap: 14px;
@@ -1379,6 +1473,19 @@ body {
   }
 
   .admin-suite-actions {
+    justify-content: flex-start;
+  }
+
+  .admin-test-report-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-test-report-card {
+    flex-direction: column;
+  }
+
+  .admin-report-actions.inline {
+    width: 100%;
     justify-content: flex-start;
   }
 }

@@ -174,6 +174,8 @@ router.post("/", authMiddleware, async (req, res) => {
       project,
       designation,
       testName,
+      startedAt,
+      timeTakenSeconds,
     } = req.body;
 
     if (!Array.isArray(answers)) {
@@ -288,6 +290,17 @@ router.post("/", authMiddleware, async (req, res) => {
       : CandidateEmail;
     const storedProject = submitter?.project || project || "General";
     const storedDesignation = submitter?.designation || designation || "";
+    const submittedAt = new Date();
+    const parsedStartedAt = startedAt ? new Date(startedAt) : null;
+    const safeStartedAt = parsedStartedAt && !Number.isNaN(parsedStartedAt.getTime())
+      ? parsedStartedAt
+      : undefined;
+    const parsedTimeTaken = Number(timeTakenSeconds);
+    const safeTimeTaken = Number.isFinite(parsedTimeTaken)
+      ? Math.max(0, Math.round(parsedTimeTaken))
+      : safeStartedAt
+        ? Math.max(0, Math.round((submittedAt.getTime() - safeStartedAt.getTime()) / 1000))
+        : null;
 
     const result = new Result({
       suiteId,
@@ -305,7 +318,9 @@ router.post("/", authMiddleware, async (req, res) => {
       project:        storedProject,
       designation:    storedDesignation,
       passed,
-      submittedAt:    new Date(),
+      startedAt:      safeStartedAt,
+      submittedAt,
+      timeTakenSeconds: safeTimeTaken,
     });
 
     await result.save();
@@ -317,6 +332,9 @@ router.post("/", authMiddleware, async (req, res) => {
       totalQuestions: questions.length,
       categoryResults,
       passed,
+      startedAt: result.startedAt,
+      submittedAt: result.submittedAt,
+      timeTakenSeconds: result.timeTakenSeconds,
     });
 
   } catch (err) {
