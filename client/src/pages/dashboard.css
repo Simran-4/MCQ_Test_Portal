@@ -478,7 +478,7 @@ body {
 }
 
 .admin-management-grid.single {
-  grid-template-columns: minmax(0, 760px);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .admin-management-card {
