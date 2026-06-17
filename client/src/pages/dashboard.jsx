@@ -10,6 +10,8 @@ import { canAdmin, getAuthHeaders } from "../utils/auth";
 import BulkMailPanel from "../components/BulkMailPanel";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const DEVANAGARI_FONT_NAME = "Sarala";
+const DEVANAGARI_FONT_FILE = "Sarala-Regular.ttf";
 
 function userContact(user) {
   return user.email || user.mobile || user.username || "";
@@ -103,8 +105,9 @@ function correctIndexesForCategory(question, category) {
 }
 
 function optionLabels(question, indexes) {
+  const options = Array.isArray(question?.options) ? question.options : [];
   return uniqueIndexes(indexes)
-    .map(index => question?.options?.[index])
+    .map(index => options[index] || options[index - 1] || `Option ${index + 1}`)
     .filter(Boolean)
     .join(", ");
 }
@@ -117,15 +120,17 @@ function selectedAnswerLabel(answer, question) {
 function correctAnswerLabel(answer, question) {
   if (!question) return "Question details unavailable";
   if (isTheoryQuestion(question)) return "Theory answer - manual review";
-  return questionCategories(question, answer)
+  const label = questionCategories(question, answer)
     .map(category => `${category}: ${optionLabels(question, correctIndexesForCategory(question, category)) || "-"}`)
     .join("; ");
+  return label || "Correct answer unavailable";
 }
 
 function questionReviewRows(result) {
   return (result.answers || []).map((answer, index) => {
     const question = getAnswerQuestion(answer);
     const categories = questionCategories(question, answer);
+    const isCorrect = typeof answer?.isCorrect === "boolean" ? answer.isCorrect : null;
     return {
       number: index + 1,
       question: question?.questionText || `Question ${index + 1}`,
@@ -134,7 +139,7 @@ function questionReviewRows(result) {
       correct: correctAnswerLabel(answer, question),
       review: isTheoryQuestion(question)
         ? "Manual review"
-        : answer?.isCorrect ? "Correct" : "Incorrect",
+        : isCorrect === null ? "Not scored" : isCorrect ? "Correct" : "Incorrect",
       marks: answer?.earnedMarks !== undefined && question?.marks !== undefined
         ? `${answer.earnedMarks}/${question.marks}`
         : answer?.earnedMarks !== undefined ? String(answer.earnedMarks) : "-",
@@ -157,15 +162,13 @@ function arrayBufferToBase64(buffer) {
 }
 
 async function addDevanagariFont(doc) {
-  const fontName = "NotoSansDevanagari";
-  const fontFile = "NotoSansDevanagari-Regular.ttf";
   try {
-    const res = await fetch(`${window.location.origin}/fonts/${fontFile}`);
+    const res = await fetch(`${window.location.origin}/fonts/${DEVANAGARI_FONT_FILE}`);
     if (!res.ok) throw new Error("Font file unavailable");
     const fontBase64 = arrayBufferToBase64(await res.arrayBuffer());
-    doc.addFileToVFS(fontFile, fontBase64);
-    doc.addFont(fontFile, fontName, "normal");
-    return fontName;
+    doc.addFileToVFS(DEVANAGARI_FONT_FILE, fontBase64);
+    doc.addFont(DEVANAGARI_FONT_FILE, DEVANAGARI_FONT_NAME, "normal");
+    return DEVANAGARI_FONT_NAME;
   } catch (err) {
     console.warn("Unable to load Devanagari PDF font. Falling back to Helvetica.", err);
     return "helvetica";
@@ -1108,42 +1111,52 @@ export default function Dashboard() {
         return;
       }
 
-      autoTable(doc, {
-        startY: reviewY + 9,
-        head: [["Q.No.", "Field", "Details"]],
-        body: rows.flatMap(row => [
-          [row.number, "Question", row.question],
-          ["", "Category", row.categories || "-"],
-          ["", "Selected Option", row.selected || "-"],
-          ["", "Correct Option", row.correct || "-"],
-          ["", "Review", row.review || "-"],
-          ["", "Marks", row.marks || "-"],
-        ]),
-        styles: { fontSize: 7.2, cellPadding: 1.8, overflow: "linebreak", valign: "top", font: reportFont, fontStyle: "normal" },
-        headStyles: { fillColor: [231, 244, 235], textColor: [26, 61, 40], font: "helvetica", fontStyle: "bold" },
-        bodyStyles: { font: reportFont, fontStyle: "normal" },
-        alternateRowStyles: { fillColor: [248, 247, 244] },
-        columnStyles: {
-          0: { cellWidth: 14, halign: "center" },
-          1: { cellWidth: 34, font: "helvetica", fontStyle: "bold", textColor: [26, 61, 40] },
-          2: { cellWidth: 220 },
-        },
-        didParseCell: (data) => {
-          if (data.section === "body" && data.column.index === 1) {
-            data.cell.styles.fillColor = [231, 244, 235];
-          }
-          if (
-            data.section === "body" &&
-            data.column.index === 2 &&
-            String(data.row.raw?.[1] || "").toLowerCase() === "review"
-          ) {
-            const value = String(data.cell.raw || "").toLowerCase();
-            if (value === "correct") data.cell.styles.textColor = [22, 101, 52];
-            if (value === "incorrect") data.cell.styles.textColor = [185, 28, 28];
-          }
-        },
+      reviewY += 9;
+      rows.forEach(row => {
+        if (reviewY > 184) {
+          doc.addPage();
+          reviewY = 18;
+        }
+
+        autoTable(doc, {
+          startY: reviewY,
+          head: [["Q.No.", "Field", "Details"]],
+          body: [
+            [row.number, "Question", row.question || "-"],
+            ["", "Category", row.categories || "-"],
+            ["", "Selected Option", row.selected || "-"],
+            ["", "Correct Option", row.correct || "-"],
+            ["", "Review", row.review || "-"],
+            ["", "Marks", row.marks || "-"],
+          ],
+          theme: "grid",
+          margin: { left: 14, right: 14 },
+          tableWidth: 269,
+          rowPageBreak: "avoid",
+          styles: { fontSize: 7.2, cellPadding: 1.8, overflow: "linebreak", valign: "top", font: reportFont, fontStyle: "normal" },
+          headStyles: { fillColor: [231, 244, 235], textColor: [26, 61, 40], font: "helvetica", fontStyle: "bold" },
+          bodyStyles: { font: reportFont, fontStyle: "normal", textColor: [36, 48, 40] },
+          alternateRowStyles: { fillColor: [248, 247, 244] },
+          columnStyles: {
+            0: { cellWidth: 14, halign: "center" },
+            1: { cellWidth: 34, font: "helvetica", fontStyle: "bold", textColor: [26, 61, 40], fillColor: [231, 244, 235] },
+            2: { cellWidth: 221 },
+          },
+          didParseCell: (data) => {
+            if (
+              data.section === "body" &&
+              data.column.index === 2 &&
+              String(data.row.raw?.[1] || "").toLowerCase() === "review"
+            ) {
+              const value = String(data.cell.raw || "").toLowerCase();
+              if (value === "correct") data.cell.styles.textColor = [22, 101, 52];
+              if (value === "incorrect") data.cell.styles.textColor = [185, 28, 28];
+            }
+          },
+        });
+        reviewY = doc.lastAutoTable.finalY + 4;
       });
-      reviewY = doc.lastAutoTable.finalY + 10;
+      reviewY += 6;
     });
 
     doc.save(`personal_report_${fileSafeName(selectedReportUser.name)}.pdf`);
