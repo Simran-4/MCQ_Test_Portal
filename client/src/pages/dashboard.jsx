@@ -68,6 +68,80 @@ function categoryRowsForResult(result) {
   return Array.isArray(result.categoryResults) ? result.categoryResults : [];
 }
 
+function uniqueIndexes(indexes) {
+  return [...new Set((Array.isArray(indexes) ? indexes : []).map(Number))]
+    .filter(Number.isInteger);
+}
+
+function getAnswerQuestion(answer) {
+  return answer?.questionId && typeof answer.questionId === "object" ? answer.questionId : null;
+}
+
+function isTheoryQuestion(question) {
+  return question?.questionType === "theory";
+}
+
+function questionCategories(question, answer) {
+  const raw = question?.category?.length ? question.category : answer?.category;
+  if (Array.isArray(raw) && raw.length > 0) return raw.filter(Boolean);
+  if (typeof raw === "string" && raw.trim()) return raw.split(",").map(item => item.trim()).filter(Boolean);
+  return ["Uncategorized"];
+}
+
+function categoryAnswerMap(question) {
+  const rawMap = question?.categoryCorrectAnswers;
+  if (!rawMap) return {};
+  if (rawMap instanceof Map) return Object.fromEntries(rawMap);
+  return rawMap;
+}
+
+function correctIndexesForCategory(question, category) {
+  const fallback = uniqueIndexes(question?.correctAnswer);
+  const map = categoryAnswerMap(question);
+  const categoryAnswers = uniqueIndexes(map?.[category]);
+  return categoryAnswers.length > 0 ? categoryAnswers : fallback;
+}
+
+function optionLabels(question, indexes) {
+  return uniqueIndexes(indexes)
+    .map(index => question?.options?.[index])
+    .filter(Boolean)
+    .join(", ");
+}
+
+function selectedAnswerLabel(answer, question) {
+  if (isTheoryQuestion(question)) return String(answer?.textAnswer || "").trim() || "Not answered";
+  return optionLabels(question, answer?.selectedOptions) || "Not answered";
+}
+
+function correctAnswerLabel(answer, question) {
+  if (!question) return "Question details unavailable";
+  if (isTheoryQuestion(question)) return "Theory answer - manual review";
+  return questionCategories(question, answer)
+    .map(category => `${category}: ${optionLabels(question, correctIndexesForCategory(question, category)) || "-"}`)
+    .join("; ");
+}
+
+function questionReviewRows(result) {
+  return (result.answers || []).map((answer, index) => {
+    const question = getAnswerQuestion(answer);
+    const categories = questionCategories(question, answer);
+    return {
+      number: index + 1,
+      question: question?.questionText || `Question ${index + 1}`,
+      categories: categories.join(", "),
+      selected: selectedAnswerLabel(answer, question),
+      correct: correctAnswerLabel(answer, question),
+      review: isTheoryQuestion(question)
+        ? "Manual review"
+        : answer?.isCorrect ? "Correct" : "Incorrect",
+      marks: answer?.earnedMarks !== undefined && question?.marks !== undefined
+        ? `${answer.earnedMarks}/${question.marks}`
+        : answer?.earnedMarks !== undefined ? String(answer.earnedMarks) : "-",
+    };
+  });
+}
+
 function fileSafeName(value) {
   return String(value || "user").replace(/[^a-z0-9]/gi, "_").toLowerCase();
 }
@@ -973,6 +1047,73 @@ export default function Dashboard() {
       },
     });
 
+    let reviewY = doc.lastAutoTable.finalY + 10;
+    selectedUserResults.forEach((result, resultIndex) => {
+      const rows = questionReviewRows(result);
+      if (reviewY > 178) {
+        doc.addPage();
+        reviewY = 18;
+      }
+
+      doc.setTextColor(26, 61, 40);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(
+        `Question Review ${resultIndex + 1}: ${resultTestName(result)}`,
+        14,
+        reviewY
+      );
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(90, 95, 92);
+      doc.text(
+        `Attempted: ${formatDateTime(result.submittedAt)} | Score: ${result.score || 0}/${result.totalMarks || 0} | Result: ${resultStatus(result)}`,
+        14,
+        reviewY + 5
+      );
+
+      if (rows.length === 0) {
+        doc.setTextColor(120, 120, 112);
+        doc.text("No question-wise answer data is available for this attempt.", 14, reviewY + 13);
+        reviewY += 22;
+        return;
+      }
+
+      autoTable(doc, {
+        startY: reviewY + 9,
+        head: [["Q.No.", "Question", "Category", "Selected Option", "Correct Option", "Review", "Marks"]],
+        body: rows.map(row => [
+          row.number,
+          row.question,
+          row.categories,
+          row.selected,
+          row.correct,
+          row.review,
+          row.marks,
+        ]),
+        styles: { fontSize: 6.8, cellPadding: 1.8, overflow: "linebreak", valign: "top" },
+        headStyles: { fillColor: [231, 244, 235], textColor: [26, 61, 40] },
+        alternateRowStyles: { fillColor: [248, 247, 244] },
+        columnStyles: {
+          0: { cellWidth: 14, halign: "center" },
+          1: { cellWidth: 70 },
+          2: { cellWidth: 28 },
+          3: { cellWidth: 42 },
+          4: { cellWidth: 50 },
+          5: { cellWidth: 23, halign: "center" },
+          6: { cellWidth: 20, halign: "center" },
+        },
+        didParseCell: (data) => {
+          if (data.section === "body" && data.column.index === 5) {
+            const value = String(data.cell.raw || "").toLowerCase();
+            if (value === "correct") data.cell.styles.textColor = [22, 101, 52];
+            if (value === "incorrect") data.cell.styles.textColor = [185, 28, 28];
+          }
+        },
+      });
+      reviewY = doc.lastAutoTable.finalY + 10;
+    });
+
     doc.save(`personal_report_${fileSafeName(selectedReportUser.name)}.pdf`);
   };
 
@@ -1317,7 +1458,7 @@ export default function Dashboard() {
             <div className="admin-report-actions">
               {canDownloadReports ? (
                 <>
-                  <button type="button" onClick={downloadPersonalPDF}>Download PDF</button>
+                  <button type="button" onClick={downloadPersonalPDF}>Descriptive PDF</button>
                   <button type="button" onClick={downloadPersonalExcel}>Download Excel</button>
                 </>
               ) : (

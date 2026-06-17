@@ -375,6 +375,7 @@ router.get("/suite/:suiteId", authMiddleware, requireAdminOrSuperAdmin, async (r
     );
     const results = await Result.find(query)
       .populate("suiteId", "name passingPercentage")
+      .populate("answers.questionId", "questionText questionType options correctAnswer categoryCorrectAnswers marks category")
       .sort({ submittedAt: -1 });
     res.json(results);
   } catch (err) {
@@ -428,6 +429,7 @@ router.get("/all", authMiddleware, async (req, res) => {
 
     const results = await Result.find(query)
       .populate("suiteId", "name passingPercentage")
+      .populate("answers.questionId", "questionText questionType options correctAnswer categoryCorrectAnswers marks category")
       .sort({ submittedAt: -1 });
     res.json(results);
   } catch (err) {
