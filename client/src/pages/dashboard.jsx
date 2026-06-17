@@ -1110,31 +1110,33 @@ export default function Dashboard() {
 
       autoTable(doc, {
         startY: reviewY + 9,
-        head: [["Q.No.", "Question", "Category", "Selected Option", "Correct Option", "Review", "Marks"]],
-        body: rows.map(row => [
-          row.number,
-          row.question,
-          row.categories,
-          row.selected,
-          row.correct,
-          row.review,
-          row.marks,
+        head: [["Q.No.", "Field", "Details"]],
+        body: rows.flatMap(row => [
+          [row.number, "Question", row.question],
+          ["", "Category", row.categories || "-"],
+          ["", "Selected Option", row.selected || "-"],
+          ["", "Correct Option", row.correct || "-"],
+          ["", "Review", row.review || "-"],
+          ["", "Marks", row.marks || "-"],
         ]),
-        styles: { fontSize: 6.8, cellPadding: 1.8, overflow: "linebreak", valign: "top", font: reportFont, fontStyle: "normal" },
+        styles: { fontSize: 7.2, cellPadding: 1.8, overflow: "linebreak", valign: "top", font: reportFont, fontStyle: "normal" },
         headStyles: { fillColor: [231, 244, 235], textColor: [26, 61, 40], font: "helvetica", fontStyle: "bold" },
         bodyStyles: { font: reportFont, fontStyle: "normal" },
         alternateRowStyles: { fillColor: [248, 247, 244] },
         columnStyles: {
           0: { cellWidth: 14, halign: "center" },
-          1: { cellWidth: 70 },
-          2: { cellWidth: 28 },
-          3: { cellWidth: 42 },
-          4: { cellWidth: 50 },
-          5: { cellWidth: 23, halign: "center" },
-          6: { cellWidth: 20, halign: "center" },
+          1: { cellWidth: 34, font: "helvetica", fontStyle: "bold", textColor: [26, 61, 40] },
+          2: { cellWidth: 220 },
         },
         didParseCell: (data) => {
-          if (data.section === "body" && data.column.index === 5) {
+          if (data.section === "body" && data.column.index === 1) {
+            data.cell.styles.fillColor = [231, 244, 235];
+          }
+          if (
+            data.section === "body" &&
+            data.column.index === 2 &&
+            String(data.row.raw?.[1] || "").toLowerCase() === "review"
+          ) {
             const value = String(data.cell.raw || "").toLowerCase();
             if (value === "correct") data.cell.styles.textColor = [22, 101, 52];
             if (value === "incorrect") data.cell.styles.textColor = [185, 28, 28];
