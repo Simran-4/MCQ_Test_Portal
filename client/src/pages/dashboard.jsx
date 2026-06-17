@@ -146,6 +146,32 @@ function fileSafeName(value) {
   return String(value || "user").replace(/[^a-z0-9]/gi, "_").toLowerCase();
 }
 
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function addDevanagariFont(doc) {
+  const fontName = "NotoSansDevanagari";
+  const fontFile = "NotoSansDevanagari-Regular.ttf";
+  try {
+    const res = await fetch(`${window.location.origin}/fonts/${fontFile}`);
+    if (!res.ok) throw new Error("Font file unavailable");
+    const fontBase64 = arrayBufferToBase64(await res.arrayBuffer());
+    doc.addFileToVFS(fontFile, fontBase64);
+    doc.addFont(fontFile, fontName, "normal");
+    return fontName;
+  } catch (err) {
+    console.warn("Unable to load Devanagari PDF font. Falling back to Helvetica.", err);
+    return "helvetica";
+  }
+}
+
 function matchesUserResult(result, user) {
   const tokens = [
     user.email,
@@ -982,12 +1008,13 @@ export default function Dashboard() {
     XLSX.writeFile(wb, `personal_report_${fileSafeName(selectedReportUser.name)}.xlsx`);
   };
 
-  const downloadPersonalPDF = () => {
+  const downloadPersonalPDF = async () => {
     if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     if (!selectedReportUser) return alert("Select a user first.");
     if (selectedUserResults.length === 0) return alert("No reports found for this user.");
 
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const reportFont = await addDevanagariFont(doc);
     doc.setFillColor(26, 61, 40);
     doc.rect(0, 0, 297, 24, "F");
     doc.setTextColor(255, 255, 255);
@@ -995,8 +1022,9 @@ export default function Dashboard() {
     doc.setFontSize(14);
     doc.text("Snehalaya Personal Test Report", 14, 10);
     doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(reportFont, "normal");
     doc.text(`${selectedReportUser.name}  |  ${userContact(selectedReportUser) || "-"}`, 14, 17);
+    doc.setFont("helvetica", "normal");
     doc.text(new Date().toLocaleDateString("en-IN"), 283, 15, { align: "right" });
 
     doc.setTextColor(26, 61, 40);
@@ -1016,9 +1044,9 @@ export default function Dashboard() {
         `${selectedUserAverage}%`,
         selectedUserLatest ? resultTestName(selectedUserLatest) : "-",
       ]],
-      styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak" },
+      styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak", font: reportFont, fontStyle: "normal" },
       headStyles: { fillColor: [231, 244, 235], textColor: [26, 61, 40] },
-      bodyStyles: { textColor: [36, 48, 40] },
+      bodyStyles: { textColor: [36, 48, 40], font: reportFont, fontStyle: "normal" },
     });
 
     autoTable(doc, {
@@ -1038,8 +1066,9 @@ export default function Dashboard() {
             .join("\n")
           : "-",
       ]),
-      styles: { fontSize: 7.6, cellPadding: 2, overflow: "linebreak" },
-      headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
+      styles: { fontSize: 7.6, cellPadding: 2, overflow: "linebreak", font: reportFont, fontStyle: "normal" },
+      headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255], font: "helvetica", fontStyle: "bold" },
+      bodyStyles: { font: reportFont, fontStyle: "normal" },
       alternateRowStyles: { fillColor: [248, 247, 244] },
       columnStyles: {
         1: { cellWidth: 54 },
@@ -1056,14 +1085,14 @@ export default function Dashboard() {
       }
 
       doc.setTextColor(26, 61, 40);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(reportFont, "normal");
       doc.setFontSize(10);
       doc.text(
         `Question Review ${resultIndex + 1}: ${resultTestName(result)}`,
         14,
         reviewY
       );
-      doc.setFont("helvetica", "normal");
+      doc.setFont(reportFont, "normal");
       doc.setFontSize(8);
       doc.setTextColor(90, 95, 92);
       doc.text(
@@ -1091,8 +1120,9 @@ export default function Dashboard() {
           row.review,
           row.marks,
         ]),
-        styles: { fontSize: 6.8, cellPadding: 1.8, overflow: "linebreak", valign: "top" },
-        headStyles: { fillColor: [231, 244, 235], textColor: [26, 61, 40] },
+        styles: { fontSize: 6.8, cellPadding: 1.8, overflow: "linebreak", valign: "top", font: reportFont, fontStyle: "normal" },
+        headStyles: { fillColor: [231, 244, 235], textColor: [26, 61, 40], font: "helvetica", fontStyle: "bold" },
+        bodyStyles: { font: reportFont, fontStyle: "normal" },
         alternateRowStyles: { fillColor: [248, 247, 244] },
         columnStyles: {
           0: { cellWidth: 14, halign: "center" },
