@@ -124,22 +124,6 @@ export default function AdminSuiteResults() {
     fetchAll();
   }, [suiteId]);
 
-  const handleToggleStatus = async () => {
-    try {
-      const newStatus = suiteStatus === "active" ? "draft" : "active";
-      const res   = await axios.put(
-        `${API}/api/test-suites/${suiteId}`,
-        { status: newStatus },
-        { headers: getAuthHeaders() }
-      );
-      setSuiteStatus(res.data.status || newStatus);
-      setSuite(prev => ({ ...prev, status: res.data.status || newStatus }));
-    } catch (err) {
-      console.error(err);
-      alert("Failed to toggle test status.");
-    }
-  };
-
   const handleDownloadPDF = async (reportType) => {
     if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     setDownloading(true); setDlType(`${reportType}-pdf`);
@@ -276,15 +260,6 @@ export default function AdminSuiteResults() {
 
         {/* Action buttons */}
         <div className="suite-results-actions" style={{ display:"flex", gap:"10px", flexWrap:"wrap" }}>
-          <button onClick={handleToggleStatus} style={{
-            display:"flex", alignItems:"center", gap:"7px", padding:"10px 18px",
-            background: suiteStatus === "active" ? "#fee2e2" : "#dcfce7",
-            color:      suiteStatus === "active" ? "#dc2626" : "#166534",
-            border:     suiteStatus === "active" ? "1.5px solid #fca5a5" : "1.5px solid #86efac",
-            borderRadius:"22px", fontSize:"14px", fontWeight:"600", cursor:"pointer",
-          }}>
-            {suiteStatus === "active" ? "⏸ Deactivate" : "▶ Activate"}
-          </button>
           <button onClick={() => setShowDownloads(v => !v)} disabled={results.length === 0} style={{
             display:"flex", alignItems:"center", gap:"7px", padding:"10px 18px",
             background: showDownloads ? GREEN : WHITE,
