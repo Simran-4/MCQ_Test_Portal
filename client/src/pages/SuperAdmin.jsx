@@ -129,6 +129,17 @@ function resultStatus(result) {
   return resultPct(result) >= 50 ? "Pass" : "Fail";
 }
 
+function formatDateTime(value) {
+  return value ? new Date(value).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }) : "-";
+}
+
 function userNameKey(user) {
   return String(user?.name || "").trim().toLowerCase();
 }
@@ -211,7 +222,7 @@ function roleAssignmentUsers(users) {
 
 function saveReportsExcel(results, suitesById, reportType) {
   const wb = XLSX.utils.book_new();
-  const summaryHeaders = ["Test Name", "Candidate", "Email", "Project/Department", "Designation", "Score", "Percentage", "Result", "Submitted At"];
+  const summaryHeaders = ["Test Name", "Candidate", "Email", "Project/Department", "Designation", "Score", "Percentage", "Result", "Attempted At"];
   const summaryRows = results.map(result => [
     resultTestName(result, suitesById),
     candidateName(result),
@@ -221,7 +232,7 @@ function saveReportsExcel(results, suitesById, reportType) {
     `${result.score || 0}/${result.totalMarks || 0}`,
     `${resultPct(result)}%`,
     resultStatus(result),
-    result.submittedAt ? new Date(result.submittedAt).toLocaleString() : "-",
+    formatDateTime(result.submittedAt),
   ]);
   const summarySheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
   summarySheet["!cols"] = summaryHeaders.map(header => ({ wch: Math.max(16, header.length + 4) }));
@@ -269,7 +280,7 @@ function saveReportsPDF(results, suitesById, reportType) {
 
   autoTable(doc, {
     startY: 30,
-    head: [["#", "Test Name", "Candidate", "Email", "Project/Department", "Designation", "Score", "%", "Result", "Date"]],
+    head: [["#", "Test Name", "Candidate", "Email", "Project/Department", "Designation", "Score", "%", "Result", "Attempted At"]],
     body: results.map((result, index) => [
       index + 1,
       resultTestName(result, suitesById),
@@ -280,7 +291,7 @@ function saveReportsPDF(results, suitesById, reportType) {
       `${result.score || 0}/${result.totalMarks || 0}`,
       `${resultPct(result)}%`,
       resultStatus(result),
-      result.submittedAt ? new Date(result.submittedAt).toLocaleDateString() : "-",
+      formatDateTime(result.submittedAt),
     ]),
     styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
     headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
@@ -350,6 +361,11 @@ function SuperAdmin() {
   const [projectName, setProjectName] = useState("");
   const [departmentProject, setDepartmentProject] = useState("");
   const [departmentName, setDepartmentName] = useState("");
+  const [editProjectOriginal, setEditProjectOriginal] = useState("");
+  const [editProjectName, setEditProjectName] = useState("");
+  const [editDepartmentProject, setEditDepartmentProject] = useState("");
+  const [editDepartmentOriginal, setEditDepartmentOriginal] = useState("");
+  const [editDepartmentName, setEditDepartmentName] = useState("");
   const [resetUser, setResetUser] = useState(null);
   const [resetPassword, setResetPassword] = useState("");
   const [resetSaving, setResetSaving] = useState(false);
@@ -785,6 +801,49 @@ function SuperAdmin() {
     setOrgOptions(nextOptions);
   };
 
+  const saveEditedProjectLocal = (currentName, nextName) => {
+    const hasDuplicate = Object.keys(orgOptions).some(project =>
+      project.toLowerCase() === nextName.toLowerCase() &&
+      project.toLowerCase() !== currentName.toLowerCase()
+    );
+    if (hasDuplicate) {
+      alert("Project/department already exists.");
+      return false;
+    }
+
+    const nextOptions = Object.entries(orgOptions).reduce((acc, [project, departments]) => {
+      acc[project.toLowerCase() === currentName.toLowerCase() ? nextName : project] = departments;
+      return acc;
+    }, {});
+    writeLocalOrgOptions(nextOptions);
+    setOrgOptions(nextOptions);
+    if (departmentProject === currentName) setDepartmentProject(nextName);
+    if (editDepartmentProject === currentName) setEditDepartmentProject(nextName);
+    return true;
+  };
+
+  const saveEditedDepartmentLocal = (projectName, currentDepartment, nextDepartment) => {
+    const departments = orgOptions[projectName] || [];
+    const hasDuplicate = departments.some(department =>
+      department.toLowerCase() === nextDepartment.toLowerCase() &&
+      department.toLowerCase() !== currentDepartment.toLowerCase()
+    );
+    if (hasDuplicate) {
+      alert("Designation already exists in this project/department.");
+      return false;
+    }
+
+    const nextOptions = {
+      ...orgOptions,
+      [projectName]: departments.map(department =>
+        department.toLowerCase() === currentDepartment.toLowerCase() ? nextDepartment : department
+      ),
+    };
+    writeLocalOrgOptions(nextOptions);
+    setOrgOptions(nextOptions);
+    return true;
+  };
+
   const addProject = async () => {
     const name = projectName.trim();
     if (!name) return alert("Enter a project/department name.");
@@ -812,6 +871,55 @@ function SuperAdmin() {
       alert("Designation saved locally. Redeploy Railway backend to save it for everyone.");
     }
     setDepartmentName("");
+  };
+
+  const updateProject = async () => {
+    const currentName = editProjectOriginal.trim();
+    const nextName = editProjectName.trim();
+    if (!currentName || !nextName) return alert("Select a project/department and enter the updated name.");
+    try {
+      const res = await axios.put(
+        `${API_URL}/superadmin/org-options/projects/${encodeURIComponent(currentName)}`,
+        { name: nextName },
+        { headers: getAuthHeaders() }
+      );
+      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
+      setEditProjectOriginal(nextName);
+      setEditProjectName(nextName);
+      alert("Project/department updated successfully.");
+    } catch (err) {
+      if (saveEditedProjectLocal(currentName, nextName)) {
+        setEditProjectOriginal(nextName);
+        setEditProjectName(nextName);
+        alert(err.response?.data?.message || "Project updated locally. Redeploy Railway backend to save it for everyone.");
+      }
+    }
+  };
+
+  const updateDepartment = async () => {
+    const project = editDepartmentProject.trim();
+    const currentDepartment = editDepartmentOriginal.trim();
+    const nextDepartment = editDepartmentName.trim();
+    if (!project || !currentDepartment || !nextDepartment) {
+      return alert("Select a project/department, designation, and enter the updated designation.");
+    }
+    try {
+      const res = await axios.put(
+        `${API_URL}/superadmin/org-options/departments`,
+        { project, oldDepartment: currentDepartment, department: nextDepartment },
+        { headers: getAuthHeaders() }
+      );
+      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
+      setEditDepartmentOriginal(nextDepartment);
+      setEditDepartmentName(nextDepartment);
+      alert("Designation updated successfully.");
+    } catch (err) {
+      if (saveEditedDepartmentLocal(project, currentDepartment, nextDepartment)) {
+        setEditDepartmentOriginal(nextDepartment);
+        setEditDepartmentName(nextDepartment);
+        alert(err.response?.data?.message || "Designation updated locally. Redeploy Railway backend to save it for everyone.");
+      }
+    }
   };
 
   const logout = () => {
@@ -855,6 +963,7 @@ function SuperAdmin() {
   const createUserProjectNames = Object.keys(orgOptions).sort((a, b) => a.localeCompare(b));
   const createUserDepartments = createUserForm.project ? orgOptions[createUserForm.project] || [] : [];
   const editUserDepartments = editUserForm.project ? orgOptions[editUserForm.project] || [] : [];
+  const editDepartmentOptions = editDepartmentProject ? orgOptions[editDepartmentProject] || [] : [];
   const assignableRoles = roles.filter(role => role.name !== "superadmin" && !role.disabled);
   const editRoleOptions = roles.some(role => role.name === editUserForm.role)
     ? roles
@@ -999,6 +1108,7 @@ function SuperAdmin() {
                       <th>Score</th>
                       <th>%</th>
                       <th>Result</th>
+                      <th>Attempted At</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1016,6 +1126,7 @@ function SuperAdmin() {
                             {resultStatus(result)}
                           </span>
                         </td>
+                        <td>{formatDateTime(result.submittedAt)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1464,12 +1575,72 @@ function SuperAdmin() {
                   <h3>Add Designation</h3>
                   <select value={departmentProject} onChange={e => setDepartmentProject(e.target.value)}>
                     <option value="">Select project/department</option>
-                    {Object.keys(orgOptions).sort((a, b) => a.localeCompare(b)).map(project => (
+                    {createUserProjectNames.map(project => (
                       <option key={project} value={project}>{project}</option>
                     ))}
                   </select>
                   <input value={departmentName} onChange={e => setDepartmentName(e.target.value)} placeholder="Designation name" />
                   <button type="button" onClick={addDepartment}>Add Designation</button>
+                </div>
+
+                <div className="control-panel">
+                  <h3>Edit Project/Department</h3>
+                  <select
+                    value={editProjectOriginal}
+                    onChange={e => {
+                      setEditProjectOriginal(e.target.value);
+                      setEditProjectName(e.target.value);
+                    }}
+                  >
+                    <option value="">Select project/department</option>
+                    {createUserProjectNames.map(project => (
+                      <option key={project} value={project}>{project}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={editProjectName}
+                    onChange={e => setEditProjectName(e.target.value)}
+                    placeholder="Updated project/department name"
+                    disabled={!editProjectOriginal}
+                  />
+                  <button type="button" onClick={updateProject} disabled={!editProjectOriginal}>Update Project/Department</button>
+                </div>
+
+                <div className="control-panel">
+                  <h3>Edit Designation</h3>
+                  <select
+                    value={editDepartmentProject}
+                    onChange={e => {
+                      setEditDepartmentProject(e.target.value);
+                      setEditDepartmentOriginal("");
+                      setEditDepartmentName("");
+                    }}
+                  >
+                    <option value="">Select project/department</option>
+                    {createUserProjectNames.map(project => (
+                      <option key={project} value={project}>{project}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={editDepartmentOriginal}
+                    onChange={e => {
+                      setEditDepartmentOriginal(e.target.value);
+                      setEditDepartmentName(e.target.value);
+                    }}
+                    disabled={!editDepartmentProject}
+                  >
+                    <option value="">{editDepartmentProject ? "Select designation" : "Select project/department first"}</option>
+                    {editDepartmentOptions.map(department => (
+                      <option key={department} value={department}>{department}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={editDepartmentName}
+                    onChange={e => setEditDepartmentName(e.target.value)}
+                    placeholder="Updated designation name"
+                    disabled={!editDepartmentOriginal}
+                  />
+                  <button type="button" onClick={updateDepartment} disabled={!editDepartmentOriginal}>Update Designation</button>
                 </div>
 
                 <div className="control-panel wide">

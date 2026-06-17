@@ -30,6 +30,15 @@ const getResultPercentage = (result) =>
 const isPassedResult = (result) =>
   typeof result?.passed === "boolean" ? result.passed : getResultPercentage(result) >= 50;
 
+const formatDateTime = (value) => value ? new Date(value).toLocaleString("en-IN", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+}) : "-";
+
 const getUserId = (user) => String(user?._id || user?.id || "");
 
 const getAssignmentDateForUser = (suite, user) => {
@@ -183,7 +192,7 @@ export default function CandidateDashboard() {
                 <div className="candidate-history-card" key={res._id} style={{ background: WHITE, padding: "16px 24px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
                   <div>
                     <h4 style={{ margin: 0, color: GREEN_DARK }}>{res.suiteId?.name || "Assessment"}</h4>
-                    <span style={{ fontSize: "12px", color: "#888" }}>{new Date(res.submittedAt).toLocaleDateString()}</span>
+                    <span style={{ fontSize: "12px", color: "#888" }}>{formatDateTime(res.submittedAt)}</span>
                   </div>
                   <div className="candidate-history-actions" style={{ textAlign: "right", display: "grid", gap: "8px", justifyItems: "end" }}>
                     <div style={{ fontWeight: "700", color: passed ? GREEN : "#C0392B" }}>

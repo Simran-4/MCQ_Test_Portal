@@ -95,6 +95,17 @@ function formatDate(value) {
   }) : "-";
 }
 
+function formatDateTime(value) {
+  return value ? new Date(value).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }) : "-";
+}
+
 function SuiteModal({ suite, onClose, onSave }) {
   const [name, setName] = useState(suite?.name || "");
   const [description, setDescription] = useState(suite?.description || "");
@@ -565,7 +576,7 @@ export default function Dashboard() {
       "Failed": selectedUserFailed,
       "Average Percentage": `${selectedUserAverage}%`,
       "Latest Test": selectedUserLatest ? resultTestName(selectedUserLatest) : "-",
-      "Latest Submitted": selectedUserLatest?.submittedAt ? new Date(selectedUserLatest.submittedAt).toLocaleString() : "-",
+      "Latest Submitted": formatDateTime(selectedUserLatest?.submittedAt),
     }];
 
     const rows = selectedUserResults.map(result => ({
@@ -580,12 +591,12 @@ export default function Dashboard() {
       "Percentage": `${resultPct(result)}%`,
       "Grade": resultGrade(result),
       "Result": resultStatus(result),
-      "Submitted At": result.submittedAt ? new Date(result.submittedAt).toLocaleString() : "-",
+      "Submitted At": formatDateTime(result.submittedAt),
     }));
     const categoryRows = selectedUserResults.flatMap(result =>
       categoryRowsForResult(result).map(category => ({
         "Test Name": resultTestName(result),
-        "Submitted At": result.submittedAt ? new Date(result.submittedAt).toLocaleString() : "-",
+        "Submitted At": formatDateTime(result.submittedAt),
         "Category": category.category || "-",
         "Score": `${category.score ?? category.earnedMarks ?? 0}/${category.total ?? 0}`,
         "Percentage": `${category.percentage || 0}%`,
@@ -648,7 +659,7 @@ export default function Dashboard() {
 
     autoTable(doc, {
       startY: doc.lastAutoTable.finalY + 8,
-      head: [["#", "Test Name", "Score", "%", "Grade", "Result", "Submitted", "Category Breakdown"]],
+      head: [["#", "Test Name", "Score", "%", "Grade", "Result", "Attempted At", "Category Breakdown"]],
       body: selectedUserResults.map((result, index) => [
         index + 1,
         resultTestName(result),
@@ -656,7 +667,7 @@ export default function Dashboard() {
         `${resultPct(result)}%`,
         resultGrade(result),
         resultStatus(result),
-        result.submittedAt ? new Date(result.submittedAt).toLocaleDateString("en-IN") : "-",
+        formatDateTime(result.submittedAt),
         categoryRowsForResult(result).length > 0
           ? categoryRowsForResult(result)
             .map(category => `${category.category || "-"}: ${category.percentage || 0}% (${categoryLabel(category)})`)
@@ -964,7 +975,7 @@ export default function Dashboard() {
                   <div><strong>{selectedUserPassed}</strong><span>Passed</span></div>
                   <div><strong>{selectedUserFailed}</strong><span>Failed</span></div>
                   <div><strong>{selectedUserAverage}%</strong><span>Average</span></div>
-                  <div><strong>{selectedUserLatest ? formatDate(selectedUserLatest.submittedAt) : "-"}</strong><span>Latest</span></div>
+                  <div><strong>{selectedUserLatest ? formatDateTime(selectedUserLatest.submittedAt) : "-"}</strong><span>Latest</span></div>
                 </div>
 
                 <div className="admin-personal-attempts">
@@ -973,7 +984,7 @@ export default function Dashboard() {
                       <div className="admin-personal-attempt-head">
                         <div>
                           <h4>{resultTestName(result)}</h4>
-                          <p>{result.submittedAt ? new Date(result.submittedAt).toLocaleString("en-IN") : "No date"}</p>
+                          <p>{formatDateTime(result.submittedAt)}</p>
                         </div>
                         <div className={`admin-personal-status ${resultStatus(result).toLowerCase()}`}>
                           {resultStatus(result)}

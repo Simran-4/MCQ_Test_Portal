@@ -666,6 +666,32 @@ router.post("/superadmin/org-options/projects", authMiddleware, requireSuperAdmi
     }
 });
 
+router.put("/superadmin/org-options/projects/:name", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const currentName = String(req.params.name || "").trim();
+        const nextName = String(req.body.name || "").trim();
+        if (!currentName || !nextName) {
+            return res.status(400).json({ message: "Current and new project names are required" });
+        }
+
+        const doc = await getOrgOptionsDoc();
+        const project = doc.projects.find(item => item.name.toLowerCase() === currentName.toLowerCase());
+        if (!project) return res.status(404).json({ message: "Project/department not found" });
+
+        const duplicate = doc.projects.some(item =>
+            item.name.toLowerCase() === nextName.toLowerCase() &&
+            item.name.toLowerCase() !== currentName.toLowerCase()
+        );
+        if (duplicate) return res.status(409).json({ message: "Project/department already exists" });
+
+        project.name = nextName;
+        await doc.save();
+        res.json(doc.projects);
+    } catch (err) {
+        res.status(500).json({ message: "Error updating project" });
+    }
+});
+
 router.post("/superadmin/org-options/departments", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
         const projectName = String(req.body.project || "").trim();
@@ -687,6 +713,36 @@ router.post("/superadmin/org-options/departments", authMiddleware, requireSuperA
         res.status(201).json(doc.projects);
     } catch (err) {
         res.status(500).json({ message: "Error saving department" });
+    }
+});
+
+router.put("/superadmin/org-options/departments", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const projectName = String(req.body.project || "").trim();
+        const currentDepartment = String(req.body.oldDepartment || "").trim();
+        const nextDepartment = String(req.body.department || "").trim();
+        if (!projectName || !currentDepartment || !nextDepartment) {
+            return res.status(400).json({ message: "Project, current designation, and new designation are required" });
+        }
+
+        const doc = await getOrgOptionsDoc();
+        const project = doc.projects.find(item => item.name.toLowerCase() === projectName.toLowerCase());
+        if (!project) return res.status(404).json({ message: "Project/department not found" });
+
+        const departmentIndex = project.departments.findIndex(item => item.toLowerCase() === currentDepartment.toLowerCase());
+        if (departmentIndex === -1) return res.status(404).json({ message: "Designation not found" });
+
+        const duplicate = project.departments.some(item =>
+            item.toLowerCase() === nextDepartment.toLowerCase() &&
+            item.toLowerCase() !== currentDepartment.toLowerCase()
+        );
+        if (duplicate) return res.status(409).json({ message: "Designation already exists in this project/department" });
+
+        project.departments.set(departmentIndex, nextDepartment);
+        await doc.save();
+        res.json(doc.projects);
+    } catch (err) {
+        res.status(500).json({ message: "Error updating designation" });
     }
 });
 

@@ -24,6 +24,17 @@ function pctColor(pct) {
   return "#dc2626";
 }
 
+function formatDateTime(value) {
+  return value ? new Date(value).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }) : "-";
+}
+
 // ── Helper: get categories for a question (always returns array) ──
 function getQuestionCats(q) {
   if (Array.isArray(q.category) && q.category.length > 0) return q.category;
@@ -365,7 +376,7 @@ export default function AdminSuiteResults() {
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"13px" }}>
               <thead>
                 <tr style={{ background: GREEN_DARK }}>
-                  {["#", "Candidate", "Email", "Project", "Department", "Score", "%", "Result", "Certificate", ...allCats].map((h, i) => (
+                  {["#", "Candidate", "Email", "Project", "Department", "Score", "%", "Result", "Attempted At", "Certificate", ...allCats].map((h, i) => (
                     <th key={i} style={{ padding:"12px 14px", color: WHITE, fontWeight:"700", textAlign: i >= 5 ? "center" : "left", whiteSpace:"nowrap", fontSize:"12px" }}>
                       {h}
                     </th>
@@ -396,6 +407,7 @@ export default function AdminSuiteResults() {
                           {status}
                         </span>
                       </td>
+                      <td style={{ padding:"12px 14px", color:"#666", fontSize:"12px", whiteSpace:"nowrap" }}>{formatDateTime(r.submittedAt)}</td>
                       <td style={{ padding:"12px 14px", textAlign:"center" }}>
                         {passed ? (
                           <div style={{ display:"flex", gap:"6px", justifyContent:"center", flexWrap:"wrap" }}>

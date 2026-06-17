@@ -19,8 +19,15 @@ function Row({ children }) {
   );
 }
 
+function capitalizeFirst(value) {
+  const trimmed = String(value || "").replace(/^\s+/, "");
+  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+}
+
 function Register() {
-  const [name,        setName]        = useState("");
+  const [firstName,   setFirstName]   = useState("");
+  const [middleName,  setMiddleName]  = useState("");
+  const [lastName,    setLastName]    = useState("");
   const [username,    setUsername]    = useState("");
   const [contactType, setContactType] = useState("email");
   const [email,       setEmail]       = useState("");
@@ -54,8 +61,16 @@ function Register() {
 
   const handleRegister = async () => {
     // ── Validation ──────────────────────────────────────────
-    if (!name || name.trim().length < 2)
-      return alert("Please enter a valid full name (at least 2 characters)");
+    const fullName = [firstName, middleName, lastName]
+      .map(part => part.trim())
+      .filter(Boolean)
+      .join(" ");
+    if (!firstName.trim())
+      return alert("Please enter your first name");
+    if (!middleName.trim())
+      return alert("Please enter your middle name");
+    if (!lastName.trim())
+      return alert("Please enter your last name");
     if (!username || username.trim().replace(/\s+/g, "").length < 3)
       return alert("Please enter a username with at least 3 characters");
     if (contactType === "email" && (!email || !email.includes("@") || !email.includes(".")))
@@ -76,7 +91,7 @@ function Register() {
     setLoading(true);
     try {
       await axios.post(`${API}/api/auth/register`, {
-        name:        name.trim(),
+        name:        fullName,
         username:    username.trim(),
         email:       contactType === "email" ? email.trim().toLowerCase() : "",
         mobile:      contactType === "mobile" ? mobile.trim() : "",
@@ -206,9 +221,38 @@ function Register() {
             Personal Info
           </p>
 
+          <Row>
+            <div>
+              <label style={labelStyle}>First Name *</label>
+              <input
+                type="text"
+                placeholder="First name"
+                style={inputStyle}
+                value={firstName}
+                onChange={(e) => setFirstName(capitalizeFirst(e.target.value))}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Middle Name *</label>
+              <input
+                type="text"
+                placeholder="Middle name"
+                style={inputStyle}
+                value={middleName}
+                onChange={(e) => setMiddleName(capitalizeFirst(e.target.value))}
+              />
+            </div>
+          </Row>
+
           <div>
-            <label style={labelStyle}>Full Name *</label>
-            <input type="text" placeholder="Your full name" style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
+            <label style={labelStyle}>Last Name *</label>
+            <input
+              type="text"
+              placeholder="Last name"
+              style={inputStyle}
+              value={lastName}
+              onChange={(e) => setLastName(capitalizeFirst(e.target.value))}
+            />
           </div>
 
           <Row>

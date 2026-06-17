@@ -7,6 +7,17 @@ import { openCertificateEmail } from "../utils/certificate";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+function formatDateTime(value) {
+  return value ? new Date(value).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }) : "-";
+}
+
 export default function ViewResults() {
   const [results, setResults]           = useState([]);
   const [projects, setProjects]         = useState([]);
@@ -142,7 +153,7 @@ export default function ViewResults() {
                   <th style={{ padding: "18px" }}>Percentage</th>
                   <th style={{ padding: "18px" }}>Status</th>
                   <th style={{ padding: "18px" }}>Certificate</th>
-                  <th style={{ padding: "18px" }}>Date</th>
+                  <th style={{ padding: "18px" }}>Attempted At</th>
                 </tr>
               </thead>
               <tbody>
@@ -219,7 +230,7 @@ export default function ViewResults() {
                         )}
                       </td>
                       <td style={{ padding: "18px", fontSize: "13px", color: "#666" }}>
-                        {new Date(res.submittedAt).toLocaleDateString()}
+                        {formatDateTime(res.submittedAt)}
                       </td>
                     </tr>
                   );
