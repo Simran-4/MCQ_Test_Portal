@@ -264,7 +264,16 @@ router.post("/register", async (req, res) => {
     try {
         const result = await createUserFromPayload({ ...req.body, role: "candidate" }, { allowAdmin: false });
         if (result.error) return res.status(result.status).json({ message: result.error });
-        res.json({ message: "User Registered Successfully" });
+        const token = jwt.sign(
+            { id: result.user._id, role: result.user.role },
+            process.env.JWT_SECRET || "snehalaya2024",
+            { expiresIn: "1d" }
+        );
+        res.json({
+            message: "User Registered Successfully",
+            token,
+            user: publicUser(result.user),
+        });
 
     } catch (err) {
         res.status(500).json({ error: err.message });

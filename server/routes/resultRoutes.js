@@ -72,8 +72,7 @@ function canAccessSuite(suite, user) {
   if (!suite || !user) return false;
   if (user.role !== "candidate") return true;
   if (suite.status !== "active") return false;
-  if (suite.isPublic !== false) return true;
-  return (suite.assignedUsers || []).some(id => id.toString() === user.id);
+  return true;
 }
 
 function metaUserId(entry) {
@@ -186,7 +185,7 @@ router.post("/", authMiddleware, async (req, res) => {
 
     const [questions, settings, suite, submitter] = await Promise.all([
       answeredQuestionIds.length
-        ? Question.find({ testSuite: suiteId, _id: { $in: answeredQuestionIds } })
+        ? Question.find({ testSuite: suiteId, _id: { $in: answeredQuestionIds } }).sort({ createdAt: 1, _id: 1 })
         : Promise.resolve([]),
       Settings.findOne(),
       TestSuite.findById(suiteId),
@@ -197,7 +196,7 @@ router.post("/", authMiddleware, async (req, res) => {
 
     if (!suite) return res.status(404).json({ message: "Test suite not found" });
     if (!canAccessSuite(suite, req.user)) {
-      return res.status(403).json({ message: "This test is not assigned to this user" });
+      return res.status(403).json({ message: "This test is not available" });
     }
 
     if (req.user.role === "candidate") {

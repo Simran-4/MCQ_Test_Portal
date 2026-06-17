@@ -301,6 +301,7 @@ export default function Dashboard() {
   const [assignedSuiteIds, setAssignedSuiteIds] = useState([]);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
+  const [suiteSearch, setSuiteSearch] = useState("");
   const [reportUserId, setReportUserId] = useState("");
   const [activePanel, setActivePanel] = useState("dashboard");
   const [deleteResultsSuite, setDeleteResultsSuite] = useState(null);
@@ -362,7 +363,6 @@ export default function Dashboard() {
     fetchAdminData();
   }, [fetchAdminData]);
 
-  const totalQuestions = suites.reduce((sum, suite) => sum + (suite.questionCount ?? 0), 0);
   const activeSuites = suites.filter(suite => suite.status === "active").length;
   const candidateUsers = users.filter(item => item.role === "candidate" && item.isActive !== false);
   const assignableUsers = users.filter(item => ["candidate", "admin"].includes(item.role) && item.isActive !== false);
@@ -388,6 +388,15 @@ export default function Dashboard() {
     ? Math.round(selectedUserResults.reduce((sum, result) => sum + resultPct(result), 0) / selectedUserResults.length)
     : 0;
   const selectedUserLatest = selectedUserResults[0] || null;
+  const filteredSuites = suites.filter(suite =>
+    [
+      suite.name,
+      suite.description,
+      suite.status,
+      suite.isPublic === false ? "private assigned" : "public",
+      `${suite.questionCount ?? 0} questions`,
+    ].join(" ").toLowerCase().includes(suiteSearch.toLowerCase())
+  );
 
   const suiteResultCount = (suiteId) =>
     reportResults.filter(result => resultSuiteId(result) === String(suiteId)).length;
@@ -476,7 +485,7 @@ export default function Dashboard() {
     e.stopPropagation();
     const url = `${window.location.origin}/test/${suiteId}`;
     navigator.clipboard.writeText(url)
-      .then(() => alert("Test link copied! Share this with candidates."))
+      .then(() => alert("Test link copied. Candidates will log in or register first, then start this test directly."))
       .catch(() => alert(`Share this link: ${url}`));
   };
 
@@ -805,16 +814,6 @@ export default function Dashboard() {
           </div>
 
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">?</div>
-            <div>
-              <p>Total Questions</p>
-              <strong>{totalQuestions}</strong>
-              <span>Across all suites</span>
-            </div>
-            <div className="admin-progress"><span style={{ width: `${Math.min(100, Math.max(25, totalQuestions * 1.5))}%` }} /></div>
-          </div>
-
-          <div className="admin-stat-card">
             <div className="admin-stat-icon">⌁</div>
             <div>
               <p>Active Suites</p>
@@ -1048,6 +1047,13 @@ export default function Dashboard() {
               <p>Create, manage and monitor your test suites.</p>
             </div>
             <div>
+              <input
+                type="search"
+                value={suiteSearch}
+                onChange={(e) => setSuiteSearch(e.target.value)}
+                placeholder="Search test suites..."
+                className="admin-suite-search"
+              />
               <button type="button" className="admin-primary-btn" onClick={openNewSuite} disabled={!canManageSuites}>
                 ＋ New test suite
               </button>
@@ -1058,9 +1064,11 @@ export default function Dashboard() {
             <div className="admin-empty-state">Loading your suites...</div>
           ) : suites.length === 0 ? (
             <div className="admin-empty-state">No suites available. Create your first one above.</div>
+          ) : filteredSuites.length === 0 ? (
+            <div className="admin-empty-state">No test suites match "{suiteSearch}".</div>
           ) : (
             <div className="admin-suite-list">
-              {suites.map(suite => (
+              {filteredSuites.map(suite => (
                 <article key={suite._id} className="admin-suite-card">
                   <div className="admin-suite-left">
                     <div className="admin-suite-icon">▤</div>

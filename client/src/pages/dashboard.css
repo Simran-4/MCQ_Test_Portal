@@ -916,6 +916,25 @@ body {
   justify-content: flex-end;
 }
 
+.admin-suite-search {
+  min-height: 44px;
+  width: min(280px, 100%);
+  padding: 10px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--admin-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  outline: none;
+}
+
+.admin-suite-search:focus {
+  border-color: var(--admin-green);
+  box-shadow: 0 0 0 3px rgba(45, 95, 63, 0.12);
+}
+
 .admin-primary-btn,
 .admin-secondary-btn {
   padding: 0 26px;

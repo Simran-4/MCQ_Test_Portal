@@ -37,6 +37,15 @@ function isTheoryQuestion(q) {
   return q?.questionType === "theory";
 }
 
+function sortQuestionsBySuiteOrder(items) {
+  return [...(items || [])].sort((a, b) => {
+    const aTime = new Date(a.createdAt || 0).getTime();
+    const bTime = new Date(b.createdAt || 0).getTime();
+    if (aTime !== bTime) return aTime - bTime;
+    return String(a._id || "").localeCompare(String(b._id || ""));
+  });
+}
+
 function rowValue(row, keys) {
   for (const key of keys) {
     if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== "") {
@@ -168,7 +177,7 @@ export default function TestSuiteDetail() {
         ? new Date(suiteRes.data.startDate).toISOString().slice(0, 16) : "");
       setEndDate(suiteRes.data.endDate
         ? new Date(suiteRes.data.endDate).toISOString().slice(0, 16) : "");
-      setQuestions(qRes.data);
+      setQuestions(sortQuestionsBySuiteOrder(qRes.data));
       const existingCats = [...new Set(qRes.data.flatMap(q =>
         Array.isArray(q.category) ? q.category : (q.category ? [q.category] : [])
       ))];
@@ -550,10 +559,10 @@ export default function TestSuiteDetail() {
       const config = { headers: getAuthHeaders() };
       if (editingQ) {
         const res = await axios.put(`${API}/api/questions/${editingQ}`, payload, config);
-        setQuestions(prev => prev.map(q => q._id === editingQ ? res.data : q));
+        setQuestions(prev => sortQuestionsBySuiteOrder(prev.map(q => q._id === editingQ ? res.data : q)));
       } else {
         const res = await axios.post(`${API}/api/test-suites/${suiteId}/questions`, payload, config);
-        setQuestions(prev => [...prev, res.data]);
+        setQuestions(prev => sortQuestionsBySuiteOrder([...prev, res.data]));
       }
       handleCancelForm();
     } catch (err) {
@@ -618,7 +627,9 @@ export default function TestSuiteDetail() {
     fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em",
   };
 
-  const grouped = questions.reduce((acc, q) => {
+  const orderedQuestions = sortQuestionsBySuiteOrder(questions);
+  const questionNumberById = new Map(orderedQuestions.map((q, index) => [String(q._id), index + 1]));
+  const grouped = orderedQuestions.reduce((acc, q) => {
     const cats = Array.isArray(q.category) && q.category.length > 0 ? q.category : ["Uncategorized"];
     const key  = cats[0];
     if (!acc[key]) acc[key] = [];
@@ -805,13 +816,14 @@ export default function TestSuiteDetail() {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "10px", flexWrap: "wrap" }}>
                   <span style={{ fontSize: "13px", color: "#92400e", fontWeight: "700" }}>{selectedQuestionIds.length} question(s) selected</span>
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <button type="button" onClick={() => setSelectedQuestionIds(questions.map(q => q._id))} style={{ padding: "7px 12px", borderRadius: "8px", border: "1px solid #fcd34d", background: WHITE, color: "#92400e", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Select all</button>
+                    <button type="button" onClick={() => setSelectedQuestionIds(orderedQuestions.map(q => q._id))} style={{ padding: "7px 12px", borderRadius: "8px", border: "1px solid #fcd34d", background: WHITE, color: "#92400e", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Select all</button>
                     <button type="button" onClick={() => setSelectedQuestionIds([])} style={{ padding: "7px 12px", borderRadius: "8px", border: "1px solid #ddd", background: WHITE, color: "#555", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Clear</button>
                   </div>
                 </div>
                 <div style={{ maxHeight: "300px", overflow: "auto", display: "flex", flexDirection: "column", gap: "8px", paddingRight: "4px" }}>
-                  {questions.map((q, index) => {
+                  {orderedQuestions.map((q) => {
                     const checked = selectedQuestionIds.includes(q._id);
+                    const questionNumber = questionNumberById.get(String(q._id)) || 1;
                     return (
                       <label key={q._id} style={{
                         display: "grid",
@@ -826,7 +838,7 @@ export default function TestSuiteDetail() {
                       }}>
                         <input type="checkbox" checked={checked} onChange={() => toggleSelectedQuestion(q._id)} style={{ accentColor: "#f59e0b", marginTop: "2px" }} />
                         <span style={{ color: "#333", fontSize: "13px", lineHeight: 1.45 }}>
-                          <strong>Q{index + 1}.</strong> {q.questionText}
+                          <strong>Q{questionNumber}.</strong> {q.questionText}
                         </span>
                       </label>
                     );
@@ -1097,11 +1109,12 @@ export default function TestSuiteDetail() {
                   <div style={{ flex: 1, height: "1px", background: "#e5e7eb" }} />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {qs.map((q, idx) => {
+                  {qs.map((q) => {
                     const correctArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
                     const catArr     = Array.isArray(q.category) ? q.category : (q.category ? [q.category] : []);
                     const categoryAnswerMap = getCategoryAnswerMap(q);
                     const theory = isTheoryQuestion(q);
+                    const questionNumber = questionNumberById.get(String(q._id)) || 1;
                     return (
                       <div key={q._id}
                         style={{ background: WHITE, border: "1px solid #e5e7eb", borderRadius: "14px", padding: "16px 18px", transition: "border-color 0.2s" }}
@@ -1118,7 +1131,7 @@ export default function TestSuiteDetail() {
                               </div>
                             )}
                             <p style={{ fontSize: "14px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 10px" }}>
-                              <span style={{ color: "#aaa", marginRight: "6px" }}>Q{idx + 1}.</span>{q.questionText}
+                              <span style={{ color: "#aaa", marginRight: "6px" }}>Q{questionNumber}.</span>{q.questionText}
                             </p>
                             {theory ? (
                               <div style={{ background: "#f8faf9", border: "1px solid #d8e9df", color: GREEN_DARK, borderRadius: "8px", padding: "8px 10px", fontSize: "13px", fontWeight: "600" }}>

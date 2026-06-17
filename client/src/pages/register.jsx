@@ -90,7 +90,7 @@ function Register() {
 
     setLoading(true);
     try {
-      await axios.post(`${API}/api/auth/register`, {
+      const res = await axios.post(`${API}/api/auth/register`, {
         name:        fullName,
         username:    username.trim(),
         email:       contactType === "email" ? email.trim().toLowerCase() : "",
@@ -102,6 +102,13 @@ function Register() {
         project,
         designation,
       });
+      if (nextPath.startsWith("/test/") && res.data?.token && res.data?.user) {
+        localStorage.setItem("token", `Bearer ${res.data.token}`);
+        localStorage.setItem("user", JSON.stringify(res.data.user));
+        alert("Registration Successful. Starting your test now.");
+        navigate(nextPath);
+        return;
+      }
       alert("Registration Successful. Please login to start the test.");
       navigate(loginPathForNext(nextPath));
     } catch (err) {

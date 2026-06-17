@@ -66,8 +66,7 @@ function canAccessSuite(suite, user) {
   if (!user) return suite.status === "active" && suite.isPublic !== false;
   if (user.role !== "candidate") return true;
   if (suite.status !== "active") return false;
-  if (suite.isPublic !== false) return true;
-  return (suite.assignedUsers || []).some(id => id.toString() === user.id);
+  return true;
 }
 
 // ── POST /api/questions/add (legacy) ─────────────────────────
@@ -167,9 +166,9 @@ router.get("/:suiteId/random", async (req, res) => {
     const suite     = await TestSuite.findById(req.params.suiteId);
     const user      = readOptionalUser(req);
     if (!canAccessSuite(suite, user)) {
-      return res.status(403).json({ message: "This test is not assigned to this user" });
+      return res.status(403).json({ message: "This test is not available" });
     }
-    const questions = await Question.find({ testSuite: req.params.suiteId });
+    const questions = await Question.find({ testSuite: req.params.suiteId }).sort({ createdAt: 1, _id: 1 });
 
     if (!questions.length)
       return res.status(404).json({ message: "No questions found for this suite" });

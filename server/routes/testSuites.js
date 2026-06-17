@@ -133,8 +133,7 @@ function canAccessSuite(suite, user) {
   if (!user) return suite.status === "active" && suite.isPublic !== false;
   if (user.role !== "candidate") return true;
   if (suite.status !== "active") return false;
-  if (suite.isPublic !== false) return true;
-  return (suite.assignedUsers || []).some(id => id.toString() === user.id);
+  return true;
 }
 
 function metaUserId(entry) {
@@ -194,9 +193,9 @@ router.get("/:id/questions", async (req, res) => {
     const user = readOptionalUser(req);
     const suite = await TestSuite.findById(req.params.id);
     if (!canAccessSuite(suite, user)) {
-      return res.status(403).json({ message: "This test is not assigned to this user" });
+      return res.status(403).json({ message: "This test is not available" });
     }
-    const questions = await Question.find({ testSuite: req.params.id });
+    const questions = await Question.find({ testSuite: req.params.id }).sort({ createdAt: 1, _id: 1 });
     const visibleQuestions = user?.role === "candidate"
       ? selectQuestionsForSuite(suite, questions)
       : questions;
@@ -491,7 +490,7 @@ router.get("/:id", async (req, res) => {
     const suite = await TestSuite.findById(req.params.id);
     if (!suite) return res.status(404).json({ message: "Suite not found" });
     if (!canAccessSuite(suite, user)) {
-      return res.status(403).json({ message: "This test is not assigned to this user" });
+      return res.status(403).json({ message: "This test is not available" });
     }
     res.json(suite);
   } catch (err) {
