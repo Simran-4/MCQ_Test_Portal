@@ -368,8 +368,8 @@ router.post("/", authMiddleware, requireAdminFeature("canManageSuites", "Test su
 router.put("/assignments/user/:userId", authMiddleware, requireAdminFeature("canAssignTests", "Test assignment access denied"), async (req, res) => {
   try {
     const user = await User.findById(req.params.userId).select("_id role isActive");
-    if (!user || user.role !== "candidate" || user.isActive === false) {
-      return res.status(404).json({ message: "Active candidate not found" });
+    if (!user || !["candidate", "admin"].includes(user.role) || user.isActive === false) {
+      return res.status(404).json({ message: "Active candidate or admin not found" });
     }
 
     const selectedSuiteIds = [...new Set(

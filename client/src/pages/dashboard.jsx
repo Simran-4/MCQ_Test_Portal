@@ -341,10 +341,12 @@ export default function Dashboard() {
   const totalQuestions = suites.reduce((sum, suite) => sum + (suite.questionCount ?? 0), 0);
   const activeSuites = suites.filter(suite => suite.status === "active").length;
   const candidateUsers = users.filter(item => item.role === "candidate" && item.isActive !== false);
-  const selectedAssignmentUser = candidateUsers.find(item => item._id === assignmentUserId);
+  const assignableUsers = users.filter(item => ["candidate", "admin"].includes(item.role) && item.isActive !== false);
+  const selectedAssignmentUser = assignableUsers.find(item => item._id === assignmentUserId);
   const selectedReportUser = users.find(item => item._id === reportUserId);
-  const assignmentFilteredUsers = candidateUsers.filter(item =>
+  const assignmentFilteredUsers = assignableUsers.filter(item =>
     userLabel(item).toLowerCase().includes(assignmentSearch.toLowerCase()) ||
+    (item.role || "").toLowerCase().includes(assignmentSearch.toLowerCase()) ||
     (item.project || "").toLowerCase().includes(assignmentSearch.toLowerCase()) ||
     (item.designation || "").toLowerCase().includes(assignmentSearch.toLowerCase())
   );
@@ -463,8 +465,8 @@ export default function Dashboard() {
   };
 
   const saveUserSuiteAssignments = async () => {
-    if (!assignmentUserId) return alert("Select a candidate first.");
-    if (assignedSuiteIds.length === 0 && !window.confirm("No private suites are selected. This will remove private suite assignments for this candidate. Continue?")) {
+    if (!assignmentUserId) return alert("Select a user first.");
+    if (assignedSuiteIds.length === 0 && !window.confirm("No private suites are selected. This will remove private suite assignments for this user. Continue?")) {
       return;
     }
 
@@ -481,9 +483,9 @@ export default function Dashboard() {
           ? { ...suite, ...updatedById.get(suite._id), questionCount: suite.questionCount }
           : suite
       ));
-      alert("Candidate suite assignments saved.");
+      alert("Test suite assignments saved.");
     } catch (err) {
-      alert(err.response?.data?.message || "Unable to save candidate suite assignments.");
+      alert(err.response?.data?.message || "Unable to save test suite assignments.");
     } finally {
       setAssignmentSaving(false);
     }
@@ -778,19 +780,21 @@ export default function Dashboard() {
           <div className="admin-management-card">
             <div className="admin-panel-heading">
               <h3>Assign Test Suites</h3>
-              <p>Select one candidate, then assign one or more private test suites to that candidate.</p>
+              <p>Select one user, then assign one or more private test suites to that user.</p>
             </div>
 
             <input
               value={assignmentSearch}
               onChange={(e) => setAssignmentSearch(e.target.value)}
-              placeholder="Search candidate by name, contact, project..."
+              placeholder="Search user by name, contact, role, project..."
             />
 
             <select value={assignmentUserId} onChange={(e) => handleAssignmentUserChange(e.target.value)}>
-              <option value="">Select candidate</option>
+              <option value="">Select user</option>
               {assignmentFilteredUsers.slice(0, 60).map(candidate => (
-                <option key={candidate._id} value={candidate._id}>{userLabel(candidate)}</option>
+                <option key={candidate._id} value={candidate._id}>
+                  {userLabel(candidate)} ({candidate.role === "admin" ? "Admin" : "Candidate"})
+                </option>
               ))}
             </select>
 
@@ -822,7 +826,7 @@ export default function Dashboard() {
               <span>
                 {selectedAssignmentUser
                   ? `${assignedSuiteIds.length} suite(s) selected for ${selectedAssignmentUser.name}`
-                  : "Choose a candidate"}
+                  : "Choose a user"}
               </span>
               <button type="button" onClick={saveUserSuiteAssignments} disabled={assignmentSaving}>
                 {assignmentSaving ? "Saving..." : "Save Assignment"}
