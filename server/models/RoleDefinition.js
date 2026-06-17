@@ -18,6 +18,10 @@ const roleDefinitionSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    disabled: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

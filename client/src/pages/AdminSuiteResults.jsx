@@ -229,10 +229,10 @@ export default function AdminSuiteResults() {
   );
 
   return (
-    <div style={{ minHeight:"100vh", background: BG, fontFamily:"'Segoe UI', sans-serif" }}>
+    <div className="suite-results-page" style={{ minHeight:"100vh", background: BG, fontFamily:"'Segoe UI', sans-serif" }}>
 
       {/* Top bar */}
-      <div style={{ padding:"16px 28px 0", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:"12px" }}>
+      <div className="suite-results-topbar" style={{ padding:"16px 28px 0", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:"12px" }}>
         <div style={{ display:"flex", alignItems:"center", gap:"14px" }}>
           <div style={{ width:"52px", height:"52px", borderRadius:"50%", background: WHITE, border:"0.5px solid rgba(0,0,0,0.1)", overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center" }}>
             <img src={`${import.meta.env.BASE_URL}Logo.png`} alt="Logo" style={{ width:"48px", height:"48px", objectFit:"contain" }} onError={e => { e.target.style.display="none"; }} />
@@ -264,7 +264,7 @@ export default function AdminSuiteResults() {
         </div>
 
         {/* Action buttons */}
-        <div style={{ display:"flex", gap:"10px", flexWrap:"wrap" }}>
+        <div className="suite-results-actions" style={{ display:"flex", gap:"10px", flexWrap:"wrap" }}>
           <button onClick={handleToggleStatus} style={{
             display:"flex", alignItems:"center", gap:"7px", padding:"10px 18px",
             background: suiteStatus === "active" ? "#fee2e2" : "#dcfce7",
@@ -288,7 +288,7 @@ export default function AdminSuiteResults() {
       </div>
 
       {showDownloads && (
-        <div style={{ margin:"16px 28px 0", background: WHITE, borderRadius:"16px", padding:"18px 20px", border:"1px solid #d8e9df", boxShadow:"0 10px 28px rgba(0,0,0,0.05)" }}>
+        <div className="suite-results-downloads" style={{ margin:"16px 28px 0", background: WHITE, borderRadius:"16px", padding:"18px 20px", border:"1px solid #d8e9df", boxShadow:"0 10px 28px rgba(0,0,0,0.05)" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"12px", flexWrap:"wrap", marginBottom:"14px" }}>
             <div>
               <div style={{ fontSize:"15px", fontWeight:"800", color: GREEN_DARK }}>Download Results</div>
@@ -327,13 +327,13 @@ export default function AdminSuiteResults() {
       )}
 
       {/* Nav */}
-      <div style={{ padding:"12px 28px", display:"flex", gap:"16px", alignItems:"center", borderBottom:"0.5px solid rgba(0,0,0,0.09)", marginTop:"12px" }}>
+      <div className="suite-results-nav" style={{ padding:"12px 28px", display:"flex", gap:"16px", alignItems:"center", borderBottom:"0.5px solid rgba(0,0,0,0.09)", marginTop:"12px" }}>
         <span onClick={() => navigate(`/admin/test-suites/${suiteId}`)} style={{ fontSize:"14px", color:"#4A7A5C", fontWeight:"500", cursor:"pointer" }}>← Back to suite</span>
         <span onClick={() => { localStorage.removeItem("token"); navigate("/"); }} style={{ fontSize:"14px", color:"#C0392B", fontWeight:"500", cursor:"pointer", marginLeft:"auto" }}>Logout</span>
       </div>
 
       {/* Content */}
-      <div style={{ padding:"24px 28px", overflowX:"auto" }}>
+      <div className="suite-results-content" style={{ padding:"24px 28px", overflowX:"auto" }}>
         {results.length > 0 && (
           <div style={{ marginBottom:"16px" }}>
             <input
@@ -361,7 +361,7 @@ export default function AdminSuiteResults() {
             <p style={{ color:"#A0A098", fontSize:"15px", margin:0 }}>No submissions yet for this test suite.</p>
           </div>
         ) : (
-          <div style={{ background: WHITE, borderRadius:"16px", border:"0.5px solid rgba(0,0,0,0.08)", overflow:"hidden" }}>
+          <div className="suite-results-table-card" style={{ background: WHITE, borderRadius:"16px", border:"0.5px solid rgba(0,0,0,0.08)", overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"13px" }}>
               <thead>
                 <tr style={{ background: GREEN_DARK }}>

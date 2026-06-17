@@ -13,7 +13,7 @@ const API = import.meta.env.VITE_API_URL ||
 
 function Row({ children }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+    <div className="auth-form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
       {children}
     </div>
   );
@@ -157,6 +157,7 @@ function Register() {
 
   return (
     <div
+      className="auth-inline-page"
       style={{
         minHeight: "100vh",
         backgroundImage: `url(${import.meta.env.BASE_URL}background.png)`,
@@ -173,6 +174,7 @@ function Register() {
       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.40)", zIndex: 0 }} />
 
       <div
+        className="auth-inline-card register-card"
         style={{
           position: "relative",
           zIndex: 1,

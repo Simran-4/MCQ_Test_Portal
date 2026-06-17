@@ -586,7 +586,7 @@ export default function StudentTest() {
   const totalCount     = questions.length;
 
   return (
-    <div style={{ minHeight:"100vh", background: BG, fontFamily:"'Segoe UI', sans-serif" }}>
+    <div className="student-test-page" style={{ minHeight:"100vh", background: BG, fontFamily:"'Segoe UI', sans-serif" }}>
 
       {/* Timer Warning */}
       {showWarning && (
@@ -602,7 +602,7 @@ export default function StudentTest() {
       {/* Confirmation Modal */}
       {showConfirm && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <div style={{ background: WHITE, padding:"32px", borderRadius:"24px", maxWidth:"400px", textAlign:"center" }}>
+          <div className="student-confirm-card" style={{ background: WHITE, padding:"32px", borderRadius:"24px", maxWidth:"400px", textAlign:"center" }}>
             <h3>Submit Assessment?</h3>
             <p>{answeredCount} of {questions.length} answered.</p>
             {markedForReview.length > 0 && <p style={{ color: ORANGE }}>⚠️ {markedForReview.length} items still marked for review.</p>}
@@ -615,7 +615,7 @@ export default function StudentTest() {
       )}
 
       {/* Header */}
-      <div style={{ background: WHITE, padding:"16px 28px", display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, zIndex:100, boxShadow:"0 2px 10px rgba(0,0,0,0.05)" }}>
+      <div className="student-test-header" style={{ background: WHITE, padding:"16px 28px", display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, zIndex:100, boxShadow:"0 2px 10px rgba(0,0,0,0.05)" }}>
         <div>
           <h2 style={{ margin:0, fontSize:"18px", color: GREEN_DARK }}>{suite?.name}</h2>
           <span style={{ fontSize:"12px", color:"#888" }}>{answeredCount} / {questions.length} Answered</span>
@@ -626,12 +626,12 @@ export default function StudentTest() {
       </div>
 
       {/* Main Layout */}
-      <div style={{ maxWidth:"1100px", margin:"24px auto", padding:"0 16px 120px", display:"flex", gap:"24px", alignItems:"flex-start" }}>
+      <div className="student-test-layout" style={{ maxWidth:"1100px", margin:"24px auto", padding:"0 16px 120px", display:"flex", gap:"24px", alignItems:"flex-start" }}>
 
         {/* Question Navigation Panel */}
-        <div style={{ width:"220px", flexShrink:0, background: WHITE, borderRadius:"16px", padding:"20px", boxShadow:"0 4px 16px rgba(0,0,0,0.06)", position:"sticky", top:"80px", maxHeight:"calc(100vh - 160px)", overflowY:"auto" }}>
+        <div className="student-question-nav" style={{ width:"220px", flexShrink:0, background: WHITE, borderRadius:"16px", padding:"20px", boxShadow:"0 4px 16px rgba(0,0,0,0.06)", position:"sticky", top:"80px", maxHeight:"calc(100vh - 160px)", overflowY:"auto" }}>
           <h3 style={{ margin:"0 0 16px", fontSize:"15px", fontWeight:"700", color: GREEN_DARK }}>Questions</h3>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"8px", marginBottom:"20px" }}>
+          <div className="student-question-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"8px", marginBottom:"20px" }}>
             {questions.map((q, idx) => {
               const isAnswered = isQuestionAnswered(q, answers);
               const isReview   = markedForReview.includes(idx);
@@ -670,7 +670,7 @@ export default function StudentTest() {
         </div>
 
         {/* Questions List */}
-        <div style={{ flex:1 }}>
+        <div className="student-question-list" style={{ flex:1 }}>
           {questions.map((q, idx) => {
             const isMarked   = markedForReview.includes(idx);
             const isSelected = isQuestionAnswered(q, answers);
@@ -680,6 +680,7 @@ export default function StudentTest() {
               <div
                 id={`question-${idx}`}
                 key={q._id}
+                className="student-question-card"
                 onClick={() => setCurrentQuestion(idx)}
                 style={{ background: WHITE, borderRadius:"16px", padding:"24px", marginBottom:"16px", border:`2px solid ${isMarked ? ORANGE : isSelected ? "#c6e2d0" : "transparent"}`, cursor:"default" }}
               >
@@ -694,7 +695,7 @@ export default function StudentTest() {
                   </div>
                 </div>
 
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"12px" }}>
+                <div className="student-question-meta" style={{ display:"flex", justifyContent:"space-between", marginBottom:"12px" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
                     <span style={{ fontWeight:"bold", color:"#aaa" }}>Q{idx + 1}</span>
                     <span style={{ background: theory ? "#dbeafe" : "#dcfce7", color: theory ? "#1d4ed8" : "#166534", padding:"2px 10px", borderRadius:"999px", fontSize:"11px", fontWeight:"700", border:`1px solid ${theory ? "#bfdbfe" : "#bbf7d0"}` }}>
@@ -755,8 +756,8 @@ export default function StudentTest() {
       </div>
 
       {/* Submit Footer */}
-      <div style={{ position:"fixed", bottom:0, left:0, right:0, background: WHITE, padding:"20px", textAlign:"center", borderTop:"1px solid #eee" }}>
-        <button onClick={handleSubmitClick} disabled={submitting} style={{ padding:"14px 60px", background: GREEN, color: WHITE, border:"none", borderRadius:"999px", fontSize:"16px", fontWeight:"bold", cursor:"pointer" }}>
+      <div className="student-submit-footer" style={{ position:"fixed", bottom:0, left:0, right:0, background: WHITE, padding:"20px", textAlign:"center", borderTop:"1px solid #eee" }}>
+        <button className="student-submit-button" onClick={handleSubmitClick} disabled={submitting} style={{ padding:"14px 60px", background: GREEN, color: WHITE, border:"none", borderRadius:"999px", fontSize:"16px", fontWeight:"bold", cursor:"pointer" }}>
           {submitting ? "Submitting..." : "Finish & Submit"}
         </button>
       </div>

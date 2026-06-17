@@ -1,5 +1,6 @@
 const express = require("express");
 const router  = express.Router();
+const bcrypt = require("bcryptjs");
 const Result   = require("../models/Result");
 const Question = require("../models/Question");
 const TestSuite = require("../models/TestSuite");
@@ -142,6 +143,22 @@ function dateRangeQuery(fromDate, toDate) {
     }
   }
   return Object.keys(submittedAt).length ? { submittedAt } : {};
+}
+
+async function requireCurrentPassword(req, res) {
+  const password = String(req.body?.password || "");
+  if (!password) {
+    res.status(400).json({ message: "Enter your password to confirm this deletion" });
+    return false;
+  }
+
+  const user = await User.findById(req.user.id).select("password");
+  if (!user || !(await bcrypt.compare(password, user.password))) {
+    res.status(403).json({ message: "Password confirmation failed" });
+    return false;
+  }
+
+  return true;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -420,6 +437,7 @@ router.get("/projects", authMiddleware, requireAdminOrSuperAdmin, async (req, re
 // Delete results for one suite, optionally filtered by date range and user.
 router.delete("/suite/:suiteId", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
   try {
+    if (!(await requireCurrentPassword(req, res))) return;
     const requester = await getRequester(req.user.id);
     if (requester?.role === "admin" && !hasAdminPermission(requester, "canManageSuites")) {
       return res.status(403).json({ message: "Result deletion access denied" });

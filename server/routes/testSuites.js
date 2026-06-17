@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const XLSX = require("xlsx");
+const bcrypt = require("bcryptjs");
 const TestSuite = require("../models/TestSuite");
 const Question = require("../models/Question");
 const User = require("../models/User");
@@ -169,6 +170,22 @@ function requireAdminFeature(feature, message) {
       res.status(500).json({ message: "Permission check failed" });
     }
   };
+}
+
+async function requireCurrentPassword(req, res) {
+  const password = String(req.body?.password || "");
+  if (!password) {
+    res.status(400).json({ message: "Enter your password to confirm this deletion" });
+    return false;
+  }
+
+  const user = await User.findById(req.user.id).select("password");
+  if (!user || !(await bcrypt.compare(password, user.password))) {
+    res.status(403).json({ message: "Password confirmation failed" });
+    return false;
+  }
+
+  return true;
 }
 
 // ── GET QUESTIONS FOR A SUITE ─────────────────────────────────
@@ -458,6 +475,7 @@ router.put("/:id/assignments", authMiddleware, requireAdminFeature("canAssignTes
 // ── DELETE SUITE ──────────────────────────────────────────────
 router.delete("/:id", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
   try {
+    if (!(await requireCurrentPassword(req, res))) return;
     await Question.deleteMany({ testSuite: req.params.id });
     await TestSuite.findByIdAndDelete(req.params.id);
     res.json({ message: "Suite and associated questions deleted" });

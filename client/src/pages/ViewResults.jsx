@@ -131,7 +131,7 @@ export default function ViewResults() {
         {loading ? (
           <div style={{ textAlign: "center", padding: "50px" }}>Loading data...</div>
         ) : (
-          <div style={{ background: "white", borderRadius: "16px", overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.05)" }}>
+          <div className="results-table-scroll" style={{ background: "white", borderRadius: "16px", overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.05)" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
               <thead style={{ background: "#F9FAF8", borderBottom: "1px solid #EEE" }}>
                 <tr>

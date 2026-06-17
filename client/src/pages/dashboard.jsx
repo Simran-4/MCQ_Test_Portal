@@ -190,6 +190,7 @@ function DeleteResultsModal({ suite, users, resultCount, loading, onClose, onDel
   const [toDate, setToDate] = useState("");
   const [userId, setUserId] = useState("");
   const [userSearch, setUserSearch] = useState("");
+  const [password, setPassword] = useState("");
 
   const filteredUsers = users.filter(item =>
     userLabel(item).toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -206,6 +207,7 @@ function DeleteResultsModal({ suite, users, resultCount, loading, onClose, onDel
       toDate,
       userId,
       userLabel: selectedUser ? userLabel(selectedUser) : "",
+      password,
     });
   };
 
@@ -252,9 +254,20 @@ function DeleteResultsModal({ suite, users, resultCount, loading, onClose, onDel
           </select>
         </label>
 
+        <label>
+          Admin password *
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Enter your password to confirm"
+            autoComplete="current-password"
+          />
+        </label>
+
         <div className="suite-modal-actions">
           <button type="button" className="admin-secondary-btn" onClick={onClose} disabled={loading}>Cancel</button>
-          <button type="button" className="admin-delete-btn result-delete-confirm" onClick={handleDelete} disabled={loading}>
+          <button type="button" className="admin-delete-btn result-delete-confirm" onClick={handleDelete} disabled={loading || !password}>
             {loading ? "Deleting..." : "Delete Results"}
           </button>
         </div>
@@ -272,7 +285,7 @@ export default function Dashboard() {
   const [togglingId, setTogglingId] = useState(null);
   const [users, setUsers] = useState([]);
   const [reportResults, setReportResults] = useState([]);
-  const [assignmentUserId, setAssignmentUserId] = useState("");
+  const [assignmentUserIds, setAssignmentUserIds] = useState([]);
   const [assignmentSearch, setAssignmentSearch] = useState("");
   const [assignedSuiteIds, setAssignedSuiteIds] = useState([]);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
@@ -342,7 +355,7 @@ export default function Dashboard() {
   const activeSuites = suites.filter(suite => suite.status === "active").length;
   const candidateUsers = users.filter(item => item.role === "candidate" && item.isActive !== false);
   const assignableUsers = users.filter(item => ["candidate", "admin"].includes(item.role) && item.isActive !== false);
-  const selectedAssignmentUser = assignableUsers.find(item => item._id === assignmentUserId);
+  const selectedAssignmentUsers = assignableUsers.filter(item => assignmentUserIds.includes(item._id));
   const selectedReportUser = users.find(item => item._id === reportUserId);
   const assignmentFilteredUsers = assignableUsers.filter(item =>
     userLabel(item).toLowerCase().includes(assignmentSearch.toLowerCase()) ||
@@ -380,9 +393,12 @@ export default function Dashboard() {
   const handleDelete = async (suiteId, suiteName, e) => {
     e.stopPropagation();
     if (!window.confirm(`Delete "${suiteName}" and all its questions?`)) return;
+    const password = window.prompt("Enter your admin password to confirm suite deletion:");
+    if (!password) return;
     try {
       await axios.delete(`${API}/api/test-suites/${suiteId}`, {
         headers: getAuthHeaders(),
+        data: { password },
       });
       setSuites(prev => prev.filter(suite => suite._id !== suiteId));
     } catch (err) {
@@ -390,9 +406,13 @@ export default function Dashboard() {
     }
   };
 
-  const handleDeleteSuiteResults = async ({ suiteId, suiteName, fromDate, toDate, userId, userLabel: selectedUserLabel }) => {
+  const handleDeleteSuiteResults = async ({ suiteId, suiteName, fromDate, toDate, userId, userLabel: selectedUserLabel, password }) => {
     if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
       alert("From date cannot be after To date.");
+      return;
+    }
+    if (!password) {
+      alert("Enter your password to delete results.");
       return;
     }
 
@@ -409,7 +429,7 @@ export default function Dashboard() {
     try {
       const res = await axios.delete(`${API}/api/results/suite/${suiteId}`, {
         headers: getAuthHeaders(),
-        data: { fromDate, toDate, userId },
+        data: { fromDate, toDate, userId, password },
       });
       alert(`${res.data?.deletedCount || 0} result(s) deleted.`);
       setDeleteResultsSuite(null);
@@ -449,13 +469,36 @@ export default function Dashboard() {
       .catch(() => alert(`Share this link: ${url}`));
   };
 
-  const handleAssignmentUserChange = (userId) => {
-    setAssignmentUserId(userId);
-    setAssignedSuiteIds(
-      suites
-        .filter(suite => suite.isPublic === false && assignedUserIdsForSuite(suite).includes(userId))
-        .map(suite => suite._id)
-    );
+  const assignmentSuiteIdsForUser = (userId) =>
+    suites
+      .filter(suite => suite.isPublic === false && assignedUserIdsForSuite(suite).includes(userId))
+      .map(suite => suite._id);
+
+  const toggleAssignmentUser = (userId) => {
+    setAssignmentUserIds(prev => {
+      const next = prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId];
+      if (next.length === 0) {
+        setAssignedSuiteIds([]);
+      } else if (next.length === 1) {
+        setAssignedSuiteIds(assignmentSuiteIdsForUser(next[0]));
+      }
+      return next;
+    });
+  };
+
+  const selectVisibleAssignmentUsers = () => {
+    const next = assignmentFilteredUsers.slice(0, 80).map(item => item._id);
+    setAssignmentUserIds(next);
+    if (next.length === 1) {
+      setAssignedSuiteIds(assignmentSuiteIdsForUser(next[0]));
+    }
+  };
+
+  const clearAssignmentUsers = () => {
+    setAssignmentUserIds([]);
+    setAssignedSuiteIds([]);
   };
 
   const toggleAssignedSuite = (suiteId) => {
@@ -465,25 +508,41 @@ export default function Dashboard() {
   };
 
   const saveUserSuiteAssignments = async () => {
-    if (!assignmentUserId) return alert("Select a user first.");
-    if (assignedSuiteIds.length === 0 && !window.confirm("No private suites are selected. This will remove private suite assignments for this user. Continue?")) {
+    if (assignmentUserIds.length === 0) return alert("Select at least one user first.");
+    if (assignedSuiteIds.length === 0 && !window.confirm(
+      assignmentUserIds.length === 1
+        ? "No private suites are selected. This will remove private suite assignments for this user. Continue?"
+        : "No private suites are selected. This will not assign any tests to the selected users. Continue?"
+    )) {
       return;
     }
 
     setAssignmentSaving(true);
     try {
-      const res = await axios.put(
-        `${API}/api/test-suites/assignments/user/${assignmentUserId}`,
-        { suiteIds: assignedSuiteIds },
-        { headers: getAuthHeaders() }
-      );
-      const updatedById = new Map(res.data.map(suite => [suite._id, suite]));
+      const responses = [];
+      for (const userId of assignmentUserIds) {
+        const suiteIds = assignmentUserIds.length === 1
+          ? assignedSuiteIds
+          : [...new Set([...assignmentSuiteIdsForUser(userId), ...assignedSuiteIds])];
+        const res = await axios.put(
+          `${API}/api/test-suites/assignments/user/${userId}`,
+          { suiteIds },
+          { headers: getAuthHeaders() }
+        );
+        responses.push(res.data);
+      }
+      const latestSuites = responses[responses.length - 1] || [];
+      const updatedById = new Map(latestSuites.map(suite => [suite._id, suite]));
       setSuites(prev => prev.map(suite =>
         updatedById.has(suite._id)
           ? { ...suite, ...updatedById.get(suite._id), questionCount: suite.questionCount }
           : suite
       ));
-      alert("Test suite assignments saved.");
+      alert(
+        assignmentUserIds.length === 1
+          ? "Test suite assignments saved."
+          : `Selected test suite(s) assigned to ${assignmentUserIds.length} users.`
+      );
     } catch (err) {
       alert(err.response?.data?.message || "Unable to save test suite assignments.");
     } finally {
@@ -780,7 +839,7 @@ export default function Dashboard() {
           <div className="admin-management-card">
             <div className="admin-panel-heading">
               <h3>Assign Test Suites</h3>
-              <p>Select one user, then assign one or more private test suites to that user.</p>
+              <p>Select one or more users, then assign private test suites to the selected users.</p>
             </div>
 
             <input
@@ -789,14 +848,37 @@ export default function Dashboard() {
               placeholder="Search user by name, contact, role, project..."
             />
 
-            <select value={assignmentUserId} onChange={(e) => handleAssignmentUserChange(e.target.value)}>
-              <option value="">Select user</option>
-              {assignmentFilteredUsers.slice(0, 60).map(candidate => (
-                <option key={candidate._id} value={candidate._id}>
-                  {userLabel(candidate)} ({candidate.role === "admin" ? "Admin" : "Candidate"})
-                </option>
-              ))}
-            </select>
+            <div className="admin-panel-footer">
+              <span>{assignmentUserIds.length} user(s) selected</span>
+              <div>
+                <button type="button" onClick={selectVisibleAssignmentUsers} disabled={assignmentFilteredUsers.length === 0}>
+                  Select Visible
+                </button>
+                <button type="button" onClick={clearAssignmentUsers} disabled={assignmentUserIds.length === 0}>
+                  Clear Users
+                </button>
+              </div>
+            </div>
+
+            <div className="admin-user-pick-list">
+              {assignmentFilteredUsers.slice(0, 80).map(candidate => {
+                const selected = assignmentUserIds.includes(candidate._id);
+                return (
+                  <label key={candidate._id} className={selected ? "selected" : ""}>
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleAssignmentUser(candidate._id)}
+                    />
+                    <span>
+                      <strong>{userLabel(candidate)}</strong>
+                      <small>{candidate.role === "admin" ? "Admin" : "Candidate"} · {candidate.project || "No project"} · {candidate.designation || "No designation"}</small>
+                    </span>
+                  </label>
+                );
+              })}
+              {assignmentFilteredUsers.length === 0 && <p>No matching users found.</p>}
+            </div>
 
             <div className="admin-suite-pick-list">
               {suites.map(suite => {
@@ -806,7 +888,7 @@ export default function Dashboard() {
                   <label key={suite._id} className={selected ? "selected" : ""}>
                     <input
                       type="checkbox"
-                      disabled={!assignmentUserId}
+                      disabled={assignmentUserIds.length === 0}
                       checked={selected}
                       onChange={() => toggleAssignedSuite(suite._id)}
                     />
@@ -824,9 +906,9 @@ export default function Dashboard() {
 
             <div className="admin-panel-footer">
               <span>
-                {selectedAssignmentUser
-                  ? `${assignedSuiteIds.length} suite(s) selected for ${selectedAssignmentUser.name}`
-                  : "Choose a user"}
+                {selectedAssignmentUsers.length
+                  ? `${assignedSuiteIds.length} suite(s) selected for ${selectedAssignmentUsers.length} user(s)`
+                  : "Choose at least one user"}
               </span>
               <button type="button" onClick={saveUserSuiteAssignments} disabled={assignmentSaving}>
                 {assignmentSaving ? "Saving..." : "Save Assignment"}

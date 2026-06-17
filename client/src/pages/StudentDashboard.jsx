@@ -88,10 +88,10 @@ export default function CandidateDashboard() {
   });
 
   return (
-    <div style={{ minHeight: "100vh", background: BG, fontFamily: "'Segoe UI', sans-serif" }}>
+    <div className="candidate-dashboard-page" style={{ minHeight: "100vh", background: BG, fontFamily: "'Segoe UI', sans-serif" }}>
 
       {/* Header */}
-      <div style={{ padding: "20px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="candidate-dashboard-header" style={{ padding: "20px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: "24px", color: GREEN_DARK }}>Hi, {user.name || "Candidate"}!</h1>
           <p style={{ margin: 0, color: "#6B6B5E" }}>{user.project} • {user.designation}</p>
@@ -103,16 +103,16 @@ export default function CandidateDashboard() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: "20px", padding: "0 28px", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
+      <div className="candidate-dashboard-tabs" style={{ display: "flex", gap: "20px", padding: "0 28px", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
         <div style={tabStyle(activeTab === "available")} onClick={() => setActiveTab("available")}>Available Tests</div>
         <div style={tabStyle(activeTab === "history")} onClick={() => setActiveTab("history")}>My History & Certificates</div>
       </div>
 
-      <div style={{ padding: "28px" }}>
+      <div className="candidate-dashboard-content" style={{ padding: "28px" }}>
         {loading ? (
           <div style={{ textAlign: "center", padding: "40px", color: "#888" }}>Loading...</div>
         ) : activeTab === "available" ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px" }}>
+          <div className="candidate-test-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px" }}>
             {suites.length === 0 ? (
               <p style={{ color: "#888" }}>No active tests available right now.</p>
             ) : suites.map(suite => {
@@ -127,7 +127,7 @@ export default function CandidateDashboard() {
               );
               const reassignedAfterPass = latestPassedAttempt && assignmentDate && !passedAttempt;
               return (
-                <div key={suite._id} style={{ background: WHITE, padding: "24px", borderRadius: "16px", boxShadow: "0 4px 12px rgba(0,0,0,0.03)", opacity: available && !passedAttempt ? 1 : 0.75 }}>
+                <div className="candidate-test-card" key={suite._id} style={{ background: WHITE, padding: "24px", borderRadius: "16px", boxShadow: "0 4px 12px rgba(0,0,0,0.03)", opacity: available && !passedAttempt ? 1 : 0.75 }}>
                   <h3 style={{ margin: "0 0 8px", color: GREEN_DARK }}>{suite.name}</h3>
                   {suite.description && (
                     <p style={{ fontSize: "14px", color: "#666", marginBottom: "12px" }}>{suite.description}</p>
@@ -180,12 +180,12 @@ export default function CandidateDashboard() {
               const historySuiteId = typeof res.suiteId === "string" ? res.suiteId : res.suiteId?._id;
               const passed = isPassedResult(res);
               return (
-                <div key={res._id} style={{ background: WHITE, padding: "16px 24px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+                <div className="candidate-history-card" key={res._id} style={{ background: WHITE, padding: "16px 24px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
                   <div>
                     <h4 style={{ margin: 0, color: GREEN_DARK }}>{res.suiteId?.name || "Assessment"}</h4>
                     <span style={{ fontSize: "12px", color: "#888" }}>{new Date(res.submittedAt).toLocaleDateString()}</span>
                   </div>
-                  <div style={{ textAlign: "right", display: "grid", gap: "8px", justifyItems: "end" }}>
+                  <div className="candidate-history-actions" style={{ textAlign: "right", display: "grid", gap: "8px", justifyItems: "end" }}>
                     <div style={{ fontWeight: "700", color: passed ? GREEN : "#C0392B" }}>
                       {res.score} / {res.totalMarks} ({pct}%)
                     </div>

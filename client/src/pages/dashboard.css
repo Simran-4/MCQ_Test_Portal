@@ -548,6 +548,11 @@ body {
   background: #fbfcfb;
 }
 
+.admin-user-pick-list label.selected {
+  border-color: rgba(31, 107, 58, 0.34);
+  background: #eef8f1;
+}
+
 .admin-user-pick-list input {
   width: 18px;
   min-height: 18px;
@@ -655,6 +660,12 @@ body {
   color: var(--admin-muted);
   font-size: 13px;
   font-weight: 700;
+}
+
+.admin-panel-footer > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .admin-panel-footer button,

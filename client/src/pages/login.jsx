@@ -113,7 +113,7 @@ function Login() {
   };
 
   return (
-    <div style={{
+    <div className="auth-inline-page login-inline-page" style={{
       minHeight: "100vh",
       backgroundImage: `url(${import.meta.env.BASE_URL}background.png)`,
       backgroundSize: "cover",
@@ -126,7 +126,7 @@ function Login() {
       position: "relative",
     }}>
       {/* Dark overlay */}
-      <div style={{
+      <div className="auth-inline-card login-inline-card" style={{
         position: "absolute", inset: 0,
         background: "rgba(0,0,0,0.35)",
       }} />

@@ -46,7 +46,15 @@ async function resolveRole(roleName) {
 
     const custom = await RoleDefinition.findOne({ name: String(roleName || "").trim() });
     if (!custom) return { error: "Selected role was not found" };
+    if (custom.disabled) return { error: "Selected role is disabled" };
     return { role: custom.baseRole, customRole: custom.name };
+}
+
+async function resolveRoleForUpdate(roleName, currentRole) {
+    const rawRole = String(roleName || currentRole || "candidate").trim();
+    const requested = rawRole.toLowerCase();
+    if (requested === "superadmin") return { role: "superadmin", customRole: "" };
+    return resolveRole(rawRole);
 }
 
 async function createUserFromPayload(payload, options = {}) {
@@ -114,10 +122,99 @@ async function createUserFromPayload(payload, options = {}) {
         gender:      gender          || "",
         project:     String(project || "").trim(),
         designation: String(designation || "").trim(),
+        isActive:    payload.isActive === undefined ? true : Boolean(payload.isActive),
     });
 
     await newUser.save();
     return { user: newUser };
+}
+
+async function updateUserFromPayload(userId, payload, requesterId) {
+    const user = await User.findById(userId);
+    if (!user) {
+        return { status: 404, error: "User not found" };
+    }
+
+    const name = String(payload.name || "").trim();
+    const normalizedUsername = normalizeUsername(payload.username || name);
+    const normalizedEmail = normalizeEmail(payload.email);
+    const normalizedMobile = normalizeMobile(payload.mobile);
+    const roleInfo = await resolveRoleForUpdate(payload.role || user.customRole || user.role, user.role);
+    const isActive = payload.isActive === undefined ? user.isActive !== false : Boolean(payload.isActive);
+    const age = payload.age === "" || payload.age === null || payload.age === undefined
+        ? null
+        : Number(payload.age);
+
+    if (roleInfo.error) {
+        return { status: 403, error: roleInfo.error };
+    }
+
+    if (!name || name.length < 2) {
+        return { status: 400, error: "Name must be at least 2 characters" };
+    }
+
+    if (!normalizedUsername || normalizedUsername.length < 3) {
+        return { status: 400, error: "Username must be at least 3 characters" };
+    }
+
+    if (!normalizedEmail && !normalizedMobile) {
+        return { status: 400, error: "Enter either email or mobile number" };
+    }
+
+    if (normalizedEmail && (!normalizedEmail.includes("@") || !normalizedEmail.includes("."))) {
+        return { status: 400, error: "Enter a valid email address" };
+    }
+
+    if (normalizedMobile && normalizedMobile.replace(/\D/g, "").length < 10) {
+        return { status: 400, error: "Enter a valid mobile number" };
+    }
+
+    if (age !== null && (!Number.isFinite(age) || age < 10 || age > 100)) {
+        return { status: 400, error: "Age must be between 10 and 100" };
+    }
+
+    if (requesterId === String(user._id) && (roleInfo.role !== "superadmin" || !isActive)) {
+        return { status: 400, error: "You cannot remove or disable your own super admin access" };
+    }
+
+    if (user.role === "superadmin" && roleInfo.role !== "superadmin") {
+        const otherSuperAdmins = await User.countDocuments({
+            role: "superadmin",
+            _id: { $ne: user._id },
+        });
+        if (otherSuperAdmins === 0) {
+            return { status: 400, error: "At least one super admin account must remain" };
+        }
+    }
+
+    const storedEmail = normalizedEmail || `${normalizedUsername}@mobile.local`;
+    const existingUser = await User.findOne({
+        _id: { $ne: user._id },
+        $or: [
+            { username: normalizedUsername },
+            { email: storedEmail },
+            ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+            ...(normalizedMobile ? [{ mobile: normalizedMobile }] : []),
+        ],
+    });
+    if (existingUser) {
+        return { status: 400, error: "Username, email, or mobile number already exists" };
+    }
+
+    user.name = name;
+    user.username = normalizedUsername;
+    user.email = storedEmail;
+    user.mobile = normalizedMobile || undefined;
+    user.role = roleInfo.role;
+    user.customRole = roleInfo.customRole || "";
+    user.isActive = isActive;
+    user.age = age;
+    user.gender = payload.gender || "";
+    user.project = String(payload.project || "").trim();
+    user.designation = String(payload.designation || "").trim();
+
+    await user.save();
+    return { user };
 }
 
 async function getOrgOptionsDoc() {
@@ -182,6 +279,17 @@ router.post("/superadmin/users", authMiddleware, requireSuperAdmin, async (req, 
         res.status(201).json(publicUser(result.user));
     } catch (err) {
         res.status(500).json({ message: "Error creating user" });
+    }
+});
+
+// ── SUPER ADMIN USER EDIT ────────────────────────────────────
+router.put("/superadmin/users/:id", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const result = await updateUserFromPayload(req.params.id, req.body, req.user.id);
+        if (result.error) return res.status(result.status).json({ message: result.error });
+        res.json(publicUser(result.user));
+    } catch (err) {
+        res.status(500).json({ message: "Error updating user" });
     }
 });
 
@@ -407,6 +515,7 @@ router.get("/superadmin/roles", authMiddleware, requireSuperAdmin, async (req, r
             name: role.name,
             baseRole: role.baseRole,
             description: role.description,
+            disabled: role.disabled,
             system: false,
         }))]);
     } catch (err) {
@@ -419,17 +528,53 @@ router.post("/superadmin/roles", authMiddleware, requireSuperAdmin, async (req, 
         const name = String(req.body.name || "").trim();
         const baseRole = req.body.baseRole === "admin" ? "admin" : "candidate";
         const description = String(req.body.description || "").trim();
+        const disabled = Boolean(req.body.disabled);
 
         if (!name) return res.status(400).json({ message: "Role name is required" });
         if (systemRoles.some(role => role.name.toLowerCase() === name.toLowerCase())) {
             return res.status(400).json({ message: "This system role already exists" });
         }
 
-        const role = await RoleDefinition.create({ name, baseRole, description });
+        const role = await RoleDefinition.create({ name, baseRole, description, disabled });
         res.status(201).json(role);
     } catch (err) {
         if (err.code === 11000) return res.status(400).json({ message: "Role already exists" });
         res.status(500).json({ message: "Error creating role" });
+    }
+});
+
+router.put("/superadmin/roles/:id", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const name = String(req.body.name || "").trim();
+        const baseRole = req.body.baseRole === "admin" ? "admin" : "candidate";
+        const description = String(req.body.description || "").trim();
+        const disabled = Boolean(req.body.disabled);
+
+        if (!name) return res.status(400).json({ message: "Role name is required" });
+        if (systemRoles.some(role => role.name.toLowerCase() === name.toLowerCase())) {
+            return res.status(400).json({ message: "System roles cannot be edited" });
+        }
+
+        const roleQuery = req.params.id.match(/^[a-f\d]{24}$/i)
+            ? { $or: [{ _id: req.params.id }, { name: req.params.id }] }
+            : { name: req.params.id };
+        const role = await RoleDefinition.findOneAndUpdate(
+            roleQuery,
+            { name, baseRole, description, disabled },
+            { new: true }
+        );
+        if (!role) return res.status(404).json({ message: "Role not found" });
+        res.json({
+            _id: role._id,
+            name: role.name,
+            baseRole: role.baseRole,
+            description: role.description,
+            disabled: role.disabled,
+            system: false,
+        });
+    } catch (err) {
+        if (err.code === 11000) return res.status(400).json({ message: "Role already exists" });
+        res.status(500).json({ message: "Error updating role" });
     }
 });
 

@@ -13,17 +13,40 @@ const API_BASE = "https://charismatic-happiness-production-dc36.up.railway.app/a
 const API_URL = `${API_BASE}/auth`;
 const LOCAL_ROLES_KEY = "snehalaya_custom_roles";
 const emptyCreateUserForm = {
-  name: "",
+  firstName: "",
+  middleName: "",
+  lastName: "",
   username: "",
   contactType: "email",
   email: "",
   mobile: "",
+  preferredContact: "",
   password: "",
+  confirmPassword: "",
   role: "candidate",
   age: "",
   gender: "",
   project: "",
   designation: "",
+  isActive: true,
+};
+const emptyEditUserForm = {
+  firstName: "",
+  middleName: "",
+  lastName: "",
+  username: "",
+  contactType: "email",
+  email: "",
+  mobile: "",
+  alternateEmail: "",
+  role: "candidate",
+  age: "",
+  gender: "",
+  project: "",
+  designation: "",
+  isActive: true,
+  resetPassword: false,
+  newPassword: "",
 };
 const ADMIN_RIGHTS = [
   { key: "canViewReports", label: "View reports", detail: "Can open report pages and see result rows" },
@@ -118,6 +141,47 @@ function userOptionLabel(user) {
   const name = user?.name || user?.username || user?.email || user?.mobile || "Unnamed user";
   const contact = userContact(user);
   return contact ? `${name} - ${contact}` : name;
+}
+
+function splitNameParts(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) {
+    return { firstName: parts[0] || "", middleName: "", lastName: "" };
+  }
+  return {
+    firstName: parts[0],
+    middleName: parts.length > 2 ? parts.slice(1, -1).join(" ") : "",
+    lastName: parts.slice(-1)[0],
+  };
+}
+
+function fullNameFromForm(form) {
+  return [form.firstName, form.middleName, form.lastName]
+    .map(part => String(part || "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function userToEditForm(user) {
+  if (!user) return emptyEditUserForm;
+  const hasEmail = Boolean(user.email);
+  const nameParts = splitNameParts(user.name);
+  return {
+    ...nameParts,
+    username: user.username || "",
+    contactType: hasEmail ? "email" : "mobile",
+    email: user.email || "",
+    mobile: user.mobile || "",
+    alternateEmail: "",
+    role: user.customRole || user.role || "candidate",
+    age: user.age || "",
+    gender: user.gender || "",
+    project: user.project || "",
+    designation: user.designation || "",
+    isActive: user.isActive !== false,
+    resetPassword: false,
+    newPassword: "",
+  };
 }
 
 function roleAssignmentUsers(users) {
@@ -273,6 +337,12 @@ function SuperAdmin() {
   ]);
   const [createUserForm, setCreateUserForm] = useState(emptyCreateUserForm);
   const [creatingUser, setCreatingUser] = useState(false);
+  const [editUserId, setEditUserId] = useState("");
+  const [editUserForm, setEditUserForm] = useState(emptyEditUserForm);
+  const [savingEditUser, setSavingEditUser] = useState(false);
+  const [roleEditName, setRoleEditName] = useState("");
+  const [roleEditForm, setRoleEditForm] = useState({ name: "", baseRole: "candidate", description: "", status: "active" });
+  const [savingRoleEdit, setSavingRoleEdit] = useState(false);
   const [roleForm, setRoleForm] = useState({ name: "", baseRole: "candidate", description: "" });
   const [assignUserId, setAssignUserId] = useState("");
   const [assignRole, setAssignRole] = useState("candidate");
@@ -371,8 +441,84 @@ function SuperAdmin() {
     }));
   };
 
+  const openEditUser = (user) => {
+    if (!user?._id) return;
+    setActiveNav("management");
+    setControlMode("roles");
+    setEditUserId(user._id);
+    setEditUserForm(userToEditForm(user));
+    requestAnimationFrame(() => {
+      document.getElementById("edit-user-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const handleEditUserChange = (userId) => {
+    setEditUserId(userId);
+    setEditUserForm(userToEditForm(users.find(user => user._id === userId)));
+  };
+
+  const updateEditUserForm = (field, value) => {
+    setEditUserForm(prev => ({
+      ...prev,
+      [field]: value,
+      ...(field === "project" ? { designation: "" } : {}),
+      ...(field === "contactType" ? { email: "", mobile: "" } : {}),
+    }));
+  };
+
+  const saveEditedUser = async () => {
+    if (!editUserId) return alert("Select a user to edit.");
+    const fullName = fullNameFromForm(editUserForm);
+    if (!fullName) return alert("Enter full name.");
+    if (!editUserForm.username.trim()) return alert("Enter username.");
+    if (editUserForm.contactType === "email" && (!editUserForm.email.trim() || !editUserForm.email.includes("@") || !editUserForm.email.includes("."))) {
+      return alert("Enter a valid email address.");
+    }
+    if (editUserForm.contactType === "mobile" && editUserForm.mobile.replace(/\D/g, "").length < 10) {
+      return alert("Enter a valid mobile number.");
+    }
+    if (editUserForm.age && (Number(editUserForm.age) < 10 || Number(editUserForm.age) > 100)) {
+      return alert("Enter a valid age between 10 and 100.");
+    }
+    if (editUserForm.resetPassword && editUserForm.newPassword.length < 6) {
+      return alert("New password must be at least 6 characters.");
+    }
+
+    setSavingEditUser(true);
+    try {
+      const payload = {
+        name: fullName,
+        username: editUserForm.username.trim(),
+        email: editUserForm.contactType === "email" ? editUserForm.email.trim().toLowerCase() : "",
+        mobile: editUserForm.contactType === "mobile" ? editUserForm.mobile.trim() : "",
+        role: editUserForm.role,
+        age: editUserForm.age ? Number(editUserForm.age) : "",
+        gender: editUserForm.gender,
+        project: editUserForm.project,
+        designation: editUserForm.designation,
+        isActive: editUserForm.isActive,
+      };
+      const res = await axios.put(`${API_URL}/superadmin/users/${editUserId}`, payload, { headers: getAuthHeaders() });
+      if (editUserForm.resetPassword) {
+        await axios.put(
+          `${API_URL}/superadmin/users/${editUserId}/password`,
+          { password: editUserForm.newPassword },
+          { headers: getAuthHeaders() }
+        );
+      }
+      setUsers(prev => prev.map(user => user._id === res.data._id ? res.data : user));
+      setEditUserForm(userToEditForm(res.data));
+      alert("User updated successfully.");
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to update user. Railway backend may need redeploy.");
+    } finally {
+      setSavingEditUser(false);
+    }
+  };
+
   const createUserAccount = async () => {
-    if (!createUserForm.name.trim()) return alert("Enter full name.");
+    const fullName = fullNameFromForm(createUserForm);
+    if (!fullName) return alert("Enter full name.");
     if (!createUserForm.username.trim()) return alert("Enter username.");
     if (createUserForm.contactType === "email" && (!createUserForm.email.trim() || !createUserForm.email.includes("@") || !createUserForm.email.includes("."))) {
       return alert("Enter a valid email address.");
@@ -381,6 +527,7 @@ function SuperAdmin() {
       return alert("Enter a valid mobile number.");
     }
     if (!createUserForm.password || createUserForm.password.length < 6) return alert("Password must be at least 6 characters.");
+    if (createUserForm.password !== createUserForm.confirmPassword) return alert("Password and confirm password must match.");
     if (!createUserForm.age || Number(createUserForm.age) < 10 || Number(createUserForm.age) > 100) return alert("Enter a valid age between 10 and 100.");
     if (!createUserForm.gender) return alert("Select gender.");
     if (!createUserForm.project) return alert("Select project/department.");
@@ -389,7 +536,7 @@ function SuperAdmin() {
     setCreatingUser(true);
     try {
       const payload = {
-        name: createUserForm.name.trim(),
+        name: fullName,
         username: createUserForm.username.trim(),
         email: createUserForm.contactType === "email" ? createUserForm.email.trim().toLowerCase() : "",
         mobile: createUserForm.contactType === "mobile" ? createUserForm.mobile.trim() : "",
@@ -399,6 +546,7 @@ function SuperAdmin() {
         gender: createUserForm.gender,
         project: createUserForm.project,
         designation: createUserForm.designation,
+        isActive: createUserForm.isActive,
       };
       const res = await axios.post(`${API_URL}/superadmin/users`, payload, { headers: getAuthHeaders() });
       setUsers(prev => [...prev, res.data].sort((a, b) => a.name.localeCompare(b.name)));
@@ -436,6 +584,65 @@ function SuperAdmin() {
       } else {
         alert(err.response?.data?.message || "Unable to create role");
       }
+    }
+  };
+
+  const handleRoleEditChange = (roleName) => {
+    setRoleEditName(roleName);
+    const role = roles.find(item => item.name === roleName);
+    setRoleEditForm(role
+      ? {
+          name: role.name,
+          baseRole: role.baseRole || "candidate",
+          description: role.description || "",
+          status: role.disabled ? "disabled" : "active",
+        }
+      : { name: "", baseRole: "candidate", description: "", status: "active" }
+    );
+  };
+
+  const saveRoleDetails = async () => {
+    if (!roleEditName) return alert("Select a role to edit.");
+    const selectedRole = roles.find(role => role.name === roleEditName);
+    if (!selectedRole) return alert("Selected role was not found.");
+    if (selectedRole.system) return alert("System roles cannot be edited.");
+    const nextName = roleEditForm.name.trim();
+    if (!nextName) return alert("Role name is required.");
+
+    setSavingRoleEdit(true);
+    try {
+      const payload = {
+        name: nextName,
+        baseRole: roleEditForm.baseRole,
+        description: roleEditForm.description,
+        disabled: roleEditForm.status === "disabled",
+      };
+      const res = await axios.put(`${API_URL}/superadmin/roles/${selectedRole._id || selectedRole.name}`, payload, { headers: getAuthHeaders() });
+      setRoles(prev => prev.map(role => role.name === roleEditName ? { ...res.data, system: false } : role));
+      setRoleEditName(res.data.name);
+      setRoleEditForm({
+        name: res.data.name,
+        baseRole: res.data.baseRole || "candidate",
+        description: res.data.description || "",
+        status: res.data.disabled ? "disabled" : "active",
+      });
+      alert("Role updated successfully.");
+    } catch (err) {
+      if (err.response?.status === 404) {
+        const nextRoles = readLocalRoles().map(role =>
+          role.name === roleEditName
+            ? { ...role, ...roleEditForm, name: nextName, disabled: roleEditForm.status === "disabled" }
+            : role
+        );
+        writeLocalRoles(nextRoles);
+        setRoles(prev => [...prev.filter(role => role.system), ...nextRoles]);
+        setRoleEditName(nextName);
+        alert("Role updated locally. Redeploy Railway backend to save it for everyone.");
+      } else {
+        alert(err.response?.data?.message || "Unable to update role.");
+      }
+    } finally {
+      setSavingRoleEdit(false);
     }
   };
 
@@ -554,6 +761,10 @@ function SuperAdmin() {
       });
       setUsers(prev => prev.filter(user => user._id !== targetUser._id));
       if (assignUserId === targetUser._id) setAssignUserId("");
+      if (editUserId === targetUser._id) {
+        setEditUserId("");
+        setEditUserForm(emptyEditUserForm);
+      }
       if (rightsUserId === targetUser._id) {
         setRightsUserId("");
         setRightsForm(normalizeRights());
@@ -643,7 +854,11 @@ function SuperAdmin() {
     : [];
   const createUserProjectNames = Object.keys(orgOptions).sort((a, b) => a.localeCompare(b));
   const createUserDepartments = createUserForm.project ? orgOptions[createUserForm.project] || [] : [];
-  const assignableRoles = roles.filter(role => role.name !== "superadmin");
+  const editUserDepartments = editUserForm.project ? orgOptions[editUserForm.project] || [] : [];
+  const assignableRoles = roles.filter(role => role.name !== "superadmin" && !role.disabled);
+  const editRoleOptions = roles.some(role => role.name === editUserForm.role)
+    ? roles
+    : [...roles, { name: editUserForm.role, system: true }];
   const roleUsers = displayUsers;
 
   const getSectionTitle = () => {
@@ -921,19 +1136,30 @@ function SuperAdmin() {
             )}
 
             {controlMode === "roles" && (
-              <div className="control-grid">
-                <div className="control-panel wide">
+              <div className="control-grid controls-roles-grid">
+                <div className="control-panel wide controls-user-panel">
                   <h3>Create User Account</h3>
-                  <div className="control-form-grid">
+                  <div className="control-form-grid controls-user-grid">
                     <input
-                      value={createUserForm.name}
-                      onChange={e => updateCreateUserForm("name", e.target.value)}
-                      placeholder="Full name"
+                      value={createUserForm.firstName}
+                      onChange={e => updateCreateUserForm("firstName", e.target.value)}
+                      placeholder="First name"
                     />
                     <input
-                      value={createUserForm.username}
-                      onChange={e => updateCreateUserForm("username", e.target.value)}
-                      placeholder="Username"
+                      value={createUserForm.middleName}
+                      onChange={e => updateCreateUserForm("middleName", e.target.value)}
+                      placeholder="Middle name"
+                    />
+                    <input
+                      value={createUserForm.lastName}
+                      onChange={e => updateCreateUserForm("lastName", e.target.value)}
+                      placeholder="Last name"
+                    />
+                    <input
+                      type="email"
+                      value={createUserForm.email}
+                      onChange={e => updateCreateUserForm("email", e.target.value)}
+                      placeholder="Email address"
                     />
                     <input
                       type="number"
@@ -949,34 +1175,30 @@ function SuperAdmin() {
                       <option value="Female">Female</option>
                       <option value="Other">Other</option>
                     </select>
-                    <select value={createUserForm.project} onChange={e => updateCreateUserForm("project", e.target.value)}>
+                    <select className="span-2" value={createUserForm.project} onChange={e => updateCreateUserForm("project", e.target.value)}>
                       <option value="">Select project/department</option>
                       {createUserProjectNames.map(project => (
                         <option key={project} value={project}>{project}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={createUserForm.designation}
-                      onChange={e => updateCreateUserForm("designation", e.target.value)}
-                      disabled={!createUserForm.project}
-                    >
-                      <option value="">{createUserForm.project ? "Select designation" : "Select project/department first"}</option>
-                      {createUserDepartments.map(department => (
-                        <option key={department} value={department}>{department}</option>
                       ))}
                     </select>
                     <select value={createUserForm.contactType} onChange={e => updateCreateUserForm("contactType", e.target.value)}>
                       <option value="email">Use email</option>
                       <option value="mobile">Use mobile number</option>
                     </select>
-                    {createUserForm.contactType === "email" ? (
-                      <input
-                        type="email"
-                        value={createUserForm.email}
-                        onChange={e => updateCreateUserForm("email", e.target.value)}
-                        placeholder="Email address"
-                      />
-                    ) : (
+                    <input
+                      value={createUserForm.username}
+                      onChange={e => updateCreateUserForm("username", e.target.value)}
+                      placeholder="Preferred contact / username"
+                    />
+                    <select value={createUserForm.role} onChange={e => updateCreateUserForm("role", e.target.value)}>
+                      <option value="">Assign role</option>
+                      {assignableRoles.map(role => (
+                        <option key={role.name} value={role.name}>
+                          {role.name}{role.system ? " (system)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {createUserForm.contactType === "mobile" && (
                       <input
                         type="tel"
                         value={createUserForm.mobile}
@@ -988,18 +1210,167 @@ function SuperAdmin() {
                       type="password"
                       value={createUserForm.password}
                       onChange={e => updateCreateUserForm("password", e.target.value)}
-                      placeholder="Temporary password"
+                      placeholder="Password"
                     />
-                    <select value={createUserForm.role} onChange={e => updateCreateUserForm("role", e.target.value)}>
-                      {assignableRoles.map(role => (
+                    <input
+                      type="password"
+                      value={createUserForm.confirmPassword}
+                      onChange={e => updateCreateUserForm("confirmPassword", e.target.value)}
+                      placeholder="Confirm password"
+                    />
+                    <select
+                      value={createUserForm.designation}
+                      onChange={e => updateCreateUserForm("designation", e.target.value)}
+                      disabled={!createUserForm.project}
+                    >
+                      <option value="">{createUserForm.project ? "Select designation" : "Select project/department first"}</option>
+                      {createUserDepartments.map(department => (
+                        <option key={department} value={department}>{department}</option>
+                      ))}
+                    </select>
+                    <select value={createUserForm.isActive ? "active" : "disabled"} onChange={e => updateCreateUserForm("isActive", e.target.value === "active")}>
+                      <option value="active">Status: Active</option>
+                      <option value="disabled">Status: Disabled</option>
+                    </select>
+                  </div>
+                  <button type="button" onClick={createUserAccount} disabled={creatingUser}>
+                    {creatingUser ? "Creating..." : "Create User"}
+                  </button>
+                </div>
+
+                <div className="control-panel wide controls-user-panel" id="edit-user-card">
+                  <h3>Edit Existing User</h3>
+                  <p className="control-panel-note">Search and update the details of an existing user.</p>
+                  <div className="control-form-grid controls-edit-search">
+                    <select value={editUserId} onChange={e => handleEditUserChange(e.target.value)}>
+                      <option value="">Select user to edit</option>
+                      {roleUsers.map(user => (
+                        <option key={user._id} value={user._id}>
+                          {userOptionLabel(user)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="control-form-grid controls-user-grid">
+                    <input
+                      value={editUserForm.firstName}
+                      onChange={e => updateEditUserForm("firstName", e.target.value)}
+                      placeholder="First name"
+                      disabled={!editUserId}
+                    />
+                    <input
+                      value={editUserForm.middleName}
+                      onChange={e => updateEditUserForm("middleName", e.target.value)}
+                      placeholder="Middle name"
+                      disabled={!editUserId}
+                    />
+                    <input
+                      value={editUserForm.lastName}
+                      onChange={e => updateEditUserForm("lastName", e.target.value)}
+                      placeholder="Last name"
+                      disabled={!editUserId}
+                    />
+                    <input
+                      type="email"
+                      value={editUserForm.email}
+                      onChange={e => updateEditUserForm("email", e.target.value)}
+                      placeholder="Email address"
+                      disabled={!editUserId || editUserForm.contactType !== "email"}
+                    />
+                    <input
+                      type="number"
+                      min="10"
+                      max="100"
+                      value={editUserForm.age}
+                      onChange={e => updateEditUserForm("age", e.target.value)}
+                      placeholder="Age"
+                      disabled={!editUserId}
+                    />
+                    <select value={editUserForm.gender} onChange={e => updateEditUserForm("gender", e.target.value)} disabled={!editUserId}>
+                      <option value="">Select gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    <select className="span-2" value={editUserForm.project} onChange={e => updateEditUserForm("project", e.target.value)} disabled={!editUserId}>
+                      <option value="">Select project/department</option>
+                      {createUserProjectNames.map(project => (
+                        <option key={project} value={project}>{project}</option>
+                      ))}
+                    </select>
+                    <select value={editUserForm.contactType} onChange={e => updateEditUserForm("contactType", e.target.value)} disabled={!editUserId}>
+                      <option value="email">Preferred contact: email</option>
+                      <option value="mobile">Preferred contact: mobile</option>
+                    </select>
+                    {editUserForm.contactType === "mobile" ? (
+                      <input
+                        type="tel"
+                        value={editUserForm.mobile}
+                        onChange={e => updateEditUserForm("mobile", e.target.value)}
+                        placeholder="Mobile number"
+                        disabled={!editUserId}
+                      />
+                    ) : (
+                      <input
+                        value={editUserForm.alternateEmail}
+                        onChange={e => updateEditUserForm("alternateEmail", e.target.value)}
+                        placeholder="Alternate email (optional)"
+                        disabled={!editUserId}
+                      />
+                    )}
+                    <select value={editUserForm.role} onChange={e => updateEditUserForm("role", e.target.value)} disabled={!editUserId}>
+                      <option value="">Assign role</option>
+                      {editRoleOptions.map(role => (
                         <option key={role.name} value={role.name}>
                           {role.name}{role.system ? " (system)" : ""}
                         </option>
                       ))}
                     </select>
+                    <select
+                      value={editUserForm.isActive ? "active" : "disabled"}
+                      onChange={e => updateEditUserForm("isActive", e.target.value === "active")}
+                      disabled={!editUserId}
+                    >
+                      <option value="active">Active account</option>
+                      <option value="disabled">Disabled account</option>
+                    </select>
+                    <select
+                      value={editUserForm.designation}
+                      onChange={e => updateEditUserForm("designation", e.target.value)}
+                      disabled={!editUserId || !editUserForm.project}
+                    >
+                      <option value="">{editUserForm.project ? "Select designation" : "Select project/department first"}</option>
+                      {editUserDepartments.map(department => (
+                        <option key={department} value={department}>{department}</option>
+                      ))}
+                    </select>
+                    <input
+                      value={editUserForm.username}
+                      onChange={e => updateEditUserForm("username", e.target.value)}
+                      placeholder="Preferred contact / username"
+                      disabled={!editUserId}
+                    />
+                    <label className="inline-check">
+                      <input
+                        type="checkbox"
+                        checked={editUserForm.resetPassword}
+                        onChange={e => updateEditUserForm("resetPassword", e.target.checked)}
+                        disabled={!editUserId}
+                      />
+                      Reset password
+                    </label>
+                    {editUserForm.resetPassword && (
+                      <input
+                        type="password"
+                        value={editUserForm.newPassword}
+                        onChange={e => updateEditUserForm("newPassword", e.target.value)}
+                        placeholder="New password"
+                        disabled={!editUserId}
+                      />
+                    )}
                   </div>
-                  <button type="button" onClick={createUserAccount} disabled={creatingUser}>
-                    {creatingUser ? "Creating..." : "Create User"}
+                  <button type="button" onClick={saveEditedUser} disabled={savingEditUser || !editUserId}>
+                    {savingEditUser ? "Saving..." : "Save User Changes"}
                   </button>
                 </div>
 
@@ -1033,6 +1404,50 @@ function SuperAdmin() {
                       <span key={role.name}>{role.name}{role.system ? " (system)" : ""}</span>
                     ))}
                   </div>
+                </div>
+
+                <div className="control-panel">
+                  <h3>Edit Role Details</h3>
+                  <select value={roleEditName} onChange={e => handleRoleEditChange(e.target.value)}>
+                    <option value="">Select role</option>
+                    {roles.map(role => (
+                      <option key={role.name} value={role.name}>
+                        {role.name}{role.system ? " (system)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    value={roleEditForm.name}
+                    onChange={e => setRoleEditForm({ ...roleEditForm, name: e.target.value })}
+                    placeholder="Role name"
+                    disabled={!roleEditName || roles.find(role => role.name === roleEditName)?.system}
+                  />
+                  <select
+                    value={roleEditForm.baseRole}
+                    onChange={e => setRoleEditForm({ ...roleEditForm, baseRole: e.target.value })}
+                    disabled={!roleEditName || roles.find(role => role.name === roleEditName)?.system}
+                  >
+                    <option value="candidate">Candidate-level access</option>
+                    <option value="admin">Admin-level access</option>
+                  </select>
+                  <textarea
+                    value={roleEditForm.description}
+                    onChange={e => setRoleEditForm({ ...roleEditForm, description: e.target.value })}
+                    placeholder="Role description"
+                    rows={3}
+                    disabled={!roleEditName || roles.find(role => role.name === roleEditName)?.system}
+                  />
+                  <select
+                    value={roleEditForm.status}
+                    onChange={e => setRoleEditForm({ ...roleEditForm, status: e.target.value })}
+                    disabled={!roleEditName || roles.find(role => role.name === roleEditName)?.system}
+                  >
+                    <option value="active">Status: Active</option>
+                    <option value="disabled">Status: Disabled</option>
+                  </select>
+                  <button type="button" onClick={saveRoleDetails} disabled={savingRoleEdit || !roleEditName || roles.find(role => role.name === roleEditName)?.system}>
+                    {savingRoleEdit ? "Saving..." : "Update Role"}
+                  </button>
                 </div>
               </div>
             )}
@@ -1124,6 +1539,13 @@ function SuperAdmin() {
                       </td>
                       <td>
                         <div className="user-actions">
+                          <button
+                            type="button"
+                            className="small-action-btn"
+                            onClick={() => openEditUser(user)}
+                          >
+                            Edit User
+                          </button>
                           <button
                             type="button"
                             className="small-action-btn"
