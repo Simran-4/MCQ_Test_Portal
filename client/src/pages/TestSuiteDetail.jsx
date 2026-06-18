@@ -120,6 +120,7 @@ export default function TestSuiteDetail() {
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState("");
   const [editingQ, setEditingQ]   = useState(null);
+  const [questionSearch, setQuestionSearch] = useState("");
 
   const [showDuration, setShowDuration] = useState(false);
   const [durationVal, setDurationVal]   = useState(30);
@@ -629,7 +630,24 @@ export default function TestSuiteDetail() {
 
   const orderedQuestions = sortQuestionsBySuiteOrder(questions);
   const questionNumberById = new Map(orderedQuestions.map((q, index) => [String(q._id), index + 1]));
-  const grouped = orderedQuestions.reduce((acc, q) => {
+  const questionSearchTerm = questionSearch.trim().toLowerCase();
+  const filteredQuestions = questionSearchTerm
+    ? orderedQuestions.filter(q => {
+        const questionNumber = questionNumberById.get(String(q._id)) || "";
+        const cats = Array.isArray(q.category) ? q.category : (q.category ? [q.category] : []);
+        const haystack = [
+          `q${questionNumber}`,
+          questionNumber,
+          q.questionText,
+          q.explanation,
+          q.questionType,
+          ...(q.options || []),
+          ...cats,
+        ].join(" ").toLowerCase();
+        return haystack.includes(questionSearchTerm);
+      })
+    : orderedQuestions;
+  const grouped = filteredQuestions.reduce((acc, q) => {
     const cats = Array.isArray(q.category) && q.category.length > 0 ? q.category : ["Uncategorized"];
     const key  = cats[0];
     if (!acc[key]) acc[key] = [];
@@ -721,6 +739,23 @@ export default function TestSuiteDetail() {
             style={{ padding: "10px 20px", background: WHITE, color: "#333", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
             View results
           </button>
+        </div>
+
+        <div style={{ background: WHITE, border: "1px solid #d8e9df", borderRadius: "16px", padding: "14px 16px", marginBottom: "20px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            value={questionSearch}
+            onChange={e => setQuestionSearch(e.target.value)}
+            placeholder="Search questions by number, text, category, option..."
+            style={{ ...inputStyle, flex: "1 1 320px", minWidth: 0 }}
+          />
+          <span style={{ color: "#6B6B5E", fontSize: "13px", fontWeight: "700" }}>
+            {filteredQuestions.length} of {questions.length} question{questions.length !== 1 ? "s" : ""}
+          </span>
+          {questionSearch && (
+            <button type="button" onClick={() => setQuestionSearch("")} style={{ padding: "9px 14px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "13px", fontWeight: "700", cursor: "pointer" }}>
+              Clear
+            </button>
+          )}
         </div>
 
         {/* ── Duration Panel ── */}
@@ -1098,6 +1133,10 @@ export default function TestSuiteDetail() {
         {questions.length === 0 ? (
           <div style={{ background: WHITE, borderRadius: "16px", border: "2px dashed #e5e7eb", padding: "48px 28px", textAlign: "center" }}>
             <p style={{ color: "#aaa", fontSize: "14px", margin: 0 }}>No questions yet. Click "+ Add question" to start.</p>
+          </div>
+        ) : filteredQuestions.length === 0 ? (
+          <div style={{ background: WHITE, borderRadius: "16px", border: "2px dashed #e5e7eb", padding: "42px 28px", textAlign: "center" }}>
+            <p style={{ color: "#8A8A7E", fontSize: "14px", margin: 0 }}>No questions match "{questionSearch}".</p>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>

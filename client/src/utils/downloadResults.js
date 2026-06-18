@@ -90,10 +90,35 @@ function resultStatus(r, suite) {
 }
 
 function optionLabels(q, indexes) {
+  const options = Array.isArray(q?.options) ? q.options : [];
   return uniqueIndexes(indexes)
-    .map(i => q.options?.[i])
+    .map(i => options[i] || options[i - 1] || `Option ${i + 1}`)
     .filter(Boolean)
     .join(", ");
+}
+
+function itemId(value) {
+  if (!value) return "";
+  if (typeof value === "object") return String(value._id || value.id || "");
+  return String(value);
+}
+
+function answerQuestionId(answer) {
+  return itemId(answer?.questionId || answer?.question);
+}
+
+function answerQuestion(answer) {
+  return answer?.questionId && typeof answer.questionId === "object" ? answer.questionId : null;
+}
+
+function questionsById(questions) {
+  return new Map((questions || []).map(question => [itemId(question), question]));
+}
+
+function findAnswerQuestion(answer, byId) {
+  const populated = answerQuestion(answer);
+  if (populated) return populated;
+  return byId.get(answerQuestionId(answer)) || null;
 }
 
 async function loadImageAsDataUrl(src) {
@@ -115,6 +140,7 @@ async function loadImageAsDataUrl(src) {
 function buildStats(suite, questions, results) {
   const scoredQuestions = questions.filter(q => !isTheoryQuestion(q));
   const allCats = [...new Set(scoredQuestions.flatMap(q => getQuestionCats(q)))];
+  const byId = questionsById(questions);
   const statsPerResult = results.map(r => {
     const catMap = {};
 
@@ -128,9 +154,7 @@ function buildStats(suite, questions, results) {
     });
 
     (r.answers || []).forEach(ans => {
-      const q = questions.find(q =>
-        q._id === ans.questionId || q._id?.toString() === ans.questionId?.toString()
-      );
+      const q = findAnswerQuestion(ans, byId);
       if (!q || isTheoryQuestion(q)) return;
 
       const selectedArr = Array.isArray(ans.selectedOptions) ? ans.selectedOptions : [];
@@ -172,40 +196,51 @@ function categoryRowsForResult(r, allCats) {
 }
 
 function questionRowsForResult(r, questions) {
+  const byId = questionsById(questions);
   return questions.map((q, idx) => {
-    const ans = (r.answers || []).find(a =>
-      q._id === a.questionId || q._id?.toString() === a.questionId?.toString()
-    );
+    const questionId = itemId(q);
+    const ans = (r.answers || []).find(a => answerQuestionId(a) === questionId);
     const selectedArr = Array.isArray(ans?.selectedOptions) ? ans.selectedOptions : [];
-    const cats = getQuestionCats(q);
+    const question = ans ? findAnswerQuestion(ans, byId) || q : q;
+    const cats = getQuestionCats(question);
+    const review = isTheoryQuestion(question)
+      ? "Manual review"
+      : !ans ? "Not answered" : ans.isCorrect ? "Correct" : "Incorrect";
+    const marks = ans?.earnedMarks !== undefined
+      ? `${formatNumber(ans.earnedMarks)}/${question.marks ?? 1}`
+      : "-";
 
-    if (isTheoryQuestion(q)) {
+    if (isTheoryQuestion(question)) {
       return {
         number: idx + 1,
-        question: q.questionText || "-",
+        question: question.questionText || "-",
         categories: cats.join(", "),
         selected: ans?.textAnswer || "Not answered",
         correct: "Theory answer - review manually",
+        review,
+        marks,
         score: "Not auto-scored",
       };
     }
 
     const catAnswerText = cats.map(cat => {
-      const labels = optionLabels(q, getCorrectAnswersForCategory(q, cat)) || "-";
+      const labels = optionLabels(question, getCorrectAnswersForCategory(question, cat)) || "-";
       return `${cat}: ${labels}`;
     }).join("; ");
     const catScoreText = cats.map(cat => {
-      const { earnedFrac, isRight } = scoreSelected(selectedArr, getCorrectAnswersForCategory(q, cat));
-      const earned = formatNumber(earnedFrac * (q.marks ?? 1));
-      return `${cat}: ${isRight ? "Correct" : "Incorrect"} (${earned}/${q.marks ?? 1})`;
+      const { earnedFrac, isRight } = scoreSelected(selectedArr, getCorrectAnswersForCategory(question, cat));
+      const earned = formatNumber(earnedFrac * (question.marks ?? 1));
+      return `${cat}: ${isRight ? "Correct" : "Incorrect"} (${earned}/${question.marks ?? 1})`;
     }).join("; ");
 
     return {
       number: idx + 1,
-      question: q.questionText || "-",
+      question: question.questionText || "-",
       categories: cats.join(", "),
-      selected: optionLabels(q, selectedArr) || "Not answered",
+      selected: optionLabels(question, selectedArr) || "Not answered",
       correct: catAnswerText,
+      review,
+      marks,
       score: catScoreText,
     };
   });
@@ -380,6 +415,8 @@ function buildDescriptiveReportHtml(stats, logoDataUrl) {
         <td>${escapeHtml(row.categories)}</td>
         <td>${escapeHtml(row.selected)}</td>
         <td>${escapeHtml(row.correct)}</td>
+        <td>${escapeHtml(row.review)}</td>
+        <td>${escapeHtml(row.marks)}</td>
         <td>${escapeHtml(row.score)}</td>
       </tr>
     `).join("");
@@ -421,6 +458,8 @@ function buildDescriptiveReportHtml(stats, logoDataUrl) {
               <th>Category</th>
               <th>Selected</th>
               <th>Correct Answer</th>
+              <th>Review</th>
+              <th>Marks</th>
               <th>Category Score</th>
             </tr>
           </thead>
@@ -908,6 +947,8 @@ function buildWorkbookDescriptive(wb, stats) {
     "Categories",
     "Selected Answer",
     "Correct Answer by Category",
+    "Review",
+    "Marks",
     "Category Score",
   ];
   const questionRows = [];
@@ -923,6 +964,8 @@ function buildWorkbookDescriptive(wb, stats) {
         row.categories,
         row.selected,
         row.correct,
+        row.review,
+        row.marks,
         row.score,
       ]);
     });
@@ -938,6 +981,8 @@ function buildWorkbookDescriptive(wb, stats) {
     { wch: 24 },
     { wch: 26 },
     { wch: 48 },
+    { wch: 14 },
+    { wch: 12 },
     { wch: 48 },
   ];
   XLSX.utils.book_append_sheet(wb, questionSheet, "Descriptive Detail");
@@ -1111,6 +1156,8 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
           ["Category", row.categories || "-"],
           ["Selected", row.selected || "-"],
           ["Correct Answer", row.correct || "-"],
+          ["Review", row.review || "-"],
+          ["Marks", row.marks || "-"],
           ["Category Score", row.score || "-"],
         ];
 

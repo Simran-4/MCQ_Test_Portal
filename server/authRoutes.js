@@ -701,6 +701,23 @@ router.put("/superadmin/org-options/projects/:name", authMiddleware, requireSupe
     }
 });
 
+router.delete("/superadmin/org-options/projects/:name", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const projectName = String(req.params.name || "").trim();
+        if (!projectName) return res.status(400).json({ message: "Project name is required" });
+
+        const doc = await getOrgOptionsDoc();
+        const projectIndex = doc.projects.findIndex(item => item.name.toLowerCase() === projectName.toLowerCase());
+        if (projectIndex === -1) return res.status(404).json({ message: "Project/department not found" });
+
+        doc.projects.splice(projectIndex, 1);
+        await doc.save();
+        res.json(doc.projects);
+    } catch (err) {
+        res.status(500).json({ message: "Error deleting project" });
+    }
+});
+
 router.post("/superadmin/org-options/departments", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
         const projectName = String(req.body.project || "").trim();
@@ -722,6 +739,29 @@ router.post("/superadmin/org-options/departments", authMiddleware, requireSuperA
         res.status(201).json(doc.projects);
     } catch (err) {
         res.status(500).json({ message: "Error saving department" });
+    }
+});
+
+router.delete("/superadmin/org-options/departments", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const projectName = String(req.body.project || req.query.project || "").trim();
+        const department = String(req.body.department || req.query.department || "").trim();
+        if (!projectName || !department) {
+            return res.status(400).json({ message: "Project and designation are required" });
+        }
+
+        const doc = await getOrgOptionsDoc();
+        const project = doc.projects.find(item => item.name.toLowerCase() === projectName.toLowerCase());
+        if (!project) return res.status(404).json({ message: "Project/department not found" });
+
+        const departmentIndex = project.departments.findIndex(item => item.toLowerCase() === department.toLowerCase());
+        if (departmentIndex === -1) return res.status(404).json({ message: "Designation not found" });
+
+        project.departments.splice(departmentIndex, 1);
+        await doc.save();
+        res.json(doc.projects);
+    } catch (err) {
+        res.status(500).json({ message: "Error deleting designation" });
     }
 });
 

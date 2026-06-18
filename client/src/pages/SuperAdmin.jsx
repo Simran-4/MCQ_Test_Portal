@@ -351,9 +351,6 @@ function SuperAdmin() {
   const [editUserId, setEditUserId] = useState("");
   const [editUserForm, setEditUserForm] = useState(emptyEditUserForm);
   const [savingEditUser, setSavingEditUser] = useState(false);
-  const [roleEditName, setRoleEditName] = useState("");
-  const [roleEditForm, setRoleEditForm] = useState({ name: "", baseRole: "candidate", description: "", status: "active" });
-  const [savingRoleEdit, setSavingRoleEdit] = useState(false);
   const [roleForm, setRoleForm] = useState({ name: "", baseRole: "candidate", description: "" });
   const [assignUserId, setAssignUserId] = useState("");
   const [assignRole, setAssignRole] = useState("candidate");
@@ -603,65 +600,6 @@ function SuperAdmin() {
     }
   };
 
-  const handleRoleEditChange = (roleName) => {
-    setRoleEditName(roleName);
-    const role = roles.find(item => item.name === roleName);
-    setRoleEditForm(role
-      ? {
-          name: role.name,
-          baseRole: role.baseRole || "candidate",
-          description: role.description || "",
-          status: role.disabled ? "disabled" : "active",
-        }
-      : { name: "", baseRole: "candidate", description: "", status: "active" }
-    );
-  };
-
-  const saveRoleDetails = async () => {
-    if (!roleEditName) return alert("Select a role to edit.");
-    const selectedRole = roles.find(role => role.name === roleEditName);
-    if (!selectedRole) return alert("Selected role was not found.");
-    if (selectedRole.system) return alert("System roles cannot be edited.");
-    const nextName = roleEditForm.name.trim();
-    if (!nextName) return alert("Role name is required.");
-
-    setSavingRoleEdit(true);
-    try {
-      const payload = {
-        name: nextName,
-        baseRole: roleEditForm.baseRole,
-        description: roleEditForm.description,
-        disabled: roleEditForm.status === "disabled",
-      };
-      const res = await axios.put(`${API_URL}/superadmin/roles/${selectedRole._id || selectedRole.name}`, payload, { headers: getAuthHeaders() });
-      setRoles(prev => prev.map(role => role.name === roleEditName ? { ...res.data, system: false } : role));
-      setRoleEditName(res.data.name);
-      setRoleEditForm({
-        name: res.data.name,
-        baseRole: res.data.baseRole || "candidate",
-        description: res.data.description || "",
-        status: res.data.disabled ? "disabled" : "active",
-      });
-      alert("Role updated successfully.");
-    } catch (err) {
-      if (err.response?.status === 404) {
-        const nextRoles = readLocalRoles().map(role =>
-          role.name === roleEditName
-            ? { ...role, ...roleEditForm, name: nextName, disabled: roleEditForm.status === "disabled" }
-            : role
-        );
-        writeLocalRoles(nextRoles);
-        setRoles(prev => [...prev.filter(role => role.system), ...nextRoles]);
-        setRoleEditName(nextName);
-        alert("Role updated locally. Redeploy Railway backend to save it for everyone.");
-      } else {
-        alert(err.response?.data?.message || "Unable to update role.");
-      }
-    } finally {
-      setSavingRoleEdit(false);
-    }
-  };
-
   const assignUserRole = async () => {
     if (!assignUserId || !assignRole) return alert("Select a user and role.");
     try {
@@ -844,6 +782,40 @@ function SuperAdmin() {
     return true;
   };
 
+  const deleteProjectLocal = (projectName) => {
+    const nextOptions = Object.entries(orgOptions).reduce((acc, [project, departments]) => {
+      if (project.toLowerCase() !== projectName.toLowerCase()) acc[project] = departments;
+      return acc;
+    }, {});
+    writeLocalOrgOptions(nextOptions);
+    setOrgOptions(nextOptions);
+    if (departmentProject === projectName) setDepartmentProject("");
+    if (editProjectOriginal === projectName) {
+      setEditProjectOriginal("");
+      setEditProjectName("");
+    }
+    if (editDepartmentProject === projectName) {
+      setEditDepartmentProject("");
+      setEditDepartmentOriginal("");
+      setEditDepartmentName("");
+    }
+  };
+
+  const deleteDepartmentLocal = (projectName, departmentName) => {
+    const nextOptions = {
+      ...orgOptions,
+      [projectName]: (orgOptions[projectName] || []).filter(department =>
+        department.toLowerCase() !== departmentName.toLowerCase()
+      ),
+    };
+    writeLocalOrgOptions(nextOptions);
+    setOrgOptions(nextOptions);
+    if (editDepartmentProject === projectName && editDepartmentOriginal === departmentName) {
+      setEditDepartmentOriginal("");
+      setEditDepartmentName("");
+    }
+  };
+
   const addProject = async () => {
     const name = projectName.trim();
     if (!name) return alert("Enter a project/department name.");
@@ -919,6 +891,59 @@ function SuperAdmin() {
         setEditDepartmentName(nextDepartment);
         alert(err.response?.data?.message || "Designation updated locally. Redeploy Railway backend to save it for everyone.");
       }
+    }
+  };
+
+  const deleteProject = async (project) => {
+    if (!project) return;
+    const departments = orgOptions[project] || [];
+    const confirmation = window.prompt(
+      `Delete project/department "${project}" and its ${departments.length} designation(s)?\n\nExisting users keep their saved value, but it will be removed from dropdowns. Type DELETE to confirm.`
+    );
+    if (confirmation !== "DELETE") return;
+    try {
+      const res = await axios.delete(
+        `${API_URL}/superadmin/org-options/projects/${encodeURIComponent(project)}`,
+        { headers: getAuthHeaders() }
+      );
+      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
+      if (departmentProject === project) setDepartmentProject("");
+      if (editProjectOriginal === project) {
+        setEditProjectOriginal("");
+        setEditProjectName("");
+      }
+      if (editDepartmentProject === project) {
+        setEditDepartmentProject("");
+        setEditDepartmentOriginal("");
+        setEditDepartmentName("");
+      }
+      alert("Project/department deleted successfully.");
+    } catch (err) {
+      deleteProjectLocal(project);
+      alert(err.response?.data?.message || "Project deleted locally. Redeploy Railway backend to save it for everyone.");
+    }
+  };
+
+  const deleteDepartment = async (project, department) => {
+    if (!project || !department) return;
+    const confirmation = window.prompt(
+      `Delete designation "${department}" from "${project}"?\n\nExisting users keep their saved value, but it will be removed from dropdowns. Type DELETE to confirm.`
+    );
+    if (confirmation !== "DELETE") return;
+    try {
+      const res = await axios.delete(`${API_URL}/superadmin/org-options/departments`, {
+        headers: getAuthHeaders(),
+        data: { project, department },
+      });
+      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
+      if (editDepartmentProject === project && editDepartmentOriginal === department) {
+        setEditDepartmentOriginal("");
+        setEditDepartmentName("");
+      }
+      alert("Designation deleted successfully.");
+    } catch (err) {
+      deleteDepartmentLocal(project, department);
+      alert(err.response?.data?.message || "Designation deleted locally. Redeploy Railway backend to save it for everyone.");
     }
   };
 
@@ -1516,50 +1541,6 @@ function SuperAdmin() {
                     ))}
                   </div>
                 </div>
-
-                <div className="control-panel">
-                  <h3>Edit Role Details</h3>
-                  <select value={roleEditName} onChange={e => handleRoleEditChange(e.target.value)}>
-                    <option value="">Select role</option>
-                    {roles.map(role => (
-                      <option key={role.name} value={role.name}>
-                        {role.name}{role.system ? " (system)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    value={roleEditForm.name}
-                    onChange={e => setRoleEditForm({ ...roleEditForm, name: e.target.value })}
-                    placeholder="Role name"
-                    disabled={!roleEditName || roles.find(role => role.name === roleEditName)?.system}
-                  />
-                  <select
-                    value={roleEditForm.baseRole}
-                    onChange={e => setRoleEditForm({ ...roleEditForm, baseRole: e.target.value })}
-                    disabled={!roleEditName || roles.find(role => role.name === roleEditName)?.system}
-                  >
-                    <option value="candidate">Candidate-level access</option>
-                    <option value="admin">Admin-level access</option>
-                  </select>
-                  <textarea
-                    value={roleEditForm.description}
-                    onChange={e => setRoleEditForm({ ...roleEditForm, description: e.target.value })}
-                    placeholder="Role description"
-                    rows={3}
-                    disabled={!roleEditName || roles.find(role => role.name === roleEditName)?.system}
-                  />
-                  <select
-                    value={roleEditForm.status}
-                    onChange={e => setRoleEditForm({ ...roleEditForm, status: e.target.value })}
-                    disabled={!roleEditName || roles.find(role => role.name === roleEditName)?.system}
-                  >
-                    <option value="active">Status: Active</option>
-                    <option value="disabled">Status: Disabled</option>
-                  </select>
-                  <button type="button" onClick={saveRoleDetails} disabled={savingRoleEdit || !roleEditName || roles.find(role => role.name === roleEditName)?.system}>
-                    {savingRoleEdit ? "Saving..." : "Update Role"}
-                  </button>
-                </div>
               </div>
             )}
 
@@ -1648,8 +1629,23 @@ function SuperAdmin() {
                   <div className="project-list">
                     {Object.entries(orgOptions).sort(([a], [b]) => a.localeCompare(b)).map(([project, departments]) => (
                       <details key={project}>
-                        <summary>{project} <span>{departments.length} designations</span></summary>
-                        <div>{departments.map(dept => <span key={dept}>{dept}</span>)}</div>
+                        <summary>
+                          <span className="project-title">{project}</span>
+                          <span>{departments.length} designations</span>
+                          <button type="button" className="project-delete-btn" onClick={e => { e.preventDefault(); e.stopPropagation(); deleteProject(project); }}>
+                            Delete
+                          </button>
+                        </summary>
+                        <div>
+                          {departments.length === 0 ? (
+                            <p>No designations added.</p>
+                          ) : departments.map(dept => (
+                            <span key={dept} className="department-chip">
+                              {dept}
+                              <button type="button" onClick={() => deleteDepartment(project, dept)} aria-label={`Delete ${dept}`}>×</button>
+                            </span>
+                          ))}
+                        </div>
                       </details>
                     ))}
                   </div>

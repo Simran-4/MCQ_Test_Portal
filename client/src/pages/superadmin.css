@@ -478,16 +478,65 @@ body {
 }
 
 .project-list summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   cursor: pointer;
   color: var(--admin-primary-dark);
   font-weight: 800;
+  list-style-position: inside;
 }
 
 .project-list summary span {
-  float: right;
   color: var(--admin-muted);
   font-size: 12px;
   font-weight: 600;
+}
+
+.project-list summary .project-title {
+  color: var(--admin-primary-dark);
+  font-size: 14px;
+  font-weight: 900;
+  flex: 1;
+}
+
+.project-list summary .project-delete-btn {
+  width: auto;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff;
+  color: #dc2626;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.project-list details div p {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.project-list .department-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.project-list .department-chip button {
+  width: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #dff0e6;
+  color: #b91c1c;
+  box-shadow: none;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .rights-console {
