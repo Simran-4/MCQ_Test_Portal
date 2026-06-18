@@ -113,9 +113,9 @@ export default function TestSuiteDetail() {
   const { suiteId }               = useParams();
   const navigate                  = useNavigate();
   const currentUser               = getCurrentUser();
-  const canManageSuiteSettings    = canAdmin("canManageSuites", currentUser);
-  const canManageQuestions        = canAdmin("canManageQuestions", currentUser);
-  const canViewQuestions          = canAdmin("canViewQuestions", currentUser) || canManageQuestions;
+  const canViewQuestions          = canAdmin("canViewQuestions", currentUser);
+  const canManageSuiteSettings    = canAdmin("canViewSuites", currentUser) && canAdmin("canManageSuites", currentUser);
+  const canManageQuestions        = canViewQuestions && canAdmin("canManageQuestions", currentUser);
   const [suite, setSuite]         = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading]     = useState(true);

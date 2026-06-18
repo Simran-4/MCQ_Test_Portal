@@ -37,6 +37,10 @@ function normalizeAdminPermissions(userOrPermissions = {}) {
       : Boolean(rawPermissions[key]);
     return acc;
   }, {});
+  if (!permissions.canViewSuites) permissions.canManageSuites = false;
+  if (permissions.canManageSuites) permissions.canViewSuites = true;
+  if (!permissions.canViewQuestions) permissions.canManageQuestions = false;
+  if (permissions.canManageQuestions) permissions.canViewQuestions = true;
 
   return {
     permissions,

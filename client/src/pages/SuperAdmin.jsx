@@ -891,13 +891,15 @@ function SuperAdmin() {
   };
 
   const toggleRight = (key) => {
-    setRightsForm(prev => ({
-      ...prev,
-      permissions: {
-        ...prev.permissions,
-        [key]: !prev.permissions[key],
-      },
-    }));
+    setRightsForm(prev => {
+      const nextValue = !prev.permissions[key];
+      const permissions = { ...prev.permissions, [key]: nextValue };
+      if (key === "canViewSuites" && !nextValue) permissions.canManageSuites = false;
+      if (key === "canManageSuites" && nextValue) permissions.canViewSuites = true;
+      if (key === "canViewQuestions" && !nextValue) permissions.canManageQuestions = false;
+      if (key === "canManageQuestions" && nextValue) permissions.canViewQuestions = true;
+      return { ...prev, permissions };
+    });
   };
 
   const saveAdminRights = async () => {

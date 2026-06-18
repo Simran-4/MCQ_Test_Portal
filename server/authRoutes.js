@@ -620,12 +620,13 @@ router.put("/superadmin/users/:id/role", authMiddleware, requireSuperAdmin, asyn
 
 router.put("/superadmin/users/:id/permissions", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
-        const permissions = Object.keys(ADMIN_PERMISSION_DEFAULTS).reduce((acc, key) => {
+        const rawPermissions = Object.keys(ADMIN_PERMISSION_DEFAULTS).reduce((acc, key) => {
             acc[key] = req.body.permissions?.[key] === undefined
                 ? ADMIN_PERMISSION_DEFAULTS[key]
                 : Boolean(req.body.permissions[key]);
             return acc;
         }, {});
+        const permissions = normalizeAdminPermissions({ permissions: rawPermissions }).permissions;
         const scopeProjects = Array.isArray(req.body.scopeProjects)
             ? [...new Set(req.body.scopeProjects.map(item => String(item || "").trim()).filter(Boolean))]
             : [];

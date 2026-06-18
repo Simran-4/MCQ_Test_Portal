@@ -508,9 +508,9 @@ export default function Dashboard() {
   }, []);
   const canViewReports = canAdmin("canViewReports", user);
   const canDownloadReports = canAdmin("canDownloadReports", user);
-  const canManageSuites = canAdmin("canManageSuites", user);
-  const canOpenSuites = canAdmin("canViewSuites", user) || canManageSuites;
-  const canViewQuestions = canAdmin("canViewQuestions", user) || canAdmin("canManageQuestions", user);
+  const canOpenSuites = canAdmin("canViewSuites", user);
+  const canManageSuites = canOpenSuites && canAdmin("canManageSuites", user);
+  const canViewQuestions = canAdmin("canViewQuestions", user);
   const canAssignTests = canAdmin("canAssignTests", user);
   const canBulkMail = canAdmin("canBulkMail", user);
 
