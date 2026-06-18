@@ -57,6 +57,30 @@ function uniqueIndexes(indexes) {
     .filter(Number.isInteger);
 }
 
+function itemId(value) {
+  if (!value) return "";
+  if (typeof value === "object") return String(value._id || value.id || "");
+  return String(value);
+}
+
+function answerQuestion(answer) {
+  return answer?.questionId && typeof answer.questionId === "object" ? answer.questionId : null;
+}
+
+function answerQuestionId(answer) {
+  return itemId(answer?.questionId || answer?.question);
+}
+
+function questionsById(items) {
+  return new Map((items || []).map(question => [itemId(question), question]));
+}
+
+function findAnswerQuestion(answer, byId) {
+  const populated = answerQuestion(answer);
+  if (populated) return populated;
+  return byId.get(answerQuestionId(answer)) || null;
+}
+
 function getCorrectAnswersForCategory(q, cat) {
   const fallback = uniqueIndexes(Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer]);
   const map = getCategoryAnswerMap(q);
@@ -66,8 +90,9 @@ function getCorrectAnswersForCategory(q, cat) {
 
 function scoreSelected(selectedArr, correctArr) {
   if (correctArr.length === 0) return { earnedFrac: 0, isRight: false };
-  const hits = selectedArr.filter(i => correctArr.includes(i)).length;
-  const wrongs = selectedArr.filter(i => !correctArr.includes(i)).length;
+  const selectedIndexes = uniqueIndexes(selectedArr);
+  const hits = selectedIndexes.filter(i => correctArr.includes(i)).length;
+  const wrongs = selectedIndexes.filter(i => !correctArr.includes(i)).length;
   const earnedFrac = Math.max(0, (hits - wrongs) / correctArr.length);
   return { earnedFrac, isRight: earnedFrac === 1 };
 }
@@ -153,6 +178,7 @@ export default function AdminSuiteResults() {
 
   // ✅ FIXED: Per-result stats now correctly handles multi-category questions
   const enriched = results.map(r => {
+    const byId = questionsById(questions);
     // Build catMap with ALL categories from ALL questions
     const catMap = {};
     questions.forEach(q => {
@@ -169,9 +195,7 @@ export default function AdminSuiteResults() {
 
     // Now score each answer against each category's own answer key
     (r.answers || []).forEach(ans => {
-      const q = questions.find(
-        q => q._id === ans.questionId || q._id?.toString() === ans.questionId?.toString()
-      );
+      const q = findAnswerQuestion(ans, byId);
       if (!q || isTheoryQuestion(q)) return;
       const cats = getQuestionCats(q);
       const marks = q.marks ?? 1;
