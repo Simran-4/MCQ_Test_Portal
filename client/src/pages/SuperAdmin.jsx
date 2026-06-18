@@ -129,6 +129,19 @@ function resultStatus(result) {
   return resultPct(result) >= 50 ? "Pass" : "Fail";
 }
 
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined || seconds === "") return "-";
+  const totalSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  if (mins >= 60) {
+    const hours = Math.floor(mins / 60);
+    const remainingMins = mins % 60;
+    return `${hours}h ${remainingMins}m ${secs}s`;
+  }
+  return `${mins}m ${secs}s`;
+}
+
 function uniqueIndexes(indexes) {
   return [...new Set((Array.isArray(indexes) ? indexes : []).map(Number))]
     .filter(Number.isInteger);
@@ -190,6 +203,16 @@ function correctAnswerLabel(answer, question) {
     .join("; ") || "Correct answer unavailable";
 }
 
+function scoreSelectedOptions(selectedOptions, correctOptions) {
+  const selected = uniqueIndexes(selectedOptions);
+  const correct = uniqueIndexes(correctOptions);
+  if (correct.length === 0) return { earnedFraction: 0, isCorrect: false };
+  const hits = selected.filter(index => correct.includes(index)).length;
+  const wrongs = selected.filter(index => !correct.includes(index)).length;
+  const earnedFraction = Math.max(0, (hits - wrongs) / correct.length);
+  return { earnedFraction, isCorrect: earnedFraction === 1 };
+}
+
 function superAdminQuestionRows(result) {
   return (result.answers || []).map((answer, index) => {
     const question = answerQuestion(answer);
@@ -201,6 +224,16 @@ function superAdminQuestionRows(result) {
     const marks = answer?.earnedMarks !== undefined && question?.marks !== undefined
       ? `${answer.earnedMarks}/${question.marks}`
       : answer?.earnedMarks !== undefined ? String(answer.earnedMarks) : "-";
+    const categoryScore = isTheory || !question
+      ? "-"
+      : categories.map(category => {
+        const { earnedFraction, isCorrect } = scoreSelectedOptions(
+          answer?.selectedOptions,
+          correctIndexesForCategory(question, category)
+        );
+        const earned = Math.round((earnedFraction * (question.marks ?? 1)) * 100) / 100;
+        return `${category}: ${isCorrect ? "Correct" : "Incorrect"} (${earned}/${question.marks ?? 1})`;
+      }).join("; ");
 
     return {
       number: index + 1,
@@ -211,6 +244,7 @@ function superAdminQuestionRows(result) {
       correct: correctAnswerLabel(answer, question),
       review,
       marks,
+      categoryScore,
     };
   });
 }
@@ -331,7 +365,7 @@ function roleAssignmentUsers(users) {
 
 function saveReportsExcel(results, suitesById, reportType) {
   const wb = XLSX.utils.book_new();
-  const summaryHeaders = ["Test Name", "Candidate", "Email", "Project/Department", "Designation", "Score", "Percentage", "Result", "Attempted At"];
+  const summaryHeaders = ["Test Name", "Candidate", "Email", "Project/Department", "Designation", "Score", "Percentage", "Result", "Attempted At", "Time Taken"];
   const summaryRows = results.map(result => [
     resultTestName(result, suitesById),
     candidateName(result),
@@ -342,12 +376,76 @@ function saveReportsExcel(results, suitesById, reportType) {
     `${resultPct(result)}%`,
     resultStatus(result),
     formatDateTime(result.submittedAt),
+    formatDuration(result.timeTakenSeconds),
   ]);
-  const summarySheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
-  summarySheet["!cols"] = summaryHeaders.map(header => ({ wch: Math.max(16, header.length + 4) }));
-  XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+
+  if (reportType !== "descriptive") {
+    const summarySheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
+    summarySheet["!cols"] = summaryHeaders.map(header => ({ wch: Math.max(16, header.length + 4) }));
+    summarySheet["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: summaryRows.length, c: summaryHeaders.length - 1 } }) };
+    XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+  }
 
   if (reportType === "descriptive") {
+    const candidateHeaders = [
+      "#",
+      ...summaryHeaders,
+      "Total Questions",
+      "Correct Answers",
+    ];
+    const candidateRows = results.map((result, index) => [
+      index + 1,
+      ...summaryRows[index],
+      result.totalQuestions ?? (result.answers || []).length,
+      result.correctAnswers ?? "-",
+    ]);
+    const candidateSheet = XLSX.utils.aoa_to_sheet([candidateHeaders, ...candidateRows]);
+    candidateSheet["!cols"] = [
+      { wch: 8 },
+      ...summaryHeaders.map(header => ({ wch: Math.max(18, header.length + 4) })),
+      { wch: 18 },
+      { wch: 18 },
+    ];
+    candidateSheet["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: candidateRows.length, c: candidateHeaders.length - 1 } }) };
+    XLSX.utils.book_append_sheet(wb, candidateSheet, "Candidate Detail");
+
+    const categoryHeaders = ["Test Name", "Candidate", "Email", "Project/Department", "Designation", "Attempted At", "Category", "Score", "Total", "Percentage"];
+    const categoryRows = [];
+    results.forEach(result => {
+      const rows = Array.isArray(result.categoryResults) && result.categoryResults.length
+        ? result.categoryResults
+        : [{ category: "Overall", score: result.score || 0, total: result.totalMarks || 0, percentage: resultPct(result) }];
+      rows.forEach(row => {
+        categoryRows.push([
+          resultTestName(result, suitesById),
+          candidateName(result),
+          candidateEmail(result),
+          result.project || "-",
+          result.designation || "-",
+          formatDateTime(result.submittedAt),
+          row.category || "Overall",
+          row.score ?? row.earnedMarks ?? 0,
+          row.total ?? 0,
+          `${row.percentage ?? 0}%`,
+        ]);
+      });
+    });
+    const categorySheet = XLSX.utils.aoa_to_sheet([categoryHeaders, ...categoryRows]);
+    categorySheet["!cols"] = [
+      { wch: 24 },
+      { wch: 24 },
+      { wch: 30 },
+      { wch: 24 },
+      { wch: 24 },
+      { wch: 22 },
+      { wch: 24 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 14 },
+    ];
+    categorySheet["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: categoryRows.length, c: categoryHeaders.length - 1 } }) };
+    XLSX.utils.book_append_sheet(wb, categorySheet, "Category Detail");
+
     const questionHeaders = [
       "Test Name",
       "Candidate",
@@ -362,6 +460,7 @@ function saveReportsExcel(results, suitesById, reportType) {
       "Correct Answer",
       "Review",
       "Marks",
+      "Category Score",
     ];
     const questionRows = [];
     results.forEach(result => {
@@ -380,6 +479,7 @@ function saveReportsExcel(results, suitesById, reportType) {
           row.correct,
           row.review,
           row.marks,
+          row.categoryScore,
         ]);
       });
     });
@@ -398,32 +498,14 @@ function saveReportsExcel(results, suitesById, reportType) {
       { wch: 48 },
       { wch: 14 },
       { wch: 12 },
+      { wch: 48 },
     ];
+    questionSheet["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: questionRows.length, c: questionHeaders.length - 1 } }) };
     XLSX.utils.book_append_sheet(wb, questionSheet, "Question Detail");
-
-    const categoryHeaders = ["Test Name", "Candidate", "Email", "Category", "Score", "Total", "Percentage"];
-    const categoryRows = [];
-    results.forEach(result => {
-      const rows = Array.isArray(result.categoryResults) && result.categoryResults.length
-        ? result.categoryResults
-        : [{ category: "Overall", score: result.score || 0, total: result.totalMarks || 0, percentage: resultPct(result) }];
-      rows.forEach(row => {
-        categoryRows.push([
-          resultTestName(result, suitesById),
-          candidateName(result),
-          candidateEmail(result),
-          row.category || "Overall",
-          row.score ?? row.earnedMarks ?? 0,
-          row.total ?? 0,
-          `${row.percentage ?? 0}%`,
-        ]);
-      });
-    });
-    const categorySheet = XLSX.utils.aoa_to_sheet([categoryHeaders, ...categoryRows]);
-    categorySheet["!cols"] = categoryHeaders.map(header => ({ wch: Math.max(16, header.length + 4) }));
-    XLSX.utils.book_append_sheet(wb, categorySheet, "Category Detail");
   }
 
+  wb.Workbook = wb.Workbook || {};
+  wb.Workbook.Views = [{ activeTab: 0 }];
   XLSX.writeFile(wb, `${reportType}_superadmin_results_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
