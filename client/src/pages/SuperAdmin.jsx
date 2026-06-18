@@ -129,6 +129,92 @@ function resultStatus(result) {
   return resultPct(result) >= 50 ? "Pass" : "Fail";
 }
 
+function uniqueIndexes(indexes) {
+  return [...new Set((Array.isArray(indexes) ? indexes : []).map(Number))]
+    .filter(Number.isInteger);
+}
+
+function itemId(value) {
+  if (!value) return "";
+  if (typeof value === "object") return String(value._id || value.id || "");
+  return String(value);
+}
+
+function answerQuestion(answer) {
+  return answer?.questionId && typeof answer.questionId === "object" ? answer.questionId : null;
+}
+
+function answerQuestionId(answer) {
+  return itemId(answer?.questionId || answer?.question);
+}
+
+function questionCategories(question, answer) {
+  const raw = question?.category?.length ? question.category : answer?.category;
+  if (Array.isArray(raw) && raw.length > 0) return raw.filter(Boolean);
+  if (typeof raw === "string" && raw.trim()) return raw.split(",").map(item => item.trim()).filter(Boolean);
+  return ["Uncategorized"];
+}
+
+function categoryAnswerMap(question) {
+  const rawMap = question?.categoryCorrectAnswers;
+  if (!rawMap) return {};
+  if (rawMap instanceof Map) return Object.fromEntries(rawMap);
+  return rawMap;
+}
+
+function correctIndexesForCategory(question, category) {
+  const fallback = uniqueIndexes(question?.correctAnswer);
+  const map = categoryAnswerMap(question);
+  const categoryAnswers = uniqueIndexes(map?.[category]);
+  return categoryAnswers.length > 0 ? categoryAnswers : fallback;
+}
+
+function optionLabels(question, indexes) {
+  const options = Array.isArray(question?.options) ? question.options : [];
+  return uniqueIndexes(indexes)
+    .map(index => options[index] || options[index - 1] || `Option ${index + 1}`)
+    .filter(Boolean)
+    .join(", ");
+}
+
+function selectedAnswerLabel(answer, question) {
+  if (question?.questionType === "theory") return String(answer?.textAnswer || "").trim() || "Not answered";
+  return optionLabels(question, answer?.selectedOptions) || "Not answered";
+}
+
+function correctAnswerLabel(answer, question) {
+  if (!question) return "Question details unavailable";
+  if (question.questionType === "theory") return "Theory answer - manual review";
+  return questionCategories(question, answer)
+    .map(category => `${category}: ${optionLabels(question, correctIndexesForCategory(question, category)) || "-"}`)
+    .join("; ") || "Correct answer unavailable";
+}
+
+function superAdminQuestionRows(result) {
+  return (result.answers || []).map((answer, index) => {
+    const question = answerQuestion(answer);
+    const categories = questionCategories(question, answer);
+    const isTheory = question?.questionType === "theory";
+    const review = isTheory
+      ? "Manual review"
+      : typeof answer?.isCorrect === "boolean" ? (answer.isCorrect ? "Correct" : "Incorrect") : "Not scored";
+    const marks = answer?.earnedMarks !== undefined && question?.marks !== undefined
+      ? `${answer.earnedMarks}/${question.marks}`
+      : answer?.earnedMarks !== undefined ? String(answer.earnedMarks) : "-";
+
+    return {
+      number: index + 1,
+      questionId: answerQuestionId(answer),
+      question: question?.questionText || `Question ${index + 1}`,
+      categories: categories.join(", "),
+      selected: selectedAnswerLabel(answer, question),
+      correct: correctAnswerLabel(answer, question),
+      review,
+      marks,
+    };
+  });
+}
+
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString("en-IN", {
     day: "2-digit",
@@ -239,6 +325,59 @@ function saveReportsExcel(results, suitesById, reportType) {
   XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
 
   if (reportType === "descriptive") {
+    const questionHeaders = [
+      "Test Name",
+      "Candidate",
+      "Email",
+      "Project/Department",
+      "Designation",
+      "Attempted At",
+      "Q No.",
+      "Question",
+      "Category",
+      "Selected Answer",
+      "Correct Answer",
+      "Review",
+      "Marks",
+    ];
+    const questionRows = [];
+    results.forEach(result => {
+      superAdminQuestionRows(result).forEach(row => {
+        questionRows.push([
+          resultTestName(result, suitesById),
+          candidateName(result),
+          candidateEmail(result),
+          result.project || "-",
+          result.designation || "-",
+          formatDateTime(result.submittedAt),
+          row.number,
+          row.question,
+          row.categories,
+          row.selected,
+          row.correct,
+          row.review,
+          row.marks,
+        ]);
+      });
+    });
+    const questionSheet = XLSX.utils.aoa_to_sheet([questionHeaders, ...questionRows]);
+    questionSheet["!cols"] = [
+      { wch: 24 },
+      { wch: 24 },
+      { wch: 30 },
+      { wch: 22 },
+      { wch: 22 },
+      { wch: 22 },
+      { wch: 8 },
+      { wch: 56 },
+      { wch: 24 },
+      { wch: 28 },
+      { wch: 48 },
+      { wch: 14 },
+      { wch: 12 },
+    ];
+    XLSX.utils.book_append_sheet(wb, questionSheet, "Question Detail");
+
     const categoryHeaders = ["Test Name", "Candidate", "Email", "Category", "Score", "Total", "Percentage"];
     const categoryRows = [];
     results.forEach(result => {
