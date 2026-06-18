@@ -912,6 +912,7 @@ function SuperAdmin() {
         { headers: getAuthHeaders() }
       );
       setUsers(prev => prev.map(user => user._id === res.data._id ? res.data : user));
+      setRightsForm(normalizeRights(res.data));
       alert("Admin rights saved.");
     } catch (err) {
       alert(err.response?.data?.message || "Unable to save admin rights.");
@@ -1240,9 +1241,10 @@ function SuperAdmin() {
   const editUserDepartments = editUserForm.project ? orgOptions[editUserForm.project] || [] : [];
   const editDepartmentOptions = editDepartmentProject ? orgOptions[editDepartmentProject] || [] : [];
   const assignableRoles = roles.filter(role => role.name !== "superadmin" && !role.disabled);
-  const editRoleOptions = roles.some(role => role.name === editUserForm.role)
-    ? roles
-    : [...roles, { name: editUserForm.role, system: true }];
+  const safeEditRoles = roles.filter(role => role.name !== "superadmin" || editUserForm.role === "superadmin");
+  const editRoleOptions = safeEditRoles.some(role => role.name === editUserForm.role)
+    ? safeEditRoles
+    : [...safeEditRoles, { name: editUserForm.role, system: true }];
   const roleUsers = displayUsers;
   const selectedEditUser = roleUsers.find(user => user._id === editUserId);
   const selectedAssignUser = roleUsers.find(user => user._id === assignUserId);

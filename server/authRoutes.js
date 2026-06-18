@@ -354,6 +354,21 @@ router.post("/login", async (req, res) => {
     }
 });
 
+// ── CURRENT USER ───────────────────────────────────────────────
+router.get("/me", authMiddleware, async (req, res) => {
+    try {
+        const user = req.currentUser || await User.findById(req.user.id).select(
+            "_id name username email mobile role customRole isActive age gender project designation adminPermissions"
+        );
+        if (!user || user.isActive === false) {
+            return res.status(401).json({ message: "Account inactive or not found" });
+        }
+        res.json(publicUser(user));
+    } catch (err) {
+        res.status(500).json({ message: "Unable to load current user" });
+    }
+});
+
 // ── FORGOT PASSWORD REQUEST ───────────────────────────────────
 router.post("/forgot-password", async (req, res) => {
     try {

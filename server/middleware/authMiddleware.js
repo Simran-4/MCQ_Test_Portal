@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
     const authHeader = req.header("Authorization");
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -14,7 +15,22 @@ const authMiddleware = (req, res, next) => {
         // We use the Railway variable first, then the hardcoded fallback
         const secret = process.env.JWT_SECRET || "snehalaya2024";
         const verified = jwt.verify(token, secret);
-        req.user = verified;
+        const user = await User.findById(verified.id).select(
+            "_id name username email mobile role customRole isActive age gender project designation adminPermissions"
+        );
+
+        if (!user || user.isActive === false) {
+            return res.status(401).json({ message: "Account inactive or not found" });
+        }
+
+        req.currentUser = user;
+        req.user = {
+            ...verified,
+            id: String(user._id),
+            role: user.role,
+            customRole: user.customRole || "",
+            adminPermissions: user.adminPermissions,
+        };
         next();
     } catch (err) {
         console.log("JWT Error:", err.message);

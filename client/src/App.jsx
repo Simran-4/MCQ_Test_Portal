@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 // Auth & Layout
@@ -17,16 +18,63 @@ import AdminSuiteResults from "./pages/AdminSuiteResults";
 // Student Pages
 import StudentDashboard from "./pages/StudentDashboard";
 import StudentTest from "./pages/StudentTest";
+import { refreshCurrentUser } from "./utils/auth";
 import { loginPathForNext } from "./utils/authRedirect";
 
 // ── PROTECTIVE WRAPPER ────────────────────────────────────
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const token = localStorage.getItem("token");
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  });
+  const [checkingUser, setCheckingUser] = useState(Boolean(token));
   const location = useLocation();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!token) {
+      setCheckingUser(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setCheckingUser(true);
+    refreshCurrentUser()
+      .then(freshUser => {
+        if (!cancelled) setUser(freshUser);
+      })
+      .catch(err => {
+        if (err.status === 401 || err.status === 403) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          if (!cancelled) setUser({});
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingUser(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, location.pathname]);
 
   if (!token) {
     return <Navigate to={loginPathForNext(`${location.pathname}${location.search}`)} replace />;
+  }
+
+  if (checkingUser) {
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "system-ui, sans-serif" }}>
+        Loading...
+      </div>
+    );
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {

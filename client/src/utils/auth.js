@@ -1,3 +1,5 @@
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export function getAuthToken() {
   const token = localStorage.getItem("token") || "";
   if (!token) return "";
@@ -29,6 +31,20 @@ export function getCurrentUser() {
   } catch {
     return {};
   }
+}
+
+export async function refreshCurrentUser() {
+  const res = await fetch(`${API}/api/auth/me`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const err = new Error("Unable to refresh current user");
+    err.status = res.status;
+    throw err;
+  }
+  const user = await res.json();
+  localStorage.setItem("user", JSON.stringify(user));
+  return user;
 }
 
 export function getAdminPermissions(user = getCurrentUser()) {
