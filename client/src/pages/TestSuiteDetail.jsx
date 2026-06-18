@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { getAuthHeaders } from "../utils/auth";
+import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
 
 const API        = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const GREEN      = "#2D5F3F";
@@ -112,6 +112,10 @@ function normalizeImportRow(row, rowNum) {
 export default function TestSuiteDetail() {
   const { suiteId }               = useParams();
   const navigate                  = useNavigate();
+  const currentUser               = getCurrentUser();
+  const canManageSuiteSettings    = canAdmin("canManageSuites", currentUser);
+  const canManageQuestions        = canAdmin("canManageQuestions", currentUser);
+  const canViewQuestions          = canAdmin("canViewQuestions", currentUser) || canManageQuestions;
   const [suite, setSuite]         = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -161,6 +165,11 @@ export default function TestSuiteDetail() {
   useEffect(() => { fetchData(); }, [suiteId]);
 
   const fetchData = async () => {
+    if (!canViewQuestions) {
+      setError("Question viewing permission is disabled for your account.");
+      setLoading(false);
+      return;
+    }
     try {
       const config = { headers: getAuthHeaders() };
       const [suiteRes, qRes] = await Promise.all([
@@ -656,6 +665,7 @@ export default function TestSuiteDetail() {
   }, {});
 
   if (loading) return <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: "#aaa" }}>Loading…</div>;
+  if (error && !suite) return <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626", fontWeight: 700 }}>{error}</div>;
   if (!suite)  return <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626" }}>Test suite not found.</div>;
 
   return (
@@ -700,41 +710,49 @@ export default function TestSuiteDetail() {
 
         {/* ── Action buttons ── */}
         <div className="suite-detail-actions" style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
-          <button onClick={() => { setEditingQ(null); setForm(emptyForm); setError(""); setShowForm(s => !s); }}
-            style={{ padding: "10px 20px", background: showForm && !editingQ ? "#555" : GREEN, color: WHITE, border: "none", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-            {showForm && !editingQ ? "Cancel" : "+ Add question"}
-          </button>
-          <button onClick={handleImportClick} disabled={importing}
-            style={{ padding: "10px 20px", background: WHITE, color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: importing ? 0.6 : 1 }}>
-            {importing ? "Importing…" : "⬆️ Import Excel Questions"}
-          </button>
-          <button onClick={handleDownloadImportTemplate}
-            style={{ padding: "10px 20px", background: WHITE, color: GREEN_DARK, border: "1px solid #d8e9df", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-            ⬇️ Excel Format
-          </button>
-          <button onClick={() => setShowCatManager(s => !s)}
-            style={{ padding: "10px 20px", background: WHITE, color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-            🏷️ Manage categories {categories.length > 0 ? `(${categories.length})` : ""}
-          </button>
-          <button onClick={() => setShowDuration(s => !s)}
-            style={{ padding: "10px 20px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-            ⏱ Set duration ({suite.duration || 30} min)
-          </button>
-          <button onClick={() => setShowPassing(s => !s)}
-            style={{ padding: "10px 20px", background: WHITE, color: "#166534", border: "1px solid #86efac", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-            ✅ Passing criteria ({suite.passingPercentage ?? 50}%)
-          </button>
-          <button onClick={() => setShowQtsServe(s => !s)}
-            style={{ padding: "10px 20px", background: WHITE, color: "#f59e0b", border: "1px solid #fcd34d", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-            🎯 Question set {suite.questionSelectionMode === "selected"
-              ? `(${(suite.selectedQuestionIds || []).length} selected)`
-              : suite.questionsToServe ? `(${suite.questionsToServe} random)` : "(all)"}
-          </button>
-          {/* Feature 9 */}
-          <button onClick={() => setShowDateWindow(s => !s)}
-            style={{ padding: "10px 20px", background: WHITE, color: "#6366f1", border: "1px solid #c7d2fe", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-            📅 Availability window
-          </button>
+          {canManageQuestions && (
+            <>
+              <button onClick={() => { setEditingQ(null); setForm(emptyForm); setError(""); setShowForm(s => !s); }}
+                style={{ padding: "10px 20px", background: showForm && !editingQ ? "#555" : GREEN, color: WHITE, border: "none", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                {showForm && !editingQ ? "Cancel" : "+ Add question"}
+              </button>
+              <button onClick={handleImportClick} disabled={importing}
+                style={{ padding: "10px 20px", background: WHITE, color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: importing ? 0.6 : 1 }}>
+                {importing ? "Importing…" : "⬆️ Import Excel Questions"}
+              </button>
+              <button onClick={handleDownloadImportTemplate}
+                style={{ padding: "10px 20px", background: WHITE, color: GREEN_DARK, border: "1px solid #d8e9df", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                ⬇️ Excel Format
+              </button>
+              <button onClick={() => setShowCatManager(s => !s)}
+                style={{ padding: "10px 20px", background: WHITE, color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                🏷️ Manage categories {categories.length > 0 ? `(${categories.length})` : ""}
+              </button>
+            </>
+          )}
+          {canManageSuiteSettings && (
+            <>
+              <button onClick={() => setShowDuration(s => !s)}
+                style={{ padding: "10px 20px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                ⏱ Set duration ({suite.duration || 30} min)
+              </button>
+              <button onClick={() => setShowPassing(s => !s)}
+                style={{ padding: "10px 20px", background: WHITE, color: "#166534", border: "1px solid #86efac", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                ✅ Passing criteria ({suite.passingPercentage ?? 50}%)
+              </button>
+              <button onClick={() => setShowQtsServe(s => !s)}
+                style={{ padding: "10px 20px", background: WHITE, color: "#f59e0b", border: "1px solid #fcd34d", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                🎯 Question set {suite.questionSelectionMode === "selected"
+                  ? `(${(suite.selectedQuestionIds || []).length} selected)`
+                  : suite.questionsToServe ? `(${suite.questionsToServe} random)` : "(all)"}
+              </button>
+              {/* Feature 9 */}
+              <button onClick={() => setShowDateWindow(s => !s)}
+                style={{ padding: "10px 20px", background: WHITE, color: "#6366f1", border: "1px solid #c7d2fe", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                📅 Availability window
+              </button>
+            </>
+          )}
           <button onClick={() => navigate(`/admin/results?suite=${suiteId}`)}
             style={{ padding: "10px 20px", background: WHITE, color: "#333", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
             View results
@@ -953,7 +971,7 @@ export default function TestSuiteDetail() {
         )}
 
         {/* ── Add / Edit Question Form ── */}
-        {showForm && (
+        {showForm && canManageQuestions && (
           <div style={{ background: WHITE, border: `2px solid ${GREEN}`, borderRadius: "16px", padding: "24px", marginBottom: "24px" }}>
             <h2 style={{ fontSize: "16px", fontWeight: "700", color: GREEN_DARK, marginBottom: "18px", marginTop: 0 }}>
               {editingQ ? "✏️ Edit question" : "New question"}
@@ -1132,7 +1150,9 @@ export default function TestSuiteDetail() {
         {/* ── Questions list ── */}
         {questions.length === 0 ? (
           <div style={{ background: WHITE, borderRadius: "16px", border: "2px dashed #e5e7eb", padding: "48px 28px", textAlign: "center" }}>
-            <p style={{ color: "#aaa", fontSize: "14px", margin: 0 }}>No questions yet. Click "+ Add question" to start.</p>
+            <p style={{ color: "#aaa", fontSize: "14px", margin: 0 }}>
+              {canManageQuestions ? 'No questions yet. Click "+ Add question" to start.' : "No questions are available in this suite."}
+            </p>
           </div>
         ) : filteredQuestions.length === 0 ? (
           <div style={{ background: WHITE, borderRadius: "16px", border: "2px dashed #e5e7eb", padding: "42px 28px", textAlign: "center" }}>
@@ -1208,10 +1228,12 @@ export default function TestSuiteDetail() {
                               </div>
                             )}
                           </div>
-                          <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
-                            <button onClick={() => handleEdit(q)} style={{ padding: "6px 12px", fontSize: "12px", fontWeight: "600", background: WHITE, color: GREEN, border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>Edit</button>
-                            <button onClick={() => handleDeleteQuestion(q._id)} style={{ padding: "6px 12px", fontSize: "12px", fontWeight: "600", background: WHITE, color: "#dc2626", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>Delete</button>
-                          </div>
+                          {canManageQuestions && (
+                            <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                              <button onClick={() => handleEdit(q)} style={{ padding: "6px 12px", fontSize: "12px", fontWeight: "600", background: WHITE, color: GREEN, border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>Edit</button>
+                              <button onClick={() => handleDeleteQuestion(q._id)} style={{ padding: "6px 12px", fontSize: "12px", fontWeight: "600", background: WHITE, color: "#dc2626", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>Delete</button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

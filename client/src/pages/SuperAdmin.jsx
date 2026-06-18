@@ -51,7 +51,9 @@ const emptyEditUserForm = {
 const ADMIN_RIGHTS = [
   { key: "canViewReports", label: "View reports", detail: "Can open report pages and see result rows" },
   { key: "canDownloadReports", label: "Download reports", detail: "Can export summary/descriptive PDF or Excel" },
+  { key: "canViewSuites", label: "Open test suites", detail: "Can open test suite pages within scope" },
   { key: "canManageSuites", label: "Create / edit test suites", detail: "Can create, edit, activate, deactivate, and delete suites" },
+  { key: "canViewQuestions", label: "View questions", detail: "Can see questions inside a test suite" },
   { key: "canManageQuestions", label: "Manage questions", detail: "Can add, import, edit, and delete questions" },
   { key: "canAssignTests", label: "Assign tests", detail: "Can assign test suites to candidates" },
   { key: "canBulkMail", label: "Mail candidates", detail: "Can prepare bulk emails and certificate emails" },

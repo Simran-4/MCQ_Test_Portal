@@ -172,6 +172,14 @@ function requireAdminFeature(feature, message) {
   };
 }
 
+async function optionalAdminHasFeature(user, feature) {
+  if (!user || user.role === "candidate") return true;
+  if (user.role === "superadmin") return true;
+  if (user.role !== "admin") return false;
+  const fullUser = await User.findById(user.id).select("role adminPermissions");
+  return hasAdminPermission(fullUser, feature);
+}
+
 async function requireCurrentPassword(req, res) {
   const password = String(req.body?.password || "");
   if (!password) {
@@ -192,6 +200,9 @@ async function requireCurrentPassword(req, res) {
 router.get("/:id/questions", async (req, res) => {
   try {
     const user = readOptionalUser(req);
+    if (!(await optionalAdminHasFeature(user, "canViewQuestions"))) {
+      return res.status(403).json({ message: "Question viewing access denied" });
+    }
     const suite = await TestSuite.findById(req.params.id);
     if (!canAccessSuite(suite, user)) {
       return res.status(403).json({ message: "This test is not available" });
@@ -331,6 +342,9 @@ router.post("/:id/import-excel", authMiddleware, requireAdminFeature("canManageQ
 router.get("/", async (req, res) => {
   try {
     const user = readOptionalUser(req);
+    if (!(await optionalAdminHasFeature(user, "canViewSuites"))) {
+      return res.status(403).json({ message: "Test suite viewing access denied" });
+    }
     const query = !user
       ? { status: "active", isPublic: { $ne: false } }
       : user.role === "candidate"
@@ -545,6 +559,9 @@ router.delete("/:id/permanent", authMiddleware, requireAdminFeature("canManageSu
 router.get("/:id", async (req, res) => {
   try {
     const user = readOptionalUser(req);
+    if (!(await optionalAdminHasFeature(user, "canViewSuites"))) {
+      return res.status(403).json({ message: "Test suite viewing access denied" });
+    }
     const suite = await TestSuite.findById(req.params.id);
     if (!suite) return res.status(404).json({ message: "Suite not found" });
     if (!canAccessSuite(suite, user)) {

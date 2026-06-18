@@ -1,7 +1,9 @@
 const ADMIN_PERMISSION_DEFAULTS = {
   canViewReports: true,
   canDownloadReports: true,
+  canViewSuites: true,
   canManageSuites: true,
+  canViewQuestions: true,
   canManageQuestions: true,
   canAssignTests: true,
   canBulkMail: true,
@@ -11,7 +13,9 @@ const ADMIN_PERMISSION_DEFAULTS = {
 const ADMIN_PERMISSION_LABELS = [
   { key: "canViewReports", label: "View reports" },
   { key: "canDownloadReports", label: "Download reports" },
+  { key: "canViewSuites", label: "Open test suites" },
   { key: "canManageSuites", label: "Create / edit test suites" },
+  { key: "canViewQuestions", label: "View questions" },
   { key: "canManageQuestions", label: "Add / import / delete questions" },
   { key: "canAssignTests", label: "Assign tests to candidates" },
   { key: "canBulkMail", label: "Send bulk mail" },

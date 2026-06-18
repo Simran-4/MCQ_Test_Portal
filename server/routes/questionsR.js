@@ -150,7 +150,7 @@ router.delete("/:id", authMiddleware, requireAdminFeature("canManageQuestions", 
 });
 
 // ── GET /api/questions/all ────────────────────────────────────
-router.get("/all", authMiddleware, requireAdminFeature("canManageQuestions", "Question bank access denied"), async (req, res) => {
+router.get("/all", authMiddleware, requireAdminFeature("canViewQuestions", "Question bank access denied"), async (req, res) => {
   try {
     const questions = await Question.find();
     res.json(questions);

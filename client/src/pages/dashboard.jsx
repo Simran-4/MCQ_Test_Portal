@@ -509,6 +509,8 @@ export default function Dashboard() {
   const canViewReports = canAdmin("canViewReports", user);
   const canDownloadReports = canAdmin("canDownloadReports", user);
   const canManageSuites = canAdmin("canManageSuites", user);
+  const canOpenSuites = canAdmin("canViewSuites", user) || canManageSuites;
+  const canViewQuestions = canAdmin("canViewQuestions", user) || canAdmin("canManageQuestions", user);
   const canAssignTests = canAdmin("canAssignTests", user);
   const canBulkMail = canAdmin("canBulkMail", user);
 
@@ -527,7 +529,12 @@ export default function Dashboard() {
     }
   }, [canManageSuites]);
 
-  const fetchSuites = async () => {
+  const fetchSuites = useCallback(async () => {
+    if (!canOpenSuites) {
+      setSuites([]);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await axios.get(`${API}/api/test-suites`, {
         headers: getAuthHeaders(),
@@ -538,11 +545,11 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canOpenSuites]);
 
   useEffect(() => {
     fetchSuites();
-  }, []);
+  }, [fetchSuites]);
 
   useEffect(() => {
     fetchTrashedSuites();
@@ -1240,7 +1247,7 @@ export default function Dashboard() {
           <div className="admin-nav-menu">
             <button type="button">▤ Test Management⌄</button>
             <div className="admin-nav-dropdown">
-              <button type="button" onClick={showAllSuites}>▤ All Test Suites</button>
+              <button type="button" onClick={showAllSuites} disabled={!canOpenSuites}>▤ All Test Suites</button>
               <button type="button" onClick={openNewSuite} disabled={!canManageSuites}>＋ Add Test Suite</button>
               {canAssignTests && (
                 <button type="button" onClick={() => setActivePanel("assignments")}>
@@ -1689,6 +1696,7 @@ export default function Dashboard() {
           </section>
         )}
 
+        {canOpenSuites ? (
         <section className="suite-section" id="admin-test-suites">
           <div className="suite-section-header">
             <div>
@@ -1751,7 +1759,13 @@ export default function Dashboard() {
                     <button type="button" className="admin-row-btn" onClick={(e) => handleCopyLink(suite._id, e)}>
                       🔗 Copy link
                     </button>
-                    <button type="button" className="admin-open-btn" onClick={() => navigate(`/admin/test-suites/${suite._id}`)}>
+                    <button
+                      type="button"
+                      className="admin-open-btn"
+                      onClick={() => navigate(`/admin/test-suites/${suite._id}`)}
+                      disabled={!canViewQuestions}
+                      title={canViewQuestions ? "Open test suite" : "View questions permission is disabled"}
+                    >
                       Open
                     </button>
                     {canManageSuites && (
@@ -1786,6 +1800,11 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
+        ) : (
+          <section className="suite-section" id="admin-test-suites">
+            <div className="admin-empty-state">Test suite viewing permission is disabled for your account.</div>
+          </section>
+        )}
       </main>
 
       {showModal && (
