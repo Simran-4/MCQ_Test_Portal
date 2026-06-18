@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { cloneElement, isValidElement, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 // Auth & Layout
@@ -32,6 +32,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     }
   });
   const [checkingUser, setCheckingUser] = useState(Boolean(token));
+  const [userVersion, setUserVersion] = useState(0);
   const location = useLocation();
 
   useEffect(() => {
@@ -44,24 +45,46 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       };
     }
 
-    setCheckingUser(true);
-    refreshCurrentUser()
-      .then(freshUser => {
-        if (!cancelled) setUser(freshUser);
-      })
-      .catch(err => {
-        if (err.status === 401 || err.status === 403) {
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-          if (!cancelled) setUser({});
+    const applyFreshUser = (freshUser) => {
+      if (cancelled) return;
+      setUser(prev => {
+        if (JSON.stringify(prev) !== JSON.stringify(freshUser)) {
+          setUserVersion(version => version + 1);
         }
-      })
-      .finally(() => {
-        if (!cancelled) setCheckingUser(false);
+        return freshUser;
       });
+    };
+
+    const syncUser = (showLoading = false) => {
+      if (showLoading) setCheckingUser(true);
+      refreshCurrentUser()
+        .then(applyFreshUser)
+        .catch(err => {
+          if (err.status === 401 || err.status === 403) {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            if (!cancelled) setUser({});
+          }
+        })
+        .finally(() => {
+          if (showLoading && !cancelled) setCheckingUser(false);
+        });
+    };
+
+    const syncWhenVisible = () => {
+      if (!document.hidden) syncUser(false);
+    };
+
+    syncUser(true);
+    window.addEventListener("focus", syncWhenVisible);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    const intervalId = window.setInterval(() => syncUser(false), 30000);
 
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", syncWhenVisible);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+      window.clearInterval(intervalId);
     };
   }, [token, location.pathname]);
 
@@ -84,7 +107,9 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to={user.role === "candidate" ? "/candidate" : "/"} replace />;
   }
 
-  return children;
+  return isValidElement(children)
+    ? cloneElement(children, { key: `${user._id || "user"}-${userVersion}` })
+    : children;
 };
 
 function App() {
