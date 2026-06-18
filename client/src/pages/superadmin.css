@@ -394,6 +394,28 @@ body {
   grid-template-columns: 1fr;
 }
 
+.role-card-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+
+.role-card {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.role-card button {
+  align-self: flex-start;
+}
+
+.role-card textarea {
+  flex: 1;
+}
+
 .control-form-grid input,
 .control-form-grid select {
   margin-bottom: 0;
@@ -1078,6 +1100,7 @@ input:checked + .slider::before {
   }
 
   .controls-roles-grid,
+  .role-card-row,
   .controls-user-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1094,6 +1117,7 @@ input:checked + .slider::before {
 
   .control-tabs,
   .controls-roles-grid,
+  .role-card-row,
   .controls-user-grid {
     grid-template-columns: 1fr;
   }

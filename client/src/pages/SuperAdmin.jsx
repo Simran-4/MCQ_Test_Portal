@@ -240,6 +240,29 @@ function userOptionLabel(user) {
   return contact ? `${name} - ${contact}` : name;
 }
 
+function userMatchesSearch(user, query) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return [
+    userOptionLabel(user),
+    user?.role,
+    user?.customRole,
+    user?.project,
+    user?.designation,
+    user?.email,
+    user?.mobile,
+    user?.username,
+    user?.name,
+  ].filter(Boolean).join(" ").toLowerCase().includes(needle);
+}
+
+function keepSelectedOptionVisible(options, selectedUser) {
+  if (!selectedUser?._id || options.some(user => user._id === selectedUser._id)) {
+    return options;
+  }
+  return [selectedUser, ...options];
+}
+
 function splitNameParts(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (parts.length <= 1) {
@@ -488,10 +511,12 @@ function SuperAdmin() {
   const [createUserForm, setCreateUserForm] = useState(emptyCreateUserForm);
   const [creatingUser, setCreatingUser] = useState(false);
   const [editUserId, setEditUserId] = useState("");
+  const [editUserSearch, setEditUserSearch] = useState("");
   const [editUserForm, setEditUserForm] = useState(emptyEditUserForm);
   const [savingEditUser, setSavingEditUser] = useState(false);
   const [roleForm, setRoleForm] = useState({ name: "", baseRole: "candidate", description: "" });
   const [assignUserId, setAssignUserId] = useState("");
+  const [assignUserSearch, setAssignUserSearch] = useState("");
   const [assignRole, setAssignRole] = useState("candidate");
   const [orgOptions, setOrgOptions] = useState(defaultOrgOptions);
   const [projectName, setProjectName] = useState("");
@@ -1133,6 +1158,16 @@ function SuperAdmin() {
     ? roles
     : [...roles, { name: editUserForm.role, system: true }];
   const roleUsers = displayUsers;
+  const selectedEditUser = roleUsers.find(user => user._id === editUserId);
+  const selectedAssignUser = roleUsers.find(user => user._id === assignUserId);
+  const editUserOptions = keepSelectedOptionVisible(
+    roleUsers.filter(user => userMatchesSearch(user, editUserSearch)),
+    selectedEditUser
+  );
+  const assignUserOptions = keepSelectedOptionVisible(
+    roleUsers.filter(user => userMatchesSearch(user, assignUserSearch)),
+    selectedAssignUser
+  );
 
   const getSectionTitle = () => {
     if (activeNav === "Candidates") return "Candidates";
@@ -1517,9 +1552,15 @@ function SuperAdmin() {
                   <h3>Edit Existing User</h3>
                   <p className="control-panel-note">Search and update the details of an existing user.</p>
                   <div className="control-form-grid controls-edit-search">
+                    <input
+                      value={editUserSearch}
+                      onChange={e => setEditUserSearch(e.target.value)}
+                      placeholder="Search user by name, email, role, project..."
+                    />
                     <select value={editUserId} onChange={e => handleEditUserChange(e.target.value)}>
                       <option value="">Select user to edit</option>
-                      {roleUsers.map(user => (
+                      {editUserOptions.length === 0 && <option value="" disabled>No users found</option>}
+                      {editUserOptions.map(user => (
                         <option key={user._id} value={user._id}>
                           {userOptionLabel(user)}
                         </option>
@@ -1649,35 +1690,43 @@ function SuperAdmin() {
                   </button>
                 </div>
 
-                <div className="control-panel">
-                  <h3>Create New Role</h3>
-                  <input value={roleForm.name} onChange={e => setRoleForm({ ...roleForm, name: e.target.value })} placeholder="Role name" />
-                  <select value={roleForm.baseRole} onChange={e => setRoleForm({ ...roleForm, baseRole: e.target.value })}>
-                    <option value="candidate">Candidate-level access</option>
-                    <option value="admin">Admin-level access</option>
-                  </select>
-                  <textarea value={roleForm.description} onChange={e => setRoleForm({ ...roleForm, description: e.target.value })} placeholder="Role description" rows={3} />
-                  <button type="button" onClick={createRole}>Create Role</button>
-                </div>
+                <div className="role-card-row">
+                  <div className="control-panel role-card">
+                    <h3>Create New Role</h3>
+                    <input value={roleForm.name} onChange={e => setRoleForm({ ...roleForm, name: e.target.value })} placeholder="Role name" />
+                    <select value={roleForm.baseRole} onChange={e => setRoleForm({ ...roleForm, baseRole: e.target.value })}>
+                      <option value="candidate">Candidate-level access</option>
+                      <option value="admin">Admin-level access</option>
+                    </select>
+                    <textarea value={roleForm.description} onChange={e => setRoleForm({ ...roleForm, description: e.target.value })} placeholder="Role description" rows={3} />
+                    <button type="button" onClick={createRole}>Create Role</button>
+                  </div>
 
-                <div className="control-panel">
-                  <h3>Add People To Role</h3>
-                  <select value={assignUserId} onChange={e => setAssignUserId(e.target.value)}>
-                    <option value="">Select user</option>
-                    {roleUsers.map(user => (
-                      <option key={user._id} value={user._id}>
-                        {userOptionLabel(user)}
-                      </option>
-                    ))}
-                  </select>
-                  <select value={assignRole} onChange={e => setAssignRole(e.target.value)}>
-                    {assignableRoles.map(role => <option key={role.name} value={role.name}>{role.name}</option>)}
-                  </select>
-                  <button type="button" onClick={assignUserRole}>Assign Role</button>
-                  <div className="mini-list">
-                    {assignableRoles.map(role => (
-                      <span key={role.name}>{role.name}{role.system ? " (system)" : ""}</span>
-                    ))}
+                  <div className="control-panel role-card">
+                    <h3>Add People To Role</h3>
+                    <input
+                      value={assignUserSearch}
+                      onChange={e => setAssignUserSearch(e.target.value)}
+                      placeholder="Search user by name, email, role, project..."
+                    />
+                    <select value={assignUserId} onChange={e => setAssignUserId(e.target.value)}>
+                      <option value="">Select user</option>
+                      {assignUserOptions.length === 0 && <option value="" disabled>No users found</option>}
+                      {assignUserOptions.map(user => (
+                        <option key={user._id} value={user._id}>
+                          {userOptionLabel(user)}
+                        </option>
+                      ))}
+                    </select>
+                    <select value={assignRole} onChange={e => setAssignRole(e.target.value)}>
+                      {assignableRoles.map(role => <option key={role.name} value={role.name}>{role.name}</option>)}
+                    </select>
+                    <button type="button" onClick={assignUserRole}>Assign Role</button>
+                    <div className="mini-list">
+                      {assignableRoles.map(role => (
+                        <span key={role.name}>{role.name}{role.system ? " (system)" : ""}</span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
