@@ -672,6 +672,71 @@ body {
   color: #196334;
 }
 
+.custom-right-maker {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.15fr) minmax(160px, 0.9fr) minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #dbeadf;
+  border-radius: 12px;
+  background: #fbfcfb;
+}
+
+.custom-right-maker > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.custom-right-maker strong {
+  color: var(--admin-primary-dark);
+  font-size: 15px;
+}
+
+.custom-right-maker span {
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.custom-right-maker input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #d6e1d8;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--admin-text);
+  font: inherit;
+}
+
+.custom-right-maker button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--admin-primary);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.custom-right-badge {
+  display: inline-grid;
+  place-items: center;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #eef7e9;
+  color: #2d6b3f;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .rights-table-wrap {
   max-height: 440px;
   overflow: auto;
@@ -727,6 +792,18 @@ body {
 .rights-toggle:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+@media (max-width: 1100px) {
+  .custom-right-maker {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .custom-right-maker {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ========== CARD ========== */

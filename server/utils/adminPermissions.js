@@ -32,13 +32,18 @@ function cleanList(values) {
 
 function normalizeAdminPermissions(userOrPermissions = {}) {
   const raw = userOrPermissions.adminPermissions || userOrPermissions || {};
-  const rawPermissions = raw.permissions || {};
-  const permissions = Object.keys(ADMIN_PERMISSION_DEFAULTS).reduce((acc, key) => {
-    acc[key] = rawPermissions[key] === undefined
-      ? ADMIN_PERMISSION_DEFAULTS[key]
-      : Boolean(rawPermissions[key]);
+  const rawPermissions = raw.permissions instanceof Map
+    ? Object.fromEntries(raw.permissions)
+    : raw.permissions || {};
+  const permissions = Object.keys(rawPermissions).reduce((acc, key) => {
+    acc[key] = Boolean(rawPermissions[key]);
     return acc;
   }, {});
+  Object.keys(ADMIN_PERMISSION_DEFAULTS).forEach((key) => {
+    permissions[key] = rawPermissions[key] === undefined
+      ? ADMIN_PERMISSION_DEFAULTS[key]
+      : Boolean(rawPermissions[key]);
+  });
   if (!permissions.canViewSuites) permissions.canManageSuites = false;
   if (permissions.canManageSuites) permissions.canViewSuites = true;
   if (!permissions.canViewQuestions) permissions.canManageQuestions = false;

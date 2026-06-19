@@ -641,6 +641,11 @@ router.put("/superadmin/users/:id/permissions", authMiddleware, requireSuperAdmi
                 : Boolean(req.body.permissions[key]);
             return acc;
         }, {});
+        Object.entries(req.body.permissions || {}).forEach(([key, value]) => {
+            if (!ADMIN_PERMISSION_DEFAULTS[key] && /^[A-Za-z][A-Za-z0-9_:-]{1,80}$/.test(key)) {
+                rawPermissions[key] = Boolean(value);
+            }
+        });
         const permissions = normalizeAdminPermissions({ permissions: rawPermissions }).permissions;
         const scopeProjects = Array.isArray(req.body.scopeProjects)
             ? [...new Set(req.body.scopeProjects.map(item => String(item || "").trim()).filter(Boolean))]

@@ -57,7 +57,10 @@ export function getAdminPermissions(user = getCurrentUser()) {
         ? ADMIN_PERMISSION_DEFAULTS[key]
         : Boolean(rawPermissions[key]);
       return acc;
-    }, {}),
+    }, Object.keys(rawPermissions).reduce((acc, key) => {
+      acc[key] = Boolean(rawPermissions[key]);
+      return acc;
+    }, {})),
     scopeProjects: Array.isArray(raw.scopeProjects) ? raw.scopeProjects : [],
     scopeDepartments: Array.isArray(raw.scopeDepartments) ? raw.scopeDepartments : [],
   };

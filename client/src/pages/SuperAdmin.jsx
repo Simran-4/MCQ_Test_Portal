@@ -12,6 +12,7 @@ import { apiProjectsToMap, defaultOrgOptions, mergeOrgOptions, readLocalOrgOptio
 const API_BASE = "https://charismatic-happiness-production-dc36.up.railway.app/api";
 const API_URL = `${API_BASE}/auth`;
 const LOCAL_ROLES_KEY = "snehalaya_custom_roles";
+const LOCAL_RIGHTS_KEY = "snehalaya_custom_rights";
 const emptyCreateUserForm = {
   firstName: "",
   middleName: "",
@@ -76,7 +77,10 @@ function normalizeRights(user) {
         ? ADMIN_PERMISSION_DEFAULTS[key]
         : Boolean(savedPermissions[key]);
       return acc;
-    }, {}),
+    }, Object.keys(savedPermissions).reduce((acc, key) => {
+      acc[key] = Boolean(savedPermissions[key]);
+      return acc;
+    }, {})),
     scopeProjects: Array.isArray(saved.scopeProjects) ? saved.scopeProjects : [],
     scopeDepartments: Array.isArray(saved.scopeDepartments) ? saved.scopeDepartments : [],
   };
@@ -106,6 +110,28 @@ function readLocalRoles() {
 
 function writeLocalRoles(roles) {
   localStorage.setItem(LOCAL_ROLES_KEY, JSON.stringify(roles));
+}
+
+function readLocalRights() {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_RIGHTS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalRights(rights) {
+  localStorage.setItem(LOCAL_RIGHTS_KEY, JSON.stringify(rights));
+}
+
+function customRightKey(label) {
+  const slug = String(label || "")
+    .trim()
+    .replace(/([a-z])([A-Z])/g, "$1_$2")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+  return `custom_${slug || Date.now()}`;
 }
 
 function candidateName(result) {
@@ -618,6 +644,8 @@ function SuperAdmin() {
   const [rightsUserId, setRightsUserId] = useState("");
   const [rightsForm, setRightsForm] = useState(() => normalizeRights());
   const [rightsSaving, setRightsSaving] = useState(false);
+  const [customRights, setCustomRights] = useState(() => readLocalRights());
+  const [customRightForm, setCustomRightForm] = useState({ label: "", detail: "" });
 
   const setOverview = useCallback((overview) => {
     setUsers(overview.users);
@@ -901,6 +929,31 @@ function SuperAdmin() {
       if (key === "canManageQuestions" && nextValue) permissions.canViewQuestions = true;
       return { ...prev, permissions };
     });
+  };
+
+  const addCustomRight = () => {
+    const label = customRightForm.label.trim();
+    if (!label) return alert("Enter a right name.");
+    const key = customRightKey(label);
+    const allRights = [...ADMIN_RIGHTS, ...customRights];
+    if (allRights.some(right => right.key === key || right.label.toLowerCase() === label.toLowerCase())) {
+      return alert("This right already exists.");
+    }
+
+    const nextRight = {
+      key,
+      label,
+      detail: customRightForm.detail.trim() || "Custom right created by superadmin",
+      custom: true,
+    };
+    const nextRights = [...customRights, nextRight];
+    setCustomRights(nextRights);
+    writeLocalRights(nextRights);
+    setRightsForm(prev => ({
+      ...prev,
+      permissions: { ...prev.permissions, [key]: true },
+    }));
+    setCustomRightForm({ label: "", detail: "" });
   };
 
   const saveAdminRights = async () => {
@@ -1232,6 +1285,7 @@ function SuperAdmin() {
     ].join(" ").toLowerCase().includes(reportSearch.toLowerCase())
   );
   const adminUsers = displayUsers.filter(user => user.role === "admin" || user.role === "superadmin");
+  const rightsRows = [...ADMIN_RIGHTS, ...customRights];
   const selectedRightsUser = users.find(user => user._id === rightsUserId);
   const rightsProject = rightsForm.scopeProjects[0] || "";
   const rightsDepartments = rightsProject
@@ -1498,6 +1552,24 @@ function SuperAdmin() {
                   </div>
                 )}
 
+                <div className="custom-right-maker">
+                  <div>
+                    <strong>Make New Right</strong>
+                    <span>Create an extra right row, then allow or deny it for the selected admin.</span>
+                  </div>
+                  <input
+                    value={customRightForm.label}
+                    onChange={e => setCustomRightForm(prev => ({ ...prev, label: e.target.value }))}
+                    placeholder="Right name"
+                  />
+                  <input
+                    value={customRightForm.detail}
+                    onChange={e => setCustomRightForm(prev => ({ ...prev, detail: e.target.value }))}
+                    placeholder="Right details"
+                  />
+                  <button type="button" onClick={addCustomRight}>＋ Add Right</button>
+                </div>
+
                 <div className="rights-table-wrap">
                   <table className="rights-table">
                     <thead>
@@ -1508,11 +1580,14 @@ function SuperAdmin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {ADMIN_RIGHTS.map(right => {
+                      {rightsRows.map(right => {
                         const allowed = rightsForm.permissions[right.key] !== false;
                         return (
                           <tr key={right.key}>
-                            <td>{right.label}</td>
+                            <td>
+                              {right.label}
+                              {right.custom && <span className="custom-right-badge">custom</span>}
+                            </td>
                             <td>{right.detail}</td>
                             <td>
                               <button
