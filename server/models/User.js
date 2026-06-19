@@ -71,6 +71,7 @@ const UserSchema = new mongoose.Schema(
         adminPermissions: {
             permissions: {
                 canViewReports:     { type: Boolean, default: true },
+                canViewTestReports: { type: Boolean, default: true },
                 canDownloadReports: { type: Boolean, default: true },
                 canViewSuites:      { type: Boolean, default: true },
                 canManageSuites:    { type: Boolean, default: true },

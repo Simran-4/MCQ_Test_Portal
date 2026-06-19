@@ -1,5 +1,6 @@
 const ADMIN_PERMISSION_DEFAULTS = {
   canViewReports: true,
+  canViewTestReports: true,
   canDownloadReports: true,
   canViewSuites: true,
   canManageSuites: true,
@@ -12,6 +13,7 @@ const ADMIN_PERMISSION_DEFAULTS = {
 
 const ADMIN_PERMISSION_LABELS = [
   { key: "canViewReports", label: "View reports" },
+  { key: "canViewTestReports", label: "View test reports" },
   { key: "canDownloadReports", label: "Download reports" },
   { key: "canViewSuites", label: "Open test suites" },
   { key: "canManageSuites", label: "Create / edit test suites" },

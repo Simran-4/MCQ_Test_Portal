@@ -50,6 +50,7 @@ const emptyEditUserForm = {
 };
 const ADMIN_RIGHTS = [
   { key: "canViewReports", label: "View reports", detail: "Can open report pages and see result rows" },
+  { key: "canViewTestReports", label: "View test reports", detail: "Can open the statistical and descriptive test report section" },
   { key: "canDownloadReports", label: "Download reports", detail: "Can export summary/descriptive PDF or Excel" },
   { key: "canViewSuites", label: "Open test suites", detail: "Can open test suite pages within scope" },
   { key: "canManageSuites", label: "Create / edit test suites", detail: "Can create, edit, activate, deactivate, and delete suites" },

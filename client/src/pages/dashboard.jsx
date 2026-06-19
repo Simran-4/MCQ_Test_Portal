@@ -256,6 +256,7 @@ function buildTestSummaryRows(results) {
         failed: 0,
         attempts: [],
         durations: [],
+        percentages: [],
       });
     }
     const item = grouped.get(key);
@@ -266,6 +267,7 @@ function buildTestSummaryRows(results) {
     if (result.submittedAt) item.attempts.push(new Date(result.submittedAt));
     const duration = resultTimeTakenSeconds(result);
     if (duration !== null) item.durations.push(duration);
+    item.percentages.push(resultPct(result));
   });
 
   return [...grouped.values()]
@@ -280,12 +282,19 @@ function buildTestSummaryRows(results) {
       const averageTime = item.durations.length
         ? Math.round(item.durations.reduce((sum, value) => sum + value, 0) / item.durations.length)
         : null;
+      const totalAttempts = item.passed + item.failed;
+      const passRate = totalAttempts > 0 ? Math.round((item.passed / totalAttempts) * 10000) / 100 : 0;
+      const averageScore = item.percentages.length
+        ? Math.round((item.percentages.reduce((sum, value) => sum + value, 0) / item.percentages.length) * 100) / 100
+        : 0;
       return {
         testName: item.testName,
         usersAttempted: item.candidateKeys.size,
         passed: item.passed,
         failed: item.failed,
-        totalAttempts: item.passed + item.failed,
+        totalAttempts,
+        passRate,
+        averageScore,
         firstAttempt,
         latestAttempt,
         averageTime,
@@ -507,12 +516,14 @@ export default function Dashboard() {
     }
   }, []);
   const canViewReports = canAdmin("canViewReports", user);
+  const canViewTestReports = canAdmin("canViewTestReports", user);
   const canDownloadReports = canAdmin("canDownloadReports", user);
   const canOpenSuites = canAdmin("canViewSuites", user);
   const canManageSuites = canOpenSuites && canAdmin("canManageSuites", user);
   const canViewQuestions = canAdmin("canViewQuestions", user);
   const canAssignTests = canAdmin("canAssignTests", user);
   const canBulkMail = canAdmin("canBulkMail", user);
+  const canViewUsers = canAdmin("canViewUsers", user);
 
   const fetchTrashedSuites = useCallback(async () => {
     if (!canManageSuites) return;
@@ -563,18 +574,22 @@ export default function Dashboard() {
   const fetchAdminData = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
-      const [usersRes, resultsRes] = await Promise.all([
-        axios.get(`${API}/api/auth/users`, { headers }),
-        canViewReports
+      const [usersRes, resultsRes] = await Promise.allSettled([
+        (canViewUsers || canAssignTests)
+          ? axios.get(`${API}/api/auth/users`, { headers })
+          : Promise.resolve({ data: [] }),
+        (canViewReports || canViewTestReports)
           ? axios.get(`${API}/api/results/all`, { headers })
           : Promise.resolve({ data: [] }),
       ]);
-      setUsers(usersRes.data);
-      setReportResults(resultsRes.data);
+      setUsers(usersRes.status === "fulfilled" ? usersRes.value.data : []);
+      setReportResults(resultsRes.status === "fulfilled" ? resultsRes.value.data : []);
+      if (usersRes.status === "rejected") console.error("Failed to fetch users:", usersRes.reason);
+      if (resultsRes.status === "rejected") console.error("Failed to fetch reports:", resultsRes.reason);
     } catch (err) {
       console.error("Failed to fetch admin data:", err);
     }
-  }, [canViewReports]);
+  }, [canAssignTests, canViewReports, canViewTestReports, canViewUsers]);
 
   useEffect(() => {
     fetchAdminData();
@@ -847,6 +862,8 @@ export default function Dashboard() {
       "Total Users Attempted": row.usersAttempted,
       "Passed": row.passed,
       "Failed": row.failed,
+      "Pass Rate (%)": `${row.passRate.toFixed(2)}%`,
+      "Average Score (%)": `${row.averageScore.toFixed(2)}%`,
       "Total Attempts": row.totalAttempts,
       "First Attempted At": formatDateTime(row.firstAttempt),
       "Latest Attempted At": formatDateTime(row.latestAttempt),
@@ -868,23 +885,22 @@ export default function Dashboard() {
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text("Summary Test Report", 14, 10);
+    doc.text("Statistical Test Report", 14, 10);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(`Generated ${formatDateTime(new Date())}`, 14, 17);
 
     autoTable(doc, {
       startY: 32,
-      head: [["Test No.", "Test Name", "Users Attempted", "Passed", "Failed", "Total Attempts", "First Attempt", "Latest Attempt", "Avg Time Taken"]],
+      head: [["Test No.", "Test Name", "Users Attempted", "Passed", "Failed", "Pass Rate", "Avg Score", "Avg Time Taken"]],
       body: testSummaryRows.map((row, index) => [
         index + 1,
         row.testName,
         row.usersAttempted,
         row.passed,
         row.failed,
-        row.totalAttempts,
-        formatDateTime(row.firstAttempt),
-        formatDateTime(row.latestAttempt),
+        `${row.passRate.toFixed(2)}%`,
+        `${row.averageScore.toFixed(2)}%`,
         formatDuration(row.averageTime),
       ]),
       styles: { fontSize: 7.3, cellPadding: 2, overflow: "linebreak" },
@@ -1275,7 +1291,7 @@ export default function Dashboard() {
             </button>
           )}
 
-          {canViewReports && (
+          {canViewTestReports && (
             <button type="button" className={activePanel === "test-report" ? "active" : ""} onClick={() => setActivePanel("test-report")}>
               ▥ Test Report
             </button>
@@ -1527,40 +1543,44 @@ export default function Dashboard() {
           </section>
         )}
 
-        {activePanel === "test-report" && canViewReports && (
+        {activePanel === "test-report" && canViewTestReports && (
           <section className="admin-test-report">
-            <div className="admin-panel-heading">
-              <h3>Test Report</h3>
-              <p>Download summary and descriptive reports for all submitted test attempts.</p>
+            <div className="admin-test-report-titlebar">
+              <div>
+                <h3>Test Report</h3>
+                <p>Download statistical summary and descriptive reports for all submitted test attempts.</p>
+              </div>
             </div>
 
             <div className="admin-test-report-grid">
               <article className="admin-test-report-card">
-                <div>
-                  <h4>Summary Test Report</h4>
-                  <p>Test number, test name, users attempted, passed, failed, attempt window, and average time taken.</p>
+                <div className="admin-test-report-icon">▥</div>
+                <div className="admin-test-report-copy">
+                  <h4>Statistical Test Report</h4>
+                  <p>Test number, users attempted, passed, failed, pass rate, average score, and average time taken</p>
                 </div>
                 <div className="admin-report-actions inline">
-                  <button type="button" onClick={downloadTestSummaryPDF} disabled={!canDownloadReports || testSummaryRows.length === 0}>Summary PDF</button>
-                  <button type="button" onClick={downloadTestSummaryExcel} disabled={!canDownloadReports || testSummaryRows.length === 0}>Summary Excel</button>
+                  <button type="button" onClick={downloadTestSummaryPDF} disabled={!canDownloadReports || testSummaryRows.length === 0}>▤ Statistical PDF</button>
+                  <button type="button" onClick={downloadTestSummaryExcel} disabled={!canDownloadReports || testSummaryRows.length === 0}>▣ Statistical Excel</button>
                 </div>
               </article>
 
               <article className="admin-test-report-card">
-                <div>
+                <div className="admin-test-report-icon pie">◔</div>
+                <div className="admin-test-report-copy">
                   <h4>Descriptive Test Report</h4>
-                  <p>Candidate-wise attempt date and time, time taken, score, percentage, and pass/fail result.</p>
+                  <p>Candidate-wise attempt date and time, time taken, score, percentage, and pass/fail result</p>
                 </div>
                 <div className="admin-report-actions inline">
-                  <button type="button" onClick={downloadDescriptiveTestPDF} disabled={!canDownloadReports || descriptiveTestRows.length === 0}>Descriptive PDF</button>
-                  <button type="button" onClick={downloadDescriptiveTestExcel} disabled={!canDownloadReports || descriptiveTestRows.length === 0}>Descriptive Excel</button>
+                  <button type="button" onClick={downloadDescriptiveTestPDF} disabled={!canDownloadReports || descriptiveTestRows.length === 0}>▤ Descriptive PDF</button>
+                  <button type="button" onClick={downloadDescriptiveTestExcel} disabled={!canDownloadReports || descriptiveTestRows.length === 0}>▣ Descriptive Excel</button>
                 </div>
               </article>
             </div>
 
             <div className="admin-test-report-table">
               <div className="admin-test-report-table-head">
-                <h4>Summary Preview</h4>
+                <h4>Statistical Summary</h4>
                 <span>{testSummaryRows.length} test(s)</span>
               </div>
               <div className="admin-table-scroll">
@@ -1572,8 +1592,9 @@ export default function Dashboard() {
                       <th>Users Attempted</th>
                       <th>Passed</th>
                       <th>Failed</th>
-                      <th>Latest Attempt</th>
-                      <th>Avg Time</th>
+                      <th>Pass Rate (%)</th>
+                      <th>Average Score (%)</th>
+                      <th>Average Time</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1582,9 +1603,10 @@ export default function Dashboard() {
                         <td>{index + 1}</td>
                         <td>{row.testName}</td>
                         <td>{row.usersAttempted}</td>
-                        <td>{row.passed}</td>
-                        <td>{row.failed}</td>
-                        <td>{formatDateTime(row.latestAttempt)}</td>
+                        <td><span className="report-good">{row.passed}</span></td>
+                        <td><span className="report-bad">{row.failed}</span></td>
+                        <td><span className={row.passRate >= 75 ? "report-good" : row.passRate >= 50 ? "report-warn" : "report-bad"}>{row.passRate.toFixed(2)}%</span></td>
+                        <td><span className={row.averageScore >= 75 ? "report-good" : row.averageScore >= 50 ? "report-warn" : "report-bad"}>{row.averageScore.toFixed(2)}%</span></td>
                         <td>{formatDuration(row.averageTime)}</td>
                       </tr>
                     ))}
@@ -1596,7 +1618,7 @@ export default function Dashboard() {
 
             <div className="admin-test-report-table">
               <div className="admin-test-report-table-head">
-                <h4>Descriptive Preview</h4>
+                <h4>Descriptive Summary</h4>
                 <span>{descriptiveTestRows.length} attempt(s)</span>
               </div>
               <div className="admin-table-scroll">
@@ -1608,6 +1630,7 @@ export default function Dashboard() {
                       <th>Candidate</th>
                       <th>Attempted Date & Time</th>
                       <th>Time Taken</th>
+                      <th>Score (%)</th>
                       <th>Result</th>
                     </tr>
                   </thead>
@@ -1619,6 +1642,7 @@ export default function Dashboard() {
                         <td>{row.candidate}</td>
                         <td>{formatDateTime(row.attemptedAt)}</td>
                         <td>{formatDuration(row.timeTakenSeconds)}</td>
+                        <td>{row.percentage}</td>
                         <td>
                           <span className={`admin-personal-status ${row.result.toLowerCase()}`}>{row.result}</span>
                         </td>
@@ -1733,7 +1757,7 @@ export default function Dashboard() {
                       <h4>{suite.name}</h4>
                       <p>
                         {suite.questionCount ?? 0} questions <span>•</span> Pass {suite.passingPercentage ?? 50}%
-                        <span>•</span> Uploaded {formatDate(suite.createdAt)}
+                        <span>•</span> Uploaded {formatDateTime(suite.createdAt)}
                       </p>
                     </div>
                   </div>

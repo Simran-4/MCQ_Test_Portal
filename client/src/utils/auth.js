@@ -15,6 +15,7 @@ export function getAuthHeaders(extraHeaders = {}) {
 
 export const ADMIN_PERMISSION_DEFAULTS = {
   canViewReports: true,
+  canViewTestReports: true,
   canDownloadReports: true,
   canViewSuites: true,
   canManageSuites: true,

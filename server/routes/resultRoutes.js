@@ -101,6 +101,10 @@ async function getRequester(userId) {
   return User.findById(userId).select("role adminPermissions name username email mobile");
 }
 
+function canReadAnyReport(user) {
+  return hasAdminPermission(user, "canViewReports") || hasAdminPermission(user, "canViewTestReports");
+}
+
 function andQuery(base, extra) {
   const clauses = [];
   if (Object.keys(base).length > 0) clauses.push(base);
@@ -366,7 +370,7 @@ router.post("/add", authMiddleware, requireAdminOrSuperAdmin, async (req, res) =
 router.get("/suite/:suiteId", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
   try {
     const requester = await getRequester(req.user.id);
-    if (requester?.role === "admin" && !hasAdminPermission(requester, "canViewReports")) {
+    if (requester?.role === "admin" && !canReadAnyReport(requester)) {
       return res.status(403).json({ message: "Report access denied" });
     }
     const query = andQuery(
@@ -416,7 +420,7 @@ router.get("/all", authMiddleware, async (req, res) => {
         Object.assign(query, candidateFilter);
       }
     } else if (requester?.role === "admin") {
-      if (!hasAdminPermission(requester, "canViewReports")) {
+      if (!canReadAnyReport(requester)) {
         return res.status(403).json({ message: "Report access denied" });
       }
       const scoped = scopedResultQuery(requester);
@@ -443,7 +447,7 @@ router.get("/all", authMiddleware, async (req, res) => {
 router.get("/projects", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
   try {
     const requester = await getRequester(req.user.id);
-    if (requester?.role === "admin" && !hasAdminPermission(requester, "canViewReports")) {
+    if (requester?.role === "admin" && !canReadAnyReport(requester)) {
       return res.status(403).json({ message: "Report access denied" });
     }
     const projects = await Result.distinct("project", requester?.role === "admin" ? scopedResultQuery(requester) : {});
