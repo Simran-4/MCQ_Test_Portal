@@ -60,10 +60,16 @@ function resultGrade(result) {
 }
 
 function categoryLabel(category) {
+  if (category?.scaleLabel) return category.scaleLabel;
   const pct = Number(category?.percentage || 0);
   if (pct >= 75) return "High";
   if (pct >= 50) return "Moderate";
   return "Low";
+}
+
+function categoryScoreLabel(category) {
+  if (category?.scaleScore) return `${category.scaleScore}/10`;
+  return `${category.percentage || 0}%`;
 }
 
 function categoryRowsForResult(result) {
@@ -1016,7 +1022,9 @@ export default function Dashboard() {
         "Category": category.category || "-",
         "Score": `${category.score ?? category.earnedMarks ?? 0}/${category.total ?? 0}`,
         "Percentage": `${category.percentage || 0}%`,
+        "Scale Score": category.scaleScore ? `${category.scaleScore}/10` : "-",
         "Grade": categoryLabel(category),
+        "Description": category.description || "-",
       }))
     );
     const wb = XLSX.utils.book_new();
@@ -1503,12 +1511,13 @@ export default function Dashboard() {
                             <div key={`${result._id}-${category.category}`} className="admin-personal-category">
                               <div>
                                 <span>{category.category || "Uncategorized"}</span>
-                                <strong>{categoryLabel(category)} · {category.percentage || 0}%</strong>
+                                <strong>{categoryLabel(category)} · {categoryScoreLabel(category)}</strong>
                               </div>
                               <div className="admin-personal-bar">
                                 <span style={{ width: `${Math.max(0, Math.min(100, category.percentage || 0))}%` }} />
                               </div>
                               <small>{category.score ?? category.earnedMarks ?? 0}/{category.total ?? 0}</small>
+                              {category.description && <small>{category.description}</small>}
                             </div>
                           ))}
                         </div>

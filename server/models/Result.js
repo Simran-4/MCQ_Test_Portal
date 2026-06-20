@@ -15,6 +15,9 @@ const categoryResultSchema = new mongoose.Schema({
   total:       { type: Number, default: 0 },
   earnedMarks: { type: Number, default: 0 },
   percentage:  { type: Number, default: 0 },
+  scaleScore:  { type: Number, default: null },
+  scaleLabel:  { type: String, default: "" },
+  description: { type: String, default: "" },
 }, { _id: false });
 
 const resultSchema = new mongoose.Schema({

@@ -15,6 +15,7 @@ const emptyForm = {
   questionType:   "mcq",
   options:        ["", "", "", ""],
   correctAnswers: [],
+  optionScores:   ["", "", "", ""],
   categoryCorrectAnswers: {},
   explanation:    "",
   marks:          1,
@@ -73,6 +74,55 @@ function parseCorrectAnswerIndexes(value, options) {
     .filter(index => Number.isInteger(index) && index >= 0 && index < options.length);
 }
 
+function parseOptionScores(value, optionCount) {
+  const scores = splitList(value).map(item => Number(item));
+  if (scores.length === 0 || scores.some(score => !Number.isFinite(score))) return [];
+  return scores.slice(0, optionCount);
+}
+
+function rowScoreValue(row, index) {
+  const letters = ["A", "B", "C", "D", "E", "F"];
+  const number = index + 1;
+  const keys = [
+    `option${number}Score`,
+    `Option${number}Score`,
+    `score${number}`,
+    `Score${number}`,
+    `${letters[index]}Score`,
+    `${letters[index].toLowerCase()}Score`,
+    `score${letters[index]}`,
+    `Score${letters[index]}`,
+  ];
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== "") {
+      const value = Number(row[key]);
+      return Number.isFinite(value) ? value : null;
+    }
+  }
+  return null;
+}
+
+function parseOptionScoresFromRow(row, options) {
+  const direct = parseOptionScores(
+    rowValue(row, ["optionScores", "OptionScores", "scores", "Scores"]),
+    options.length
+  );
+  if (direct.length > 0) return direct;
+  const perOption = options.map((_, index) => rowScoreValue(row, index));
+  return perOption.some(value => value !== null)
+    ? perOption.map(value => Number.isFinite(value) ? value : 0)
+    : [];
+}
+
+function maxScoreIndexes(optionScores) {
+  const scores = (Array.isArray(optionScores) ? optionScores : []).map(Number).filter(Number.isFinite);
+  if (scores.length === 0) return [];
+  const max = Math.max(...scores);
+  return scores
+    .map((score, index) => score === max && max > 0 ? index : null)
+    .filter(Number.isInteger);
+}
+
 function normalizeImportRow(row, rowNum) {
   const questionText = String(rowValue(row, ["questionText", "Question", "question"])).trim();
   const questionType = String(rowValue(row, ["questionType", "QuestionType", "type", "Type"]) || "mcq")
@@ -89,10 +139,12 @@ function normalizeImportRow(row, rowNum) {
     rowValue(row, ["correctAnswers", "CorrectAnswers", "correctAnswer", "CorrectAnswer", "correct", "answer", "Answer"]),
     options
   );
+  const optionScores = parseOptionScoresFromRow(row, options);
+  const inferredCorrectAnswer = correctAnswer.length > 0 ? correctAnswer : maxScoreIndexes(optionScores);
 
   if (!questionText) return { error: `Row ${rowNum}: missing questionText` };
   if (questionType === "mcq" && options.length < 2) return { error: `Row ${rowNum}: need at least 2 options` };
-  if (questionType === "mcq" && correctAnswer.length === 0) {
+  if (questionType === "mcq" && inferredCorrectAnswer.length === 0) {
     return { error: `Row ${rowNum}: invalid correctAnswers. Use 0-based index, A/B/C/D, or exact option text.` };
   }
 
@@ -100,7 +152,8 @@ function normalizeImportRow(row, rowNum) {
     questionText,
     questionType,
     options: questionType === "theory" ? [] : options,
-    correctAnswer: questionType === "theory" ? [] : correctAnswer,
+    correctAnswer: questionType === "theory" ? [] : inferredCorrectAnswer,
+    optionScores: questionType === "theory" ? [] : optionScores,
     categoryCorrectAnswers: {},
     explanation: String(rowValue(row, ["explanation", "Explanation"])).trim(),
     marks: Number(rowValue(row, ["marks", "Marks"]) || 1) || 1,
@@ -140,6 +193,9 @@ export default function TestSuiteDetail() {
   const [showPassing, setShowPassing] = useState(false);
   const [passingVal, setPassingVal]   = useState(50);
   const [savingPassing, setSavingPassing] = useState(false);
+  const [showScoring, setShowScoring] = useState(false);
+  const [scoringMode, setScoringMode] = useState("standard");
+  const [savingScoring, setSavingScoring] = useState(false);
 
   // Feature 9: Date window
   const [showDateWindow, setShowDateWindow] = useState(false);
@@ -182,6 +238,7 @@ export default function TestSuiteDetail() {
       setSelectedQuestionIds((suiteRes.data.selectedQuestionIds || []).map(id => String(id?._id || id)));
       setQtsServeVal(suiteRes.data.questionsToServe || "");
       setPassingVal(suiteRes.data.passingPercentage ?? 50);
+      setScoringMode(suiteRes.data.scoringMode || "standard");
       // Format dates for datetime-local input
       setStartDate(suiteRes.data.startDate
         ? new Date(suiteRes.data.startDate).toISOString().slice(0, 16) : "");
@@ -249,6 +306,10 @@ export default function TestSuiteDetail() {
       "option3",
       "option4",
       "correctAnswers",
+      "optionScores",
+      "option1Score",
+      "option2Score",
+      "option3Score",
       "explanation",
       "marks",
       "category",
@@ -262,6 +323,10 @@ export default function TestSuiteDetail() {
       "5",
       "6",
       "1",
+      "0,1,0",
+      "",
+      "",
+      "",
       "4 is the correct answer.",
       "1",
       "Confidence",
@@ -390,6 +455,24 @@ export default function TestSuiteDetail() {
     }
   };
 
+  const handleSaveScoring = async () => {
+    setSavingScoring(true);
+    try {
+      const payload = { scoringMode: scoringMode === "sixteen_pf" ? "sixteen_pf" : "standard" };
+      await axios.put(`${API}/api/test-suites/${suiteId}`,
+        payload,
+        { headers: getAuthHeaders() }
+      );
+      setSuite(prev => ({ ...prev, ...payload }));
+      setShowScoring(false);
+      alert(payload.scoringMode === "sixteen_pf" ? "16PF scoring enabled for this suite." : "Standard MCQ scoring enabled.");
+    } catch {
+      alert("Failed to save scoring mode.");
+    } finally {
+      setSavingScoring(false);
+    }
+  };
+
   // Feature 9: Save date window
   const handleSaveDates = async () => {
     if (startDate && endDate && new Date(startDate) >= new Date(endDate)) {
@@ -483,9 +566,15 @@ export default function TestSuiteDetail() {
     setForm({ ...form, options: opts });
   };
 
+  const handleOptionScoreChange = (index, value) => {
+    const scores = [...(form.optionScores || [])];
+    scores[index] = value;
+    setForm({ ...form, optionScores: scores });
+  };
+
   const addOption = () => {
     if (form.options.length >= 6) return;
-    setForm({ ...form, options: [...form.options, ""] });
+    setForm({ ...form, options: [...form.options, ""], optionScores: [...(form.optionScores || []), ""] });
   };
 
   const removeOption = (index) => {
@@ -494,6 +583,7 @@ export default function TestSuiteDetail() {
     setForm({
       ...form,
       options: opts,
+      optionScores: (form.optionScores || []).filter((_, i) => i !== index),
       correctAnswers: form.correctAnswers
         .filter(i => i !== index)
         .map(i => i > index ? i - 1 : i),
@@ -551,12 +641,21 @@ export default function TestSuiteDetail() {
     const fallbackCorrect = remappedCorrect.length > 0
       ? remappedCorrect
       : uniqueSortedIndexes(Object.values(remappedCategoryCorrect).flat());
+    const remappedOptionScores = form.options.reduce((acc, opt, oldIdx) => {
+      if (!opt.trim()) return acc;
+      const value = form.optionScores?.[oldIdx];
+      const numeric = Number(value);
+      acc.push(Number.isFinite(numeric) ? numeric : 0);
+      return acc;
+    }, []);
+    const hasOptionScores = remappedOptionScores.some(score => score !== 0);
 
     const payload = {
       questionText:  form.questionText.trim(),
       questionType,
       options:       trimmedOptions,
       correctAnswer: questionType === "theory" ? [] : fallbackCorrect,
+      optionScores:  questionType === "theory" || !hasOptionScores ? [] : remappedOptionScores,
       categoryCorrectAnswers: questionType === "theory" ? {} : remappedCategoryCorrect,
       explanation:   form.explanation.trim(),
       marks:         Number(form.marks) || 1,
@@ -598,6 +697,7 @@ export default function TestSuiteDetail() {
       questionType:   q.questionType === "theory" ? "theory" : "mcq",
       options:        opts,
       correctAnswers: defaultCorrect,
+      optionScores:   opts.map((_, index) => q.optionScores?.[index] ?? ""),
       categoryCorrectAnswers,
       explanation:    q.explanation || "",
       marks:          q.marks || 1,
@@ -698,6 +798,9 @@ export default function TestSuiteDetail() {
         {(suite.questionSelectionMode === "random" || (!suite.questionSelectionMode && suite.questionsToServe)) && suite.questionsToServe && (
           <span style={{ fontSize: "13px", color: "#f59e0b" }}>🎲 {suite.questionsToServe} random</span>
         )}
+        {suite.scoringMode === "sixteen_pf" && (
+          <span style={{ fontSize: "13px", color: "#7c3aed" }}>🧠 16PF scoring</span>
+        )}
         {suite.startDate && (
           <span style={{ fontSize: "13px", color: "#6366f1" }}>
             📅 {new Date(suite.startDate).toLocaleDateString()} – {suite.endDate ? new Date(suite.endDate).toLocaleDateString() : "∞"}
@@ -745,6 +848,10 @@ export default function TestSuiteDetail() {
                 🎯 Question set {suite.questionSelectionMode === "selected"
                   ? `(${(suite.selectedQuestionIds || []).length} selected)`
                   : suite.questionsToServe ? `(${suite.questionsToServe} random)` : "(all)"}
+              </button>
+              <button onClick={() => setShowScoring(s => !s)}
+                style={{ padding: "10px 20px", background: WHITE, color: "#6d28d9", border: "1px solid #ddd6fe", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                🧠 Scoring mode ({suite.scoringMode === "sixteen_pf" ? "16PF" : "standard"})
               </button>
               {/* Feature 9 */}
               <button onClick={() => setShowDateWindow(s => !s)}
@@ -812,6 +919,25 @@ export default function TestSuiteDetail() {
               </button>
               <button onClick={() => setShowPassing(false)} style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}>Cancel</button>
             </div>
+          </div>
+        )}
+
+        {showScoring && (
+          <div style={{ background: WHITE, border: "1px solid #ddd6fe", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: "700", color: "#5b21b6", marginTop: 0, marginBottom: "14px" }}>🧠 Suite Scoring Mode</h2>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+              <select value={scoringMode} onChange={e => setScoringMode(e.target.value)} style={{ ...inputStyle, maxWidth: "320px" }}>
+                <option value="standard">Standard MCQ percentage</option>
+                <option value="sixteen_pf">16PF weighted factor scoring</option>
+              </select>
+              <button onClick={handleSaveScoring} disabled={savingScoring} style={{ padding: "10px 20px", background: "#6d28d9", color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: savingScoring ? 0.6 : 1 }}>
+                {savingScoring ? "Saving…" : "Save"}
+              </button>
+              <button onClick={() => setShowScoring(false)} style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}>Cancel</button>
+            </div>
+            <p style={{ fontSize: "12px", color: "#6b7280", margin: "10px 0 0" }}>
+              16PF mode uses option score columns from Excel, then stores factor raw score, percentage, 1-10 scale score, and trait label.
+            </p>
           </div>
         )}
 
@@ -1055,6 +1181,16 @@ export default function TestSuiteDetail() {
                           style={{ accentColor: GREEN, width: "16px", height: "16px", flexShrink: 0, cursor: opt.trim() ? "pointer" : "not-allowed" }} />
                         <input style={{ ...inputStyle, flex: 1, width: "auto", border: isCorrect ? `2px solid ${GREEN}` : "1px solid #ddd", background: isCorrect ? "#f0faf5" : WHITE }}
                           placeholder={`Option ${i + 1}${i >= 2 ? " (optional)" : ""}`} value={opt} onChange={e => handleOptionChange(i, e.target.value)} />
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={form.optionScores?.[i] ?? ""}
+                          onChange={e => handleOptionScoreChange(i, e.target.value)}
+                          placeholder="Score"
+                          disabled={!opt.trim()}
+                          title="Optional weighted score for this option"
+                          style={{ ...inputStyle, width: "86px", flex: "0 0 86px", background: opt.trim() ? WHITE : "#f3f4f6" }}
+                        />
                         {isCorrect && <span style={{ fontSize: "12px", color: GREEN, fontWeight: "600", whiteSpace: "nowrap", minWidth: "60px" }}>✓ Correct</span>}
                         {form.options.length > 2 && (
                           <button onClick={() => removeOption(i)} style={{ background: "none", border: "none", color: "#dc2626", fontSize: "20px", cursor: "pointer", padding: "0 4px", flexShrink: 0, lineHeight: 1 }}>×</button>
@@ -1170,6 +1306,7 @@ export default function TestSuiteDetail() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {qs.map((q) => {
                     const correctArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
+                    const optionScores = Array.isArray(q.optionScores) ? q.optionScores : [];
                     const catArr     = Array.isArray(q.category) ? q.category : (q.category ? [q.category] : []);
                     const categoryAnswerMap = getCategoryAnswerMap(q);
                     const theory = isTheoryQuestion(q);
@@ -1200,9 +1337,10 @@ export default function TestSuiteDetail() {
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                               {q.options.map((opt, i) => {
                                 const isCorrect = correctArr.includes(i);
+                                const hasScore = optionScores[i] !== undefined && optionScores[i] !== null;
                                 return (
                                   <p key={i} style={{ fontSize: "13px", margin: 0, padding: "6px 10px", borderRadius: "8px", background: isCorrect ? "#dcfce7" : "#f9fafb", color: isCorrect ? "#166534" : "#555", fontWeight: isCorrect ? "600" : "400" }}>
-                                    {String.fromCharCode(65 + i)}. {opt} {isCorrect ? "✓" : ""}
+                                    {String.fromCharCode(65 + i)}. {opt} {isCorrect ? "✓" : ""}{hasScore ? ` · ${optionScores[i]} pts` : ""}
                                   </p>
                                 );
                               })}

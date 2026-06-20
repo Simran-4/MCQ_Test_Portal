@@ -97,7 +97,7 @@ router.post("/add", authMiddleware, requireAdminFeature("canManageQuestions", "Q
 // ── PUT /api/questions/:id ────────────────────────────────────
 router.put("/:id", authMiddleware, requireAdminFeature("canManageQuestions", "Question management access denied"), async (req, res) => {
   try {
-    const { questionText, options, correctAnswer, explanation, marks, category, categoryCorrectAnswers } = req.body;
+    const { questionText, options, correctAnswer, optionScores, explanation, marks, category, categoryCorrectAnswers } = req.body;
     const questionType = req.body.questionType === "theory" ? "theory" : "mcq";
     if (!questionText?.trim())
       return res.status(400).json({ message: "Question text is required" });
@@ -112,6 +112,12 @@ router.put("/:id", authMiddleware, requireAdminFeature("canManageQuestions", "Qu
       return res.status(400).json({ message: "Correct answer index out of range" });
     const categories = Array.isArray(category) ? category : (category ? [category] : []);
     const categoryAnswerMap = sanitizeCategoryCorrectAnswers(categoryCorrectAnswers, categories, filledOptions.length);
+    const normalizedOptionScores = Array.isArray(optionScores)
+      ? optionScores
+        .slice(0, filledOptions.length)
+        .map(Number)
+        .map(score => Number.isFinite(score) ? score : 0)
+      : [];
 
     const updated = await Question.findByIdAndUpdate(
       req.params.id,
@@ -120,6 +126,7 @@ router.put("/:id", authMiddleware, requireAdminFeature("canManageQuestions", "Qu
         questionType,
         options:       questionType === "theory" ? [] : filledOptions,
         correctAnswer: questionType === "theory" ? [] : correctArr,
+        optionScores:  questionType === "theory" ? [] : normalizedOptionScores,
         explanation:   explanation || "",
         marks:         marks || 1,
         category:      categories,

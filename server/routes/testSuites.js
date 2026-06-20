@@ -54,6 +54,55 @@ function parseCorrectAnswerIndexes(value, options) {
     .filter(index => Number.isInteger(index) && index >= 0 && index < options.length);
 }
 
+function parseOptionScores(value, optionCount) {
+  const scores = splitList(value).map(item => Number(item));
+  if (scores.length === 0 || scores.some(score => !Number.isFinite(score))) return [];
+  return scores.slice(0, optionCount);
+}
+
+function rowScoreValue(row, index) {
+  const letters = ["A", "B", "C", "D", "E", "F"];
+  const number = index + 1;
+  const keys = [
+    `option${number}Score`,
+    `Option${number}Score`,
+    `score${number}`,
+    `Score${number}`,
+    `${letters[index]}Score`,
+    `${letters[index].toLowerCase()}Score`,
+    `score${letters[index]}`,
+    `Score${letters[index]}`,
+  ];
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== "") {
+      const value = Number(row[key]);
+      return Number.isFinite(value) ? value : null;
+    }
+  }
+  return null;
+}
+
+function parseOptionScoresFromRow(row, options) {
+  const direct = parseOptionScores(
+    row.optionScores || row.OptionScores || row.scores || row.Scores,
+    options.length
+  );
+  if (direct.length > 0) return direct;
+  const perOption = options.map((_, index) => rowScoreValue(row, index));
+  return perOption.some(value => value !== null)
+    ? perOption.map(value => Number.isFinite(value) ? value : 0)
+    : [];
+}
+
+function maxScoreIndexes(optionScores) {
+  const scores = (Array.isArray(optionScores) ? optionScores : []).map(Number).filter(Number.isFinite);
+  if (scores.length === 0) return [];
+  const max = Math.max(...scores);
+  return scores
+    .map((score, index) => score === max && max > 0 ? index : null)
+    .filter(Number.isInteger);
+}
+
 function parseCategoryCorrectAnswers(rawMap) {
   if (!rawMap) return {};
   if (typeof rawMap === "object" && !Array.isArray(rawMap)) return rawMap;
@@ -93,6 +142,9 @@ function sanitizeSuiteUpdatePayload(body) {
     payload.questionSelectionMode = ["all", "random", "selected"].includes(payload.questionSelectionMode)
       ? payload.questionSelectionMode
       : "all";
+  }
+  if (payload.scoringMode !== undefined) {
+    payload.scoringMode = payload.scoringMode === "sixteen_pf" ? "sixteen_pf" : "standard";
   }
   if (payload.questionsToServe !== undefined) {
     const numeric = Number(payload.questionsToServe);
@@ -232,6 +284,9 @@ router.post("/:id/questions", authMiddleware, requireAdminFeature("canManageQues
       questionType,
       options: questionType === "theory" ? [] : options,
       correctAnswer: questionType === "theory" ? [] : req.body.correctAnswer,
+      optionScores: questionType === "theory"
+        ? []
+        : (Array.isArray(req.body.optionScores) ? req.body.optionScores.map(Number).filter(Number.isFinite) : []),
       category: categories,
       categoryCorrectAnswers: questionType === "theory"
         ? {}
@@ -293,7 +348,9 @@ router.post("/:id/import-excel", authMiddleware, requireAdminFeature("canManageQ
         row.correctAnswers || row.CorrectAnswers || row.correctAnswer || row.CorrectAnswer || row.correct || row.answer || "",
         options
       );
-      if (questionType === "mcq" && correctAnswer.length === 0) {
+      const optionScores = questionType === "theory" ? [] : parseOptionScoresFromRow(row, options);
+      const inferredCorrectAnswer = correctAnswer.length > 0 ? correctAnswer : maxScoreIndexes(optionScores);
+      if (questionType === "mcq" && inferredCorrectAnswer.length === 0) {
         errors.push(`Row ${rowNum}: invalid correctAnswers`);
         return;
       }
@@ -312,7 +369,8 @@ router.post("/:id/import-excel", authMiddleware, requireAdminFeature("canManageQ
         questionText,
         questionType,
         options: questionType === "theory" ? [] : options,
-        correctAnswer: questionType === "theory" ? [] : correctAnswer,
+        correctAnswer: questionType === "theory" ? [] : inferredCorrectAnswer,
+        optionScores,
         categoryCorrectAnswers: questionType === "theory" ? {} : categoryCorrectAnswers,
         explanation: String(row.explanation || row.Explanation || "").trim(),
         marks: parseInt(row.marks || row.Marks || 1, 10) || 1,
@@ -382,12 +440,13 @@ router.get("/", async (req, res) => {
 // ── CREATE NEW SUITE ──────────────────────────────────────────
 router.post("/", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
   try {
-    const { name, description, status, passingPercentage } = req.body;
+    const { name, description, status, passingPercentage, scoringMode } = req.body;
     const newSuite = new TestSuite({
       name,
       description,
       status: status || "draft",
       passingPercentage: normalizePassingPercentage(passingPercentage),
+      scoringMode: scoringMode === "sixteen_pf" ? "sixteen_pf" : "standard",
     });
     const savedSuite = await newSuite.save();
     res.status(201).json(savedSuite);

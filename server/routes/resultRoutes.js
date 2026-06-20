@@ -60,6 +60,156 @@ function scoreSelected(selectedArr, correctArr) {
   return { earnedFrac, isRight: earnedFrac === 1 };
 }
 
+const factorDescriptions = {
+  A: {
+    low: "Reserved, detached, critical, aloof, stiff.",
+    average: "Balanced warmth and reserve.",
+    high: "Outgoing, warmhearted, easy-going, participating.",
+  },
+  B: {
+    low: "Concrete thinking and lower scholastic mental capacity.",
+    average: "Balanced concrete and abstract reasoning.",
+    high: "Abstract thinking, bright, higher scholastic mental capacity.",
+  },
+  C: {
+    low: "Affected by feelings, emotionally less stable, easily upset, changeable.",
+    average: "Moderate emotional steadiness.",
+    high: "Emotionally stable, mature, faces reality, calm.",
+  },
+  E: {
+    low: "Humble, mild, easily led, docile, accommodating.",
+    average: "Balanced assertiveness and accommodation.",
+    high: "Assertive, aggressive, stubborn, competitive.",
+  },
+  F: {
+    low: "Sober, prudent, taciturn, serious.",
+    average: "Moderate liveliness and restraint.",
+    high: "Happy-go-lucky, impulsively lively, enthusiastic.",
+  },
+  G: {
+    low: "Expedient, disregards rules, feels few obligations.",
+    average: "Moderate rule-consciousness.",
+    high: "Conscientious, persistent, moralistic, staid.",
+  },
+  H: {
+    low: "Shy, timid, restrained, threat-sensitive.",
+    average: "Moderate social boldness.",
+    high: "Venturesome, uninhibited, socially bold, spontaneous.",
+  },
+  I: {
+    low: "Tough-minded, self-reliant, realistic, no-nonsense.",
+    average: "Balanced sensitivity and practicality.",
+    high: "Tender-minded, sensitive, clinging, overprotected.",
+  },
+  L: {
+    low: "Trusting, adaptable, free of jealousy, easy to get on with.",
+    average: "Balanced trust and skepticism.",
+    high: "Suspicious, self-opinionated, hard to fool.",
+  },
+  M: {
+    low: "Practical, careful, conventional, regulated by external realities.",
+    average: "Balanced practicality and imagination.",
+    high: "Imaginative, wrapped up in inner urgencies, careless of practical matters.",
+  },
+  N: {
+    low: "Forthright, unpretentious, genuine, socially clumsy.",
+    average: "Balanced openness and social polish.",
+    high: "Shrewd, calculating, worldly, penetrating.",
+  },
+  O: {
+    low: "Placid, self-assured, confident, serene.",
+    average: "Moderate apprehension and confidence.",
+    high: "Apprehensive, self-reproaching, insecure, worrying, troubled.",
+  },
+  Q1: {
+    low: "Conservative, respecting established ideas, tolerant of traditional difficulties.",
+    average: "Moderate openness to change.",
+    high: "Experimenting, critical, liberal, analytical, free-thinking.",
+  },
+  Q2: {
+    low: "Group-dependent, a joiner and sound follower.",
+    average: "Balanced group support and independence.",
+    high: "Self-sufficient, prefers own decisions, resourceful.",
+  },
+  Q3: {
+    low: "Undisciplined self-conflict, follows own urges, careless of protocol.",
+    average: "Moderate self-control.",
+    high: "Controlled, exacting will power, socially precise, following self-image.",
+  },
+  Q4: {
+    low: "Relaxed, tranquil, torpid, unfrustrated.",
+    average: "Moderate tension and drive.",
+    high: "Tense, frustrated, driven, overwrought.",
+  },
+};
+
+function normalizeFactorKey(category) {
+  const text = String(category || "").toUpperCase().replace(/[–—-]/g, " ");
+  const qMatch = text.match(/\bQ\s*([1-4])\b/);
+  if (qMatch) return `Q${qMatch[1]}`;
+  const factorMatch = text.match(/\bFACTOR\s+([A-Z])\b/);
+  if (factorMatch) return factorMatch[1];
+  const single = text.trim().match(/^([A-Z])$/);
+  return single ? single[1] : text.trim();
+}
+
+function scaleFromPercentage(percentage) {
+  if (!Number.isFinite(percentage)) return 1;
+  return Math.max(1, Math.min(10, Math.round((percentage / 100) * 9 + 1)));
+}
+
+function scaleLabel(scaleScore) {
+  if (scaleScore <= 3) return "Low";
+  if (scaleScore >= 8) return "High";
+  return "Average";
+}
+
+function factorDescriptionFor(category, label) {
+  const meta = factorDescriptions[normalizeFactorKey(category)];
+  if (!meta) return "";
+  return meta[String(label || "").toLowerCase()] || "";
+}
+
+function normalizedOptionScores(q) {
+  const scores = Array.isArray(q?.optionScores) ? q.optionScores.map(Number) : [];
+  return scores.map(score => Number.isFinite(score) ? score : 0);
+}
+
+function isNeutralSelection(q, selectedArr) {
+  if (!Array.isArray(selectedArr) || selectedArr.length !== 1) return false;
+  const optionText = String(q?.options?.[selectedArr[0]] || "");
+  return /neutral|cannot say|can't say|uncertain|not sure|तटस्थ|निश्चित/i.test(optionText);
+}
+
+function isFactorB(category) {
+  return normalizeFactorKey(category) === "B";
+}
+
+function scoreSixteenPfQuestion(q, selectedArr, correctArr, category) {
+  const scores = normalizedOptionScores(q);
+  const selectedIndex = Array.isArray(selectedArr) && selectedArr.length === 1 ? Number(selectedArr[0]) : null;
+  if (scores.length > 0) {
+    const maxScore = Math.max(...scores, 0);
+    const earned = Number.isInteger(selectedIndex) ? Number(scores[selectedIndex] || 0) : 0;
+    return {
+      earned,
+      maxScore,
+      earnedFrac: maxScore > 0 ? earned / maxScore : 0,
+      isRight: maxScore > 0 && earned === maxScore,
+    };
+  }
+
+  const maxScore = isFactorB(category) ? 1 : 2;
+  const isCorrect = selectedArr.some(index => correctArr.includes(index));
+  const earned = isCorrect ? maxScore : isNeutralSelection(q, selectedArr) && !isFactorB(category) ? 1 : 0;
+  return {
+    earned,
+    maxScore,
+    earnedFrac: maxScore > 0 ? earned / maxScore : 0,
+    isRight: maxScore > 0 && earned === maxScore,
+  };
+}
+
 function isTheoryQuestion(q) {
   return q?.questionType === "theory";
 }
@@ -220,6 +370,7 @@ router.post("/", authMiddleware, async (req, res) => {
     }
 
     const passingPct = suite?.passingPercentage ?? settings?.passingPercentage ?? 50;
+    const isSixteenPf = suite?.scoringMode === "sixteen_pf";
     let score        = 0;
     let totalMarks   = 0;
     let correctCount = 0;
@@ -241,30 +392,35 @@ router.post("/", authMiddleware, async (req, res) => {
       }
 
       const marks = q.marks ?? 1;
-      totalMarks += marks;
 
-      const selectedArr = Array.isArray(selectedOptions) ? selectedOptions : [];
+      const selectedArr = uniqueIndexes(Array.isArray(selectedOptions) ? selectedOptions : []);
       const cats = getQuestionCats(q);
       const categoryScores = cats.map(cat => {
         const correctArr = getCorrectAnswersForCategory(q, cat);
+        if (isSixteenPf) {
+          return { cat, correctArr, ...scoreSixteenPfQuestion(q, selectedArr, correctArr, cat) };
+        }
         const scored = scoreSelected(selectedArr, correctArr);
-        return { cat, correctArr, ...scored };
+        return { cat, correctArr, ...scored, earned: scored.earnedFrac * marks, maxScore: marks };
       });
-      const bestEarnedFrac = categoryScores.length
-        ? Math.max(...categoryScores.map(s => s.earnedFrac))
-        : 0;
+      const bestScore = categoryScores.reduce((winner, current) =>
+        current.earnedFrac > winner.earnedFrac ? current : winner,
+        { earnedFrac: 0, earned: 0, maxScore: isSixteenPf ? 0 : marks }
+      );
+      const questionMax = isSixteenPf ? bestScore.maxScore : marks;
+      totalMarks += questionMax;
 
-      const isRight = bestEarnedFrac === 1;
+      const isRight = bestScore.earnedFrac === 1;
 
-      const earnedMarks = bestEarnedFrac * marks;
+      const earnedMarks = isSixteenPf ? bestScore.earned : bestScore.earnedFrac * marks;
       score += earnedMarks;
       if (isRight) correctCount++;
 
       // Map Categories for breakdown
-      categoryScores.forEach(({ cat, earnedFrac }) => {
+      categoryScores.forEach(({ cat, earnedFrac, earned, maxScore }) => {
         if (!categoryMap[cat]) categoryMap[cat] = { earned: 0, total: 0 };
-        categoryMap[cat].total += marks;
-        categoryMap[cat].earned += earnedFrac * marks;
+        categoryMap[cat].total += isSixteenPf ? maxScore : marks;
+        categoryMap[cat].earned += isSixteenPf ? earned : earnedFrac * marks;
       });
 
       return {
@@ -278,13 +434,21 @@ router.post("/", authMiddleware, async (req, res) => {
     });
 
     // Build categoryResults array
-    const categoryResults = Object.entries(categoryMap).map(([category, data]) => ({
-      category,
-      score:      Math.round(data.earned * 100) / 100,
-      total:      data.total,
-      earnedMarks: Math.round(data.earned * 100) / 100,
-      percentage: data.total > 0 ? Math.round((data.earned / data.total) * 100) : 0,
-    }));
+    const categoryResults = Object.entries(categoryMap).map(([category, data]) => {
+      const percentage = data.total > 0 ? Math.round((data.earned / data.total) * 100) : 0;
+      const scaleScore = isSixteenPf ? scaleFromPercentage(percentage) : null;
+      const label = isSixteenPf ? scaleLabel(scaleScore) : "";
+      return {
+        category,
+        score:      Math.round(data.earned * 100) / 100,
+        total:      data.total,
+        earnedMarks: Math.round(data.earned * 100) / 100,
+        percentage,
+        scaleScore,
+        scaleLabel: label,
+        description: isSixteenPf ? factorDescriptionFor(category, label) : "",
+      };
+    });
 
     const pct    = totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
     const passed = pct >= passingPct;
@@ -379,7 +543,7 @@ router.get("/suite/:suiteId", authMiddleware, requireAdminOrSuperAdmin, async (r
     );
     const results = await Result.find(query)
       .populate("suiteId", "name passingPercentage")
-      .populate("answers.questionId", "questionText questionType options correctAnswer categoryCorrectAnswers marks category")
+      .populate("answers.questionId", "questionText questionType options correctAnswer optionScores categoryCorrectAnswers marks category")
       .sort({ submittedAt: -1 });
     res.json(results);
   } catch (err) {
@@ -433,7 +597,7 @@ router.get("/all", authMiddleware, async (req, res) => {
 
     const results = await Result.find(query)
       .populate("suiteId", "name passingPercentage")
-      .populate("answers.questionId", "questionText questionType options correctAnswer categoryCorrectAnswers marks category")
+      .populate("answers.questionId", "questionText questionType options correctAnswer optionScores categoryCorrectAnswers marks category")
       .sort({ submittedAt: -1 });
     res.json(results);
   } catch (err) {

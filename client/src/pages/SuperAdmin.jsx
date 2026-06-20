@@ -158,6 +158,10 @@ function resultStatus(result) {
   return resultPct(result) >= 50 ? "Pass" : "Fail";
 }
 
+function categoryScaleLabel(row) {
+  return row?.scaleScore ? `${row.scaleScore}/10` : "-";
+}
+
 function formatDuration(seconds) {
   if (seconds === null || seconds === undefined || seconds === "") return "-";
   const totalSeconds = Math.max(0, Math.round(Number(seconds) || 0));
@@ -438,7 +442,7 @@ function saveReportsExcel(results, suitesById, reportType) {
     candidateSheet["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: candidateRows.length, c: candidateHeaders.length - 1 } }) };
     XLSX.utils.book_append_sheet(wb, candidateSheet, "Candidate Detail");
 
-    const categoryHeaders = ["Test Name", "Candidate", "Email", "Project/Department", "Designation", "Attempted At", "Category", "Score", "Total", "Percentage"];
+    const categoryHeaders = ["Test Name", "Candidate", "Email", "Project/Department", "Designation", "Attempted At", "Category", "Score", "Total", "Percentage", "Scale Score", "Trait", "Description"];
     const categoryRows = [];
     results.forEach(result => {
       const rows = Array.isArray(result.categoryResults) && result.categoryResults.length
@@ -456,6 +460,9 @@ function saveReportsExcel(results, suitesById, reportType) {
           row.score ?? row.earnedMarks ?? 0,
           row.total ?? 0,
           `${row.percentage ?? 0}%`,
+          categoryScaleLabel(row),
+          row.scaleLabel || "-",
+          row.description || "-",
         ]);
       });
     });
@@ -580,7 +587,7 @@ function saveReportsPDF(results, suitesById, reportType) {
       doc.text(`${index + 1}. ${candidateName(result)} - ${resultTestName(result, suitesById)}`, 14, 16);
       autoTable(doc, {
         startY: 24,
-        head: [["Category", "Score", "Total", "Percentage"]],
+        head: [["Category", "Score", "Total", "Percentage", "Scale", "Trait", "Description"]],
         body: (Array.isArray(result.categoryResults) && result.categoryResults.length
           ? result.categoryResults
           : [{ category: "Overall", score: result.score || 0, total: result.totalMarks || 0, percentage: resultPct(result) }]
@@ -589,6 +596,9 @@ function saveReportsPDF(results, suitesById, reportType) {
           row.score ?? row.earnedMarks ?? 0,
           row.total ?? 0,
           `${row.percentage ?? 0}%`,
+          categoryScaleLabel(row),
+          row.scaleLabel || "-",
+          row.description || "-",
         ]),
         headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
         styles: { fontSize: 8, cellPadding: 2.5 },

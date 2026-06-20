@@ -33,6 +33,10 @@ const questionSchema = new mongoose.Schema(
       type: [Number],  // ✅ array of correct indices
       default: [],
     },
+    optionScores: {
+      type: [Number],
+      default: [],
+    },
     categoryCorrectAnswers: {
       type: Map,
       of: [Number],

@@ -427,10 +427,11 @@ export default function StudentTest() {
   // Results Screen
   if (submitted && result) {
     const pct    = Math.round((result.score / result.totalMarks) * 100) || 0;
-    const passed = pct >= passingPct;
+    const passed = typeof result.passed === "boolean" ? result.passed : pct >= passingPct;
     const overallGrade = gradeInfo(pct);
     const catStats   = buildCategoryStats(questions, answers);
-    const catEntries = Object.entries(catStats);
+    const savedCategoryRows = Array.isArray(result.categoryResults) ? result.categoryResults : [];
+    const catEntries = savedCategoryRows.length > 0 ? savedCategoryRows : Object.entries(catStats);
 
     const handleDownloadCertificate = (language) => {
       downloadCertificatePDF({
@@ -497,20 +498,30 @@ export default function StudentTest() {
             {catEntries.length > 0 && (
               <div style={{ marginBottom:"20px", textAlign:"left" }}>
                 <p style={{ fontSize:"12px", color:"#888", textTransform:"uppercase", marginBottom:"10px", textAlign:"center" }}>Category Breakdown</p>
-                {catEntries.map(([cat, s]) => {
-                  const catPct = s.marks > 0 ? Math.round((s.earnedMarks / s.marks) * 100) : 0;
-                  const catGrade = gradeInfo(catPct);
+                {catEntries.map((entry) => {
+                  const fromServer = !Array.isArray(entry);
+                  const cat = fromServer ? entry.category : entry[0];
+                  const s = fromServer ? entry : entry[1];
+                  const catPct = fromServer
+                    ? Number(s.percentage || 0)
+                    : s.marks > 0 ? Math.round((s.earnedMarks / s.marks) * 100) : 0;
+                  const catGrade = s.scaleLabel
+                    ? { label: s.scaleLabel, color: pctColor(catPct), bg: "", message: s.description || "" }
+                    : gradeInfo(catPct);
                   return (
                     <div key={cat} style={{ marginBottom:"10px" }}>
                       <div style={{ display:"flex", justifyContent:"space-between", fontSize:"13px", marginBottom:"4px" }}>
                         <span style={{ fontWeight:"600", color: GREEN_DARK }}>{cat}</span>
                         <span style={{ color: catGrade.color, fontWeight:"800" }}>
-                          {catGrade.label} ({catPct}% {s.correct}/{s.total})
+                          {s.scaleScore ? `${catGrade.label} · ${s.scaleScore}/10` : `${catGrade.label} (${catPct}% ${s.correct}/${s.total})`}
                         </span>
                       </div>
                       <div style={{ height:"6px", background:"#eee", borderRadius:"99px" }}>
                         <div style={{ height:"6px", width:`${catPct}%`, background: catGrade.color, borderRadius:"99px", transition:"width 0.6s ease" }} />
                       </div>
+                      {s.description && (
+                        <p style={{ margin: "5px 0 0", color: "#66736a", fontSize: "12px", lineHeight: 1.4 }}>{s.description}</p>
+                      )}
                     </div>
                   );
                 })}

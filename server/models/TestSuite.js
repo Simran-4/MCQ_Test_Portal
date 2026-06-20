@@ -31,6 +31,11 @@ const testSuiteSchema = new mongoose.Schema(
       min: 0,
       max: 100,
     },
+    scoringMode: {
+      type: String,
+      enum: ["standard", "sixteen_pf"],
+      default: "standard",
+    },
 
     // ── Feature 5 & 15: Random question pool ─────────────────
     questionsToServe: {
