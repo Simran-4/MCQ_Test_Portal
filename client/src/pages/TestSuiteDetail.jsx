@@ -123,6 +123,19 @@ function maxScoreIndexes(optionScores) {
     .filter(Number.isInteger);
 }
 
+function normalizedOptionScores(optionScores, optionCount) {
+  const scores = (Array.isArray(optionScores) ? optionScores : [])
+    .slice(0, optionCount)
+    .map(score => Number(score))
+    .map(score => Number.isFinite(score) ? score : 0);
+  return scores;
+}
+
+function hasWeightedOptionScores(optionScores) {
+  return (Array.isArray(optionScores) ? optionScores : [])
+    .some(score => Number.isFinite(Number(score)));
+}
+
 function normalizeImportRow(row, rowNum) {
   const questionText = String(rowValue(row, ["questionText", "Question", "question"])).trim();
   const questionType = String(rowValue(row, ["questionType", "QuestionType", "type", "Type"]) || "mcq")
@@ -607,10 +620,11 @@ export default function TestSuiteDetail() {
       : form.options.map(o => o.trim()).filter(Boolean);
     if (questionType === "mcq" && trimmedOptions.length < 2) return setError("At least 2 options are required");
     const usesCategoryAnswerKeys = form.categories.length > 1;
-    if (questionType === "mcq" && !usesCategoryAnswerKeys && form.correctAnswers.length === 0) {
+    const formHasWeightedScores = hasWeightedOptionScores(form.optionScores);
+    if (questionType === "mcq" && !usesCategoryAnswerKeys && form.correctAnswers.length === 0 && !formHasWeightedScores) {
       return setError("Select at least one correct answer");
     }
-    if (questionType === "mcq" && usesCategoryAnswerKeys) {
+    if (questionType === "mcq" && usesCategoryAnswerKeys && !formHasWeightedScores) {
       const missingCats = form.categories.filter(cat => {
         const answers = form.categoryCorrectAnswers?.[cat] || [];
         return answers.every(i => !form.options[i]?.trim());
@@ -648,13 +662,15 @@ export default function TestSuiteDetail() {
       acc.push(Number.isFinite(numeric) ? numeric : 0);
       return acc;
     }, []);
-    const hasOptionScores = remappedOptionScores.some(score => score !== 0);
+    const hasOptionScores = formHasWeightedScores;
+    const weightedCorrect = hasOptionScores ? maxScoreIndexes(remappedOptionScores) : [];
+    const finalCorrect = fallbackCorrect.length > 0 ? fallbackCorrect : weightedCorrect;
 
     const payload = {
       questionText:  form.questionText.trim(),
       questionType,
       options:       trimmedOptions,
-      correctAnswer: questionType === "theory" ? [] : fallbackCorrect,
+      correctAnswer: questionType === "theory" ? [] : finalCorrect,
       optionScores:  questionType === "theory" || !hasOptionScores ? [] : remappedOptionScores,
       categoryCorrectAnswers: questionType === "theory" ? {} : remappedCategoryCorrect,
       explanation:   form.explanation.trim(),
@@ -1306,7 +1322,9 @@ export default function TestSuiteDetail() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {qs.map((q) => {
                     const correctArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
-                    const optionScores = Array.isArray(q.optionScores) ? q.optionScores : [];
+                    const optionScores = normalizedOptionScores(q.optionScores, q.options?.length || 0);
+                    const hasScores = hasWeightedOptionScores(q.optionScores);
+                    const maxOptionScore = hasScores ? Math.max(...optionScores) : null;
                     const catArr     = Array.isArray(q.category) ? q.category : (q.category ? [q.category] : []);
                     const categoryAnswerMap = getCategoryAnswerMap(q);
                     const theory = isTheoryQuestion(q);
@@ -1336,11 +1354,11 @@ export default function TestSuiteDetail() {
                             ) : (
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                               {q.options.map((opt, i) => {
-                                const isCorrect = correctArr.includes(i);
-                                const hasScore = optionScores[i] !== undefined && optionScores[i] !== null;
+                                const isCorrect = hasScores ? optionScores[i] === maxOptionScore && maxOptionScore > 0 : correctArr.includes(i);
+                                const optionScore = optionScores[i] ?? 0;
                                 return (
-                                  <p key={i} style={{ fontSize: "13px", margin: 0, padding: "6px 10px", borderRadius: "8px", background: isCorrect ? "#dcfce7" : "#f9fafb", color: isCorrect ? "#166534" : "#555", fontWeight: isCorrect ? "600" : "400" }}>
-                                    {String.fromCharCode(65 + i)}. {opt} {isCorrect ? "✓" : ""}{hasScore ? ` · ${optionScores[i]} pts` : ""}
+                                  <p key={i} style={{ fontSize: "13px", margin: 0, padding: "6px 10px", borderRadius: "8px", background: isCorrect ? "#dcfce7" : optionScore > 0 ? "#fff7ed" : "#f9fafb", color: isCorrect ? "#166534" : optionScore > 0 ? "#9a3412" : "#555", fontWeight: isCorrect || optionScore > 0 ? "600" : "400" }}>
+                                    {String.fromCharCode(65 + i)}. {opt}{isCorrect && !hasScores ? " ✓" : ""}{hasScores ? ` · ${optionScore} pts` : ""}
                                   </p>
                                 );
                               })}
@@ -1348,11 +1366,20 @@ export default function TestSuiteDetail() {
                             )}
                             {q.explanation && <p style={{ fontSize: "12px", color: "#888", marginTop: "8px", marginBottom: 0, fontStyle: "italic" }}>💡 {q.explanation}</p>}
                             <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
-                              <span style={{ fontSize: "11px", background: "#f3f4f6", color: "#555", padding: "2px 8px", borderRadius: "999px" }}>{q.marks ?? 1} mark{(q.marks ?? 1) !== 1 ? "s" : ""}</span>
+                              <span style={{ fontSize: "11px", background: "#f3f4f6", color: "#555", padding: "2px 8px", borderRadius: "999px" }}>{hasScores ? "Weighted option scores" : `${q.marks ?? 1} mark${(q.marks ?? 1) !== 1 ? "s" : ""}`}</span>
                               <span style={{ fontSize: "11px", background: theory ? "#dbeafe" : "#dcfce7", color: theory ? "#1d4ed8" : "#166534", padding: "2px 8px", borderRadius: "999px", fontWeight: "600" }}>{theory ? "Theory" : "MCQ"}</span>
-                              {!theory && correctArr.length > 1 && <span style={{ fontSize: "11px", background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: "999px" }}>Multiple correct</span>}
+                              {!theory && !hasScores && correctArr.length > 1 && <span style={{ fontSize: "11px", background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: "999px" }}>Multiple correct</span>}
                             </div>
-                            {!theory && catArr.length > 0 && Object.keys(categoryAnswerMap).length > 0 && (
+                            {!theory && hasScores && catArr.length > 0 && (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
+                                {catArr.map(c => (
+                                  <span key={`${q._id}-${c}-scores`} style={{ fontSize: "11px", background: "#eef7f1", color: GREEN_DARK, border: "1px solid #cfe3d5", padding: "3px 8px", borderRadius: "8px", fontWeight: "600" }}>
+                                    {c}: {q.options.map((_, i) => `${String.fromCharCode(65 + i)}=${optionScores[i] ?? 0}`).join(", ")}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {!theory && !hasScores && catArr.length > 0 && Object.keys(categoryAnswerMap).length > 0 && (
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
                                 {catArr.map(c => {
                                   const answersForCat = uniqueSortedIndexes(categoryAnswerMap[c] || correctArr);

@@ -279,14 +279,23 @@ router.post("/:id/questions", authMiddleware, requireAdminFeature("canManageQues
     const options = Array.isArray(req.body.options)
       ? req.body.options.filter(o => String(o).trim() !== "")
       : [];
+    const optionScores = questionType === "theory"
+      ? []
+      : (Array.isArray(req.body.optionScores)
+        ? req.body.optionScores.slice(0, options.length).map(Number).map(score => Number.isFinite(score) ? score : 0)
+        : []);
+    const correctAnswer = Array.isArray(req.body.correctAnswer)
+      ? req.body.correctAnswer
+      : req.body.correctAnswer !== undefined ? [req.body.correctAnswer] : [];
+    const finalCorrectAnswer = questionType === "theory"
+      ? []
+      : correctAnswer.length > 0 ? correctAnswer : maxScoreIndexes(optionScores);
     const newQuestion = new Question({
       ...req.body,
       questionType,
       options: questionType === "theory" ? [] : options,
-      correctAnswer: questionType === "theory" ? [] : req.body.correctAnswer,
-      optionScores: questionType === "theory"
-        ? []
-        : (Array.isArray(req.body.optionScores) ? req.body.optionScores.map(Number).filter(Number.isFinite) : []),
+      correctAnswer: finalCorrectAnswer,
+      optionScores,
       category: categories,
       categoryCorrectAnswers: questionType === "theory"
         ? {}

@@ -51,6 +51,15 @@ function sanitizeCategoryCorrectAnswers(rawMap, categories, optionCount) {
     }, {});
 }
 
+function maxScoreIndexes(optionScores) {
+  const scores = (Array.isArray(optionScores) ? optionScores : []).map(Number).filter(Number.isFinite);
+  if (scores.length === 0) return [];
+  const max = Math.max(...scores);
+  return scores
+    .map((score, index) => score === max && max > 0 ? index : null)
+    .filter(Number.isInteger);
+}
+
 function readOptionalUser(req) {
   const authHeader = req.header("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
@@ -104,12 +113,6 @@ router.put("/:id", authMiddleware, requireAdminFeature("canManageQuestions", "Qu
     const filledOptions = Array.isArray(options) ? options.filter(o => String(o).trim() !== "") : [];
     if (questionType === "mcq" && filledOptions.length < 2)
       return res.status(400).json({ message: "At least 2 options are required" });
-    const correctArr = Array.isArray(correctAnswer) ? correctAnswer : [correctAnswer];
-    if (questionType === "mcq" && correctArr.length === 0)
-      return res.status(400).json({ message: "At least one correct answer is required" });
-    const invalidIndex = correctArr.some(i => i < 0 || i >= filledOptions.length);
-    if (questionType === "mcq" && invalidIndex)
-      return res.status(400).json({ message: "Correct answer index out of range" });
     const categories = Array.isArray(category) ? category : (category ? [category] : []);
     const categoryAnswerMap = sanitizeCategoryCorrectAnswers(categoryCorrectAnswers, categories, filledOptions.length);
     const normalizedOptionScores = Array.isArray(optionScores)
@@ -118,6 +121,15 @@ router.put("/:id", authMiddleware, requireAdminFeature("canManageQuestions", "Qu
         .map(Number)
         .map(score => Number.isFinite(score) ? score : 0)
       : [];
+    const rawCorrectArr = Array.isArray(correctAnswer)
+      ? correctAnswer
+      : correctAnswer !== undefined && correctAnswer !== null ? [correctAnswer] : [];
+    const correctArr = rawCorrectArr.length > 0 ? rawCorrectArr : maxScoreIndexes(normalizedOptionScores);
+    if (questionType === "mcq" && correctArr.length === 0)
+      return res.status(400).json({ message: "At least one correct answer or option score is required" });
+    const invalidIndex = correctArr.some(i => i < 0 || i >= filledOptions.length);
+    if (questionType === "mcq" && invalidIndex)
+      return res.status(400).json({ message: "Correct answer index out of range" });
 
     const updated = await Question.findByIdAndUpdate(
       req.params.id,
