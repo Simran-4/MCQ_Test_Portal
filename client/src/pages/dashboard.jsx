@@ -226,6 +226,23 @@ function validTime(value) {
   return Number.isFinite(time) ? time : null;
 }
 
+function toDateTimeLocalValue(date) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function getPresetDateRange(preset) {
+  const end = new Date();
+  const start = new Date(end);
+  if (preset === "last-day") start.setDate(start.getDate() - 1);
+  else if (preset === "last-week") start.setDate(start.getDate() - 7);
+  else if (preset === "last-month") start.setMonth(start.getMonth() - 1);
+  else if (preset === "three-months") start.setMonth(start.getMonth() - 3);
+  else if (preset === "last-year") start.setFullYear(start.getFullYear() - 1);
+  else return { from: "", to: "" };
+  return { from: toDateTimeLocalValue(start), to: toDateTimeLocalValue(end) };
+}
+
 function resultTimeTakenSeconds(result) {
   if (result?.timeTakenSeconds === null || result?.timeTakenSeconds === undefined || result?.timeTakenSeconds === "") {
     if (!result?.startedAt || !result?.submittedAt) return null;
@@ -585,6 +602,7 @@ export default function Dashboard() {
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
   const [suiteSearch, setSuiteSearch] = useState("");
+  const [suiteDatePreset, setSuiteDatePreset] = useState("");
   const [suiteDateFrom, setSuiteDateFrom] = useState("");
   const [suiteDateTo, setSuiteDateTo] = useState("");
   const [reportUserId, setReportUserId] = useState("");
@@ -721,6 +739,12 @@ export default function Dashboard() {
   })), [reportResults]);
   const suiteFromTime = validTime(suiteDateFrom);
   const suiteToTime = validTime(suiteDateTo);
+  const handleSuiteDatePresetChange = (preset) => {
+    setSuiteDatePreset(preset);
+    const range = getPresetDateRange(preset);
+    setSuiteDateFrom(range.from);
+    setSuiteDateTo(range.to);
+  };
   const filteredSuites = suites.filter(suite => {
     const matchesText = [
       suite.name,
@@ -1845,11 +1869,29 @@ export default function Dashboard() {
               />
               <div className="admin-suite-date-filters">
                 <label>
+                  <span>Period</span>
+                  <select
+                    value={suiteDatePreset}
+                    onChange={(e) => handleSuiteDatePresetChange(e.target.value)}
+                  >
+                    <option value="">All time</option>
+                    <option value="last-day">Last day</option>
+                    <option value="last-week">Last week</option>
+                    <option value="last-month">Last month</option>
+                    <option value="three-months">Last 3 months</option>
+                    <option value="last-year">Last year</option>
+                    {suiteDatePreset === "custom" && <option value="custom">Custom range</option>}
+                  </select>
+                </label>
+                <label>
                   <span>From</span>
                   <input
                     type="datetime-local"
                     value={suiteDateFrom}
-                    onChange={(e) => setSuiteDateFrom(e.target.value)}
+                    onChange={(e) => {
+                      setSuiteDatePreset("custom");
+                      setSuiteDateFrom(e.target.value);
+                    }}
                   />
                 </label>
                 <label>
@@ -1857,7 +1899,10 @@ export default function Dashboard() {
                   <input
                     type="datetime-local"
                     value={suiteDateTo}
-                    onChange={(e) => setSuiteDateTo(e.target.value)}
+                    onChange={(e) => {
+                      setSuiteDatePreset("custom");
+                      setSuiteDateTo(e.target.value);
+                    }}
                   />
                 </label>
                 {suiteFiltersActive && (
@@ -1866,6 +1911,7 @@ export default function Dashboard() {
                     className="admin-clear-filter-btn"
                     onClick={() => {
                       setSuiteSearch("");
+                      setSuiteDatePreset("");
                       setSuiteDateFrom("");
                       setSuiteDateTo("");
                     }}

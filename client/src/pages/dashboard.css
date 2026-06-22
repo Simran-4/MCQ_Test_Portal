@@ -973,7 +973,8 @@ body {
   text-transform: uppercase;
 }
 
-.admin-suite-date-filters input {
+.admin-suite-date-filters input,
+.admin-suite-date-filters select {
   min-height: 44px;
   width: 190px;
   padding: 9px 10px;
@@ -987,7 +988,12 @@ body {
   outline: none;
 }
 
-.admin-suite-date-filters input:focus {
+.admin-suite-date-filters select {
+  width: 170px;
+}
+
+.admin-suite-date-filters input:focus,
+.admin-suite-date-filters select:focus {
   border-color: var(--admin-green);
   box-shadow: 0 0 0 3px rgba(45, 95, 63, 0.12);
 }
@@ -1795,7 +1801,8 @@ body {
 
   .admin-suite-search,
   .admin-suite-date-filters label,
-  .admin-suite-date-filters input {
+  .admin-suite-date-filters input,
+  .admin-suite-date-filters select {
     width: 100%;
   }
 
