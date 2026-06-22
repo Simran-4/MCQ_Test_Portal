@@ -496,6 +496,77 @@ function DeleteResultsModal({ suite, users, resultCount, loading, onClose, onDel
   );
 }
 
+function DeleteSuiteModal({ suite, attemptedPeople, loading, onClose, onDelete }) {
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+
+  const canDelete = password.trim() && confirmation.trim().toUpperCase() === "DELETE";
+
+  return (
+    <div className="suite-modal-backdrop">
+      <div className="suite-modal suite-delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-suite-title">
+        <h2 id="delete-suite-title">Delete Test Suite</h2>
+        <p className="suite-delete-note">
+          You are deleting <strong>{suite.name}</strong>. The suite and all its questions will move to Trash.
+        </p>
+
+        <div className="suite-delete-summary">
+          <div>
+            <strong>{suite.questionCount ?? 0}</strong>
+            <span>question(s)</span>
+          </div>
+          <div>
+            <strong>{attemptedPeople}</strong>
+            <span>people attempted</span>
+          </div>
+          <div>
+            <strong>{suite.status === "active" ? "Active" : "Draft"}</strong>
+            <span>current status</span>
+          </div>
+        </div>
+
+        {attemptedPeople > 0 && (
+          <p className="suite-delete-warning">
+            This test has submitted attempts. Deleting the suite may hide it from active management until it is recovered from Trash.
+          </p>
+        )}
+
+        <label>
+          Admin password *
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Enter your password"
+            autoComplete="current-password"
+          />
+        </label>
+
+        <label>
+          Type DELETE to confirm *
+          <input
+            value={confirmation}
+            onChange={e => setConfirmation(e.target.value)}
+            placeholder="DELETE"
+          />
+        </label>
+
+        <div className="suite-modal-actions">
+          <button type="button" className="admin-secondary-btn" onClick={onClose} disabled={loading}>Cancel</button>
+          <button
+            type="button"
+            className="admin-delete-btn suite-delete-confirm"
+            onClick={() => onDelete({ suiteId: suite._id, suiteName: suite.name, password })}
+            disabled={loading || !canDelete}
+          >
+            {loading ? "Deleting..." : "Delete Suite"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [suites, setSuites] = useState([]);
@@ -520,6 +591,8 @@ export default function Dashboard() {
   const [activePanel, setActivePanel] = useState("dashboard");
   const [deleteResultsSuite, setDeleteResultsSuite] = useState(null);
   const [deletingResults, setDeletingResults] = useState(false);
+  const [deleteSuite, setDeleteSuite] = useState(null);
+  const [deletingSuite, setDeletingSuite] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   const user = useMemo(() => {
@@ -669,6 +742,13 @@ export default function Dashboard() {
   const suiteResultCount = (suiteId) =>
     reportResults.filter(result => resultSuiteId(result) === String(suiteId)).length;
 
+  const suiteAttemptedUserCount = (suiteId) => {
+    const suiteResults = reportResults.filter(result => resultSuiteId(result) === String(suiteId));
+    return new Set(suiteResults.map(result =>
+      String(resultCandidateContact(result) || resultCandidateName(result) || result._id).toLowerCase()
+    )).size;
+  };
+
   const handleModalSave = (suite, action) => {
     if (action === "create") {
       setSuites(prev => [{ ...suite, questionCount: 0 }, ...prev]);
@@ -678,20 +758,21 @@ export default function Dashboard() {
     fetchSuites();
   };
 
-  const handleDelete = async (suiteId, suiteName, e) => {
-    e.stopPropagation();
-    if (!window.confirm(`Delete "${suiteName}" and all its questions?`)) return;
-    const password = window.prompt("Enter your admin password to confirm suite deletion:");
+  const handleDelete = async ({ suiteId, suiteName, password }) => {
     if (!password) return;
+    setDeletingSuite(true);
     try {
       await axios.delete(`${API}/api/test-suites/${suiteId}`, {
         headers: getAuthHeaders(),
         data: { password },
       });
       setSuites(prev => prev.filter(suite => suite._id !== suiteId));
+      setDeleteSuite(null);
       await fetchTrashedSuites();
     } catch (err) {
       alert("Delete failed: " + (err.response?.data?.message || "Check your permissions."));
+    } finally {
+      setDeletingSuite(false);
     }
   };
 
@@ -1815,6 +1896,7 @@ export default function Dashboard() {
                       <h4>{suite.name}</h4>
                       <p>
                         {suite.questionCount ?? 0} questions <span>•</span> Pass {suite.passingPercentage ?? 50}%
+                        <span>•</span> {suiteAttemptedUserCount(suite._id)} attempted
                         <span>•</span> Uploaded {formatDateTime(suite.createdAt)}
                       </p>
                     </div>
@@ -1858,7 +1940,7 @@ export default function Dashboard() {
                         <button type="button" className="admin-row-btn admin-results-delete-btn" onClick={() => setDeleteResultsSuite(suite)}>
                           ▧ Delete Results
                         </button>
-                        <button type="button" className="admin-delete-btn" onClick={(e) => handleDelete(suite._id, suite.name, e)}>
+                        <button type="button" className="admin-delete-btn" onClick={() => setDeleteSuite(suite)}>
                           ⌫ Delete
                         </button>
                       </>
@@ -1905,6 +1987,16 @@ export default function Dashboard() {
           loading={deletingResults}
           onClose={() => setDeleteResultsSuite(null)}
           onDelete={handleDeleteSuiteResults}
+        />
+      )}
+
+      {deleteSuite && (
+        <DeleteSuiteModal
+          suite={deleteSuite}
+          attemptedPeople={suiteAttemptedUserCount(deleteSuite._id)}
+          loading={deletingSuite}
+          onClose={() => setDeleteSuite(null)}
+          onDelete={handleDelete}
         />
       )}
     </div>
