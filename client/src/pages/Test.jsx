@@ -11,6 +11,11 @@ function isQuestionImage(value) {
   return source.startsWith("data:image/") || /^https?:\/\/.+/i.test(source);
 }
 
+function isQuestionVideo(value) {
+  const source = String(value || "").trim();
+  return source.startsWith("data:video/") || /^https?:\/\/.+\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(source);
+}
+
 function Test() {
 
   const { suiteId } = useParams(); // for multi-suite support
@@ -303,6 +308,14 @@ function Test() {
                   className="question-image"
                   src={questions[currentQuestion].imageUrl}
                   alt={`Question ${currentQuestion + 1}`}
+                />
+              )}
+              {isQuestionVideo(questions[currentQuestion]?.videoUrl) && (
+                <video
+                  className="question-image"
+                  src={questions[currentQuestion].videoUrl}
+                  controls
+                  playsInline
                 />
               )}
 

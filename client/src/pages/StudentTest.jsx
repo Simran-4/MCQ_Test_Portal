@@ -81,6 +81,11 @@ function isQuestionImage(value) {
   return source.startsWith("data:image/") || /^https?:\/\/.+/i.test(source);
 }
 
+function isQuestionVideo(value) {
+  const source = String(value || "").trim();
+  return source.startsWith("data:video/") || /^https?:\/\/.+\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(source);
+}
+
 function isQuestionAnswered(q, answers) {
   const answer = answers[q._id];
   if (isTheoryQuestion(q)) return typeof answer === "string" && answer.trim().length > 0;
@@ -750,6 +755,14 @@ export default function StudentTest() {
                     src={q.imageUrl}
                     alt={`Question ${idx + 1}`}
                     style={{ width:"100%", maxHeight:"360px", objectFit:"contain", background:"#f8faf9", border:"1px solid #e5e7eb", borderRadius:"12px", padding:"8px", marginBottom:"16px" }}
+                  />
+                )}
+                {isQuestionVideo(q.videoUrl) && (
+                  <video
+                    src={q.videoUrl}
+                    controls
+                    playsInline
+                    style={{ width:"100%", maxHeight:"380px", background:"#111", border:"1px solid #e5e7eb", borderRadius:"12px", padding:"8px", marginBottom:"16px" }}
                   />
                 )}
 

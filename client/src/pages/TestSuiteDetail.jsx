@@ -10,10 +10,12 @@ const GREEN_DARK = "#1A3D28";
 const BG         = "#EEE9E0";
 const WHITE      = "#ffffff";
 const QUESTION_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024;
+const QUESTION_VIDEO_MAX_BYTES = 8 * 1024 * 1024;
 
 const emptyForm = {
   questionText:   "",
   imageUrl:       "",
+  videoUrl:       "",
   questionType:   "mcq",
   options:        ["", "", "", ""],
   correctAnswers: [],
@@ -143,6 +145,11 @@ function isQuestionImage(value) {
   return source.startsWith("data:image/") || /^https?:\/\/.+/i.test(source);
 }
 
+function isQuestionVideo(value) {
+  const source = String(value || "").trim();
+  return source.startsWith("data:video/") || /^https?:\/\/.+\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(source);
+}
+
 function normalizeImportRow(row, rowNum) {
   const questionText = String(rowValue(row, ["questionText", "Question", "question"])).trim();
   const questionType = String(rowValue(row, ["questionType", "QuestionType", "type", "Type"]) || "mcq")
@@ -171,6 +178,7 @@ function normalizeImportRow(row, rowNum) {
   return {
     questionText,
     imageUrl: String(rowValue(row, ["imageUrl", "ImageUrl", "image", "Image", "picture", "Picture"])).trim(),
+    videoUrl: String(rowValue(row, ["videoUrl", "VideoUrl", "video", "Video"])).trim(),
     questionType,
     options: questionType === "theory" ? [] : options,
     correctAnswer: questionType === "theory" ? [] : inferredCorrectAnswer,
@@ -323,6 +331,7 @@ export default function TestSuiteDetail() {
     const headers = [
       "questionText",
       "imageUrl",
+      "videoUrl",
       "option1",
       "option2",
       "option3",
@@ -341,6 +350,7 @@ export default function TestSuiteDetail() {
     const example = [
       "What is 2+2?",
       "https://example.com/question-image.png",
+      "https://example.com/question-video.mp4",
       "3",
       "4",
       "5",
@@ -614,6 +624,25 @@ export default function TestSuiteDetail() {
     reader.readAsDataURL(file);
   };
 
+  const handleQuestionVideoFile = (file) => {
+    setError("");
+    if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      setError("Please select a video file.");
+      return;
+    }
+    if (file.size > QUESTION_VIDEO_MAX_BYTES) {
+      setError("Question video must be under 8 MB. For larger videos, paste a direct video URL.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm(f => ({ ...f, videoUrl: String(reader.result || "") }));
+    };
+    reader.onerror = () => setError("Unable to read the selected video.");
+    reader.readAsDataURL(file);
+  };
+
   const addOption = () => {
     if (form.options.length >= 6) return;
     setForm({ ...form, options: [...form.options, ""], optionScores: [...(form.optionScores || []), ""] });
@@ -698,6 +727,7 @@ export default function TestSuiteDetail() {
     const payload = {
       questionText:  form.questionText.trim(),
       imageUrl:      form.imageUrl.trim(),
+      videoUrl:      form.videoUrl.trim(),
       questionType,
       options:       trimmedOptions,
       correctAnswer: questionType === "theory" ? [] : finalCorrect,
@@ -741,6 +771,7 @@ export default function TestSuiteDetail() {
     setForm({
       questionText:   q.questionText,
       imageUrl:       q.imageUrl || "",
+      videoUrl:       q.videoUrl || "",
       questionType:   q.questionType === "theory" ? "theory" : "mcq",
       options:        opts,
       correctAnswers: defaultCorrect,
@@ -1186,6 +1217,36 @@ export default function TestSuiteDetail() {
                   </div>
                 )}
               </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "end" }}>
+                <div>
+                  <label style={labelStyle}>Question video (optional)</label>
+                  <input
+                    style={inputStyle}
+                    placeholder="Paste direct video URL, or upload below"
+                    value={form.videoUrl}
+                    onChange={e => setForm({ ...form, videoUrl: e.target.value })}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, videoUrl: "" })}
+                  disabled={!form.videoUrl}
+                  style={{ padding: "10px 14px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "13px", fontWeight: "700", cursor: form.videoUrl ? "pointer" : "not-allowed", opacity: form.videoUrl ? 1 : 0.55 }}
+                >
+                  Remove
+                </button>
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={e => handleQuestionVideoFile(e.target.files?.[0])}
+                  style={{ ...inputStyle, gridColumn: "1 / -1", padding: "8px 12px" }}
+                />
+                {isQuestionVideo(form.videoUrl) && (
+                  <div style={{ gridColumn: "1 / -1", border: "1px solid #d8e9df", borderRadius: "12px", padding: "10px", background: "#f8faf9" }}>
+                    <video src={form.videoUrl} controls playsInline style={{ width: "100%", maxHeight: "320px", display: "block", borderRadius: "10px", background: "#111" }} />
+                  </div>
+                )}
+              </div>
               <div>
                 <label style={labelStyle}>Question Type *</label>
                 <div style={{ display: "inline-flex", gap: "8px", background: "#f4f7f5", borderRadius: "12px", padding: "4px", border: "1px solid #d8e9df" }}>
@@ -1410,6 +1471,9 @@ export default function TestSuiteDetail() {
                             </p>
                             {isQuestionImage(q.imageUrl) && (
                               <img src={q.imageUrl} alt={`Question ${questionNumber}`} style={{ width: "100%", maxHeight: "320px", objectFit: "contain", background: "#f8faf9", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "8px", margin: "0 0 12px" }} />
+                            )}
+                            {isQuestionVideo(q.videoUrl) && (
+                              <video src={q.videoUrl} controls playsInline style={{ width: "100%", maxHeight: "360px", background: "#111", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "8px", margin: "0 0 12px" }} />
                             )}
                             {theory ? (
                               <div style={{ background: "#f8faf9", border: "1px solid #d8e9df", color: GREEN_DARK, borderRadius: "8px", padding: "8px 10px", fontSize: "13px", fontWeight: "600" }}>

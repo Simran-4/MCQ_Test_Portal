@@ -89,6 +89,17 @@ function sanitizeImageUrl(value) {
   return imageUrl;
 }
 
+function sanitizeVideoUrl(value) {
+  const videoUrl = String(value || "").trim();
+  if (!videoUrl) return "";
+  if (videoUrl.length > 12_000_000) {
+    const err = new Error("Question video is too large. Use a video under 8 MB or paste a direct video URL.");
+    err.statusCode = 400;
+    throw err;
+  }
+  return videoUrl;
+}
+
 // ── POST /api/questions/add (legacy) ─────────────────────────
 router.post("/add", authMiddleware, requireAdminFeature("canManageQuestions", "Question management access denied"), async (req, res) => {
   try {
@@ -103,6 +114,7 @@ router.post("/add", authMiddleware, requireAdminFeature("canManageQuestions", "Q
       testSuite:     testSuiteId,
       questionText:  question.trim(),
       imageUrl:      sanitizeImageUrl(req.body.imageUrl),
+      videoUrl:      sanitizeVideoUrl(req.body.videoUrl),
       options:       filledOptions,
       correctAnswer: [correctIndex],
       category:      Array.isArray(category) ? category.filter(Boolean) : (category ? [category] : []),
@@ -148,6 +160,7 @@ router.put("/:id", authMiddleware, requireAdminFeature("canManageQuestions", "Qu
       {
         questionText:  questionText.trim(),
         imageUrl:      sanitizeImageUrl(req.body.imageUrl),
+        videoUrl:      sanitizeVideoUrl(req.body.videoUrl),
         questionType,
         options:       questionType === "theory" ? [] : filledOptions,
         correctAnswer: questionType === "theory" ? [] : correctArr,

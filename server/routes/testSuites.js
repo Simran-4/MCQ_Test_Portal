@@ -200,6 +200,17 @@ function sanitizeImageUrl(value) {
   return imageUrl;
 }
 
+function sanitizeVideoUrl(value) {
+  const videoUrl = String(value || "").trim();
+  if (!videoUrl) return "";
+  if (videoUrl.length > 12_000_000) {
+    const err = new Error("Question video is too large. Use a video under 8 MB or paste a direct video URL.");
+    err.statusCode = 400;
+    throw err;
+  }
+  return videoUrl;
+}
+
 function metaUserId(entry) {
   return String(entry?.user?._id || entry?.user || "");
 }
@@ -304,6 +315,7 @@ router.post("/:id/questions", authMiddleware, requireAdminFeature("canManageQues
     const newQuestion = new Question({
       ...req.body,
       imageUrl: sanitizeImageUrl(req.body.imageUrl),
+      videoUrl: sanitizeVideoUrl(req.body.videoUrl),
       questionType,
       options: questionType === "theory" ? [] : options,
       correctAnswer: finalCorrectAnswer,
@@ -390,6 +402,7 @@ router.post("/:id/import-excel", authMiddleware, requireAdminFeature("canManageQ
           testSuite: req.params.id,
           questionText,
           imageUrl: sanitizeImageUrl(row.imageUrl || row.ImageUrl || row.image || row.Image || row.picture || row.Picture || ""),
+          videoUrl: sanitizeVideoUrl(row.videoUrl || row.VideoUrl || row.video || row.Video || ""),
           questionType,
           options: questionType === "theory" ? [] : options,
           correctAnswer: questionType === "theory" ? [] : inferredCorrectAnswer,
