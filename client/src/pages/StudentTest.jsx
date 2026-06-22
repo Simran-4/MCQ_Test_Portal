@@ -232,6 +232,7 @@ export default function StudentTest() {
   })();
   const userId = getUserId(user);
   const userSearch = user.email || user.mobile || user.username || user.name || "";
+  const shouldCheckPreviousAttempt = user.role === "candidate" && Boolean(userSearch);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -240,7 +241,7 @@ export default function StudentTest() {
 
         const [suiteRes, resultsRes] = await Promise.all([
           axios.get(`${API}/api/test-suites/${suiteId}`, { headers }),
-          userSearch
+          shouldCheckPreviousAttempt
             ? axios.get(`${API}/api/results/all`, { headers, params: { search: userSearch } })
             : Promise.resolve({ data: [] }),
         ]);
@@ -251,8 +252,12 @@ export default function StudentTest() {
         const passing      = suiteRes.data?.passingPercentage ?? 50;
         setPassingPct(passing);
 
-        const passedAttempt = latestPassedResultForSuite(resultsRes.data, suiteId);
-        const assignmentDate = getAssignmentDateForUserId(suiteRes.data, userId);
+        const passedAttempt = shouldCheckPreviousAttempt
+          ? latestPassedResultForSuite(resultsRes.data, suiteId)
+          : null;
+        const assignmentDate = shouldCheckPreviousAttempt
+          ? getAssignmentDateForUserId(suiteRes.data, userId)
+          : null;
 
         if (passedAttempt && (!assignmentDate || new Date(passedAttempt.submittedAt || 0) >= assignmentDate)) {
           setBlockedResult(passedAttempt);
@@ -273,7 +278,7 @@ export default function StudentTest() {
       }
     };
     fetchData();
-  }, [suiteId, userId, userSearch]);
+  }, [suiteId, shouldCheckPreviousAttempt, userId, userSearch]);
 
   useEffect(() => {
     if (timeLeft === null || submitted) return;

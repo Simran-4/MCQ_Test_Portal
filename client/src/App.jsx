@@ -21,6 +21,13 @@ import StudentTest from "./pages/StudentTest";
 import { refreshCurrentUser } from "./utils/auth";
 import { loginPathForNext } from "./utils/authRedirect";
 
+function homePathForRole(role) {
+  if (role === "candidate") return "/candidate";
+  if (role === "superadmin") return "/superadmin";
+  if (role === "admin") return "/dashboard";
+  return "/";
+}
+
 // ── PROTECTIVE WRAPPER ────────────────────────────────────
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const token = localStorage.getItem("token");
@@ -104,7 +111,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     if (location.pathname.startsWith("/test/")) {
       return <Navigate to={loginPathForNext(`${location.pathname}${location.search}`)} replace />;
     }
-    return <Navigate to={user.role === "candidate" ? "/candidate" : "/"} replace />;
+    return <Navigate to={homePathForRole(user.role)} replace />;
   }
 
   return isValidElement(children)
@@ -127,7 +134,7 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="/test/:suiteId" element={
-          <ProtectedRoute allowedRoles={["candidate"]}>
+          <ProtectedRoute allowedRoles={["candidate", "admin", "superadmin"]}>
             <StudentTest />
           </ProtectedRoute>
         } />

@@ -6,7 +6,8 @@ import { getSafeNextPath, registerPathForNext } from "../utils/authRedirect";
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
 const WHITE      = "#ffffff";
-const API_AUTH = "https://charismatic-happiness-production-dc36.up.railway.app/api/auth";
+const API = import.meta.env.VITE_API_URL || "https://charismatic-happiness-production-dc36.up.railway.app";
+const API_AUTH = `${API}/api/auth`;
 
 function Login() {
   const [identifier, setIdentifier] = useState("");

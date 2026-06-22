@@ -758,7 +758,7 @@ export default function Dashboard() {
     fetchSuites();
   };
 
-  const handleDelete = async ({ suiteId, suiteName, password }) => {
+  const handleDelete = async ({ suiteId, password }) => {
     if (!password) return;
     setDeletingSuite(true);
     try {

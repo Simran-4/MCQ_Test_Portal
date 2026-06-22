@@ -4,7 +4,7 @@ import axios from "axios";
 import "../styles/quiz.css";
 import { getAuthHeaders } from "../utils/auth";
 
-const API = "https://charismatic-happiness-production-dc36.up.railway.app";
+const API = import.meta.env.VITE_API_URL || "https://charismatic-happiness-production-dc36.up.railway.app";
 
 function isQuestionImage(value) {
   const source = String(value || "").trim();

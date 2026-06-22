@@ -3,8 +3,7 @@ import axios from "axios";
 import "./auth.css";
 import { getAuthHeaders } from "../utils/auth";
 
-// Use an environment variable or a clean constant for the API
-const API_BASE = "https://charismatic-happiness-production-dc36.up.railway.app/api";
+const API_BASE = `${import.meta.env.VITE_API_URL || "https://charismatic-happiness-production-dc36.up.railway.app"}/api`;
 
 function AdminSettings() {
   const [settings, setSettings] = useState({

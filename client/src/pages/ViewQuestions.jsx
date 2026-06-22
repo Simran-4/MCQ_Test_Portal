@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { getAuthHeaders } from "../utils/auth";
 
+const API = import.meta.env.VITE_API_URL || "https://charismatic-happiness-production-dc36.up.railway.app";
+
 function ViewQuestions() {
 
   const [questions, setQuestions] = useState([]);
@@ -15,7 +17,7 @@ function ViewQuestions() {
   const fetchQuestions = async () => {
     try {
       const res = await axios.get(
-        "https://charismatic-happiness-production-dc36.up.railway.app/api/questions/all",
+        `${API}/api/questions/all`,
         { headers: getAuthHeaders() }
       );
       setQuestions(res.data);
@@ -28,7 +30,7 @@ function ViewQuestions() {
     if (!window.confirm("Delete this question?")) return;
     try {
       await axios.delete(
-        `https://charismatic-happiness-production-dc36.up.railway.app/api/questions/${id}`,
+        `${API}/api/questions/${id}`,
         { headers: getAuthHeaders() }
       );
       setQuestions(questions.filter(q => q._id !== id));
