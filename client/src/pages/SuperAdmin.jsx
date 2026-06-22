@@ -1280,7 +1280,7 @@ function SuperAdmin() {
     if (activeNav === "Candidates") base = displayUsers.filter(u => u.role === "candidate");
     if (activeNav === "administrators") base = displayUsers.filter(u => u.role === "admin" || u.role === "superadmin");
     return base.filter(u =>
-      `${u.name} ${u.email} ${u.mobile} ${u.username} ${u.role} ${u.customRole || ""}`.toLowerCase().includes(search.toLowerCase())
+      `${u.name} ${u.email} ${u.mobile} ${u.username} ${u.role} ${u.customRole || ""} ${u.project || ""} ${u.designation || ""}`.toLowerCase().includes(search.toLowerCase())
     );
   };
 
@@ -2034,11 +2034,13 @@ function SuperAdmin() {
             {error && <p className="error-message">{error}</p>}
 
             <div className="table-wrapper">
-              <table>
+              <table className="user-management-table">
                 <thead>
                   <tr>
                     <th>Name</th>
                     <th>Email</th>
+                    <th>Project/Department</th>
+                    <th>Designation</th>
                     <th>Role</th>
                     <th>Status</th>
                     <th>Access</th>
@@ -2050,6 +2052,12 @@ function SuperAdmin() {
                     <tr key={user._id}>
                       <td>{user.name}</td>
                       <td>{user.email || user.mobile || user.username || "—"}</td>
+                      <td>
+                        <span className="user-org-text">{user.project || "—"}</span>
+                      </td>
+                      <td>
+                        <span className="user-org-text">{user.designation || "—"}</span>
+                      </td>
                       <td>
                         <span className={`badge ${user.role === "candidate" ? "Candidate" : "admin"}`}>
                           {user.customRole || user.role}
@@ -2070,26 +2078,31 @@ function SuperAdmin() {
                         <div className="user-actions">
                           <button
                             type="button"
-                            className="small-action-btn"
+                            className="icon-action-btn"
                             onClick={() => openEditUser(user)}
+                            aria-label={`Edit ${user.name}`}
+                            title="Edit user"
                           >
-                            Edit User
+                            ✎
                           </button>
                           <button
                             type="button"
-                            className="small-action-btn"
+                            className="icon-action-btn"
                             onClick={() => openResetPassword(user)}
+                            aria-label={`Reset password for ${user.name}`}
+                            title="Reset password"
                           >
-                            Reset Password
+                            ↻
                           </button>
                           <button
                             type="button"
-                            className="small-action-btn danger"
+                            className="icon-action-btn danger"
                             onClick={() => deleteUserAccount(user)}
                             disabled={user._id === currentUser?._id}
+                            aria-label={`Delete ${user.name}`}
                             title={user._id === currentUser?._id ? "You cannot delete your own account" : "Delete user"}
                           >
-                            Delete User
+                            ×
                           </button>
                         </div>
                       </td>

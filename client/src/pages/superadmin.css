@@ -860,6 +860,10 @@ table {
   border-collapse: collapse;
 }
 
+.user-management-table {
+  min-width: 980px;
+}
+
 thead tr {
   background: var(--admin-primary-light);
 }
@@ -877,6 +881,46 @@ td {
   padding: 16px 20px;
   border-bottom: 1px solid #eef1ef;
   text-align: left;
+}
+
+.user-management-table th,
+.user-management-table td {
+  padding: 12px 14px;
+  vertical-align: middle;
+}
+
+.user-management-table th:nth-child(1),
+.user-management-table td:nth-child(1) {
+  min-width: 190px;
+}
+
+.user-management-table th:nth-child(2),
+.user-management-table td:nth-child(2) {
+  min-width: 220px;
+}
+
+.user-management-table th:nth-child(3),
+.user-management-table td:nth-child(3),
+.user-management-table th:nth-child(4),
+.user-management-table td:nth-child(4) {
+  max-width: 150px;
+}
+
+.user-management-table th:nth-child(8),
+.user-management-table td:nth-child(8) {
+  width: 132px;
+}
+
+.user-org-text {
+  display: inline-block;
+  max-width: 145px;
+  color: #52615a;
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 tbody tr {
@@ -906,8 +950,51 @@ tbody tr:last-child td {
 
 .user-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.icon-action-btn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfe3d7;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--admin-primary-dark);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-action-btn:hover {
+  background: var(--admin-primary-light);
+  border-color: var(--admin-primary);
+}
+
+.icon-action-btn.danger {
+  border-color: #fecaca;
+  color: #b91c1c;
+  background: #fff7f7;
+}
+
+.icon-action-btn.danger:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+.icon-action-btn:disabled,
+.icon-action-btn:disabled:hover {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #6b7280;
 }
 
 .small-action-btn:hover {
