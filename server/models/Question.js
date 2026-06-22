@@ -12,6 +12,11 @@ const questionSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    imageUrl: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     questionType: {
       type: String,
       enum: ["mcq", "theory"],

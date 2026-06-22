@@ -6,6 +6,11 @@ import { getAuthHeaders } from "../utils/auth";
 
 const API = "https://charismatic-happiness-production-dc36.up.railway.app";
 
+function isQuestionImage(value) {
+  const source = String(value || "").trim();
+  return source.startsWith("data:image/") || /^https?:\/\/.+/i.test(source);
+}
+
 function Test() {
 
   const { suiteId } = useParams(); // for multi-suite support
@@ -293,6 +298,13 @@ function Test() {
               <h2 className="question-text">
                 {questions[currentQuestion]?.questionText || questions[currentQuestion]?.question}
               </h2>
+              {isQuestionImage(questions[currentQuestion]?.imageUrl) && (
+                <img
+                  className="question-image"
+                  src={questions[currentQuestion].imageUrl}
+                  alt={`Question ${currentQuestion + 1}`}
+                />
+              )}
 
               <div className="options">
                 {questions[currentQuestion]?.options.map((option, index) => (

@@ -78,6 +78,17 @@ function canAccessSuite(suite, user) {
   return true;
 }
 
+function sanitizeImageUrl(value) {
+  const imageUrl = String(value || "").trim();
+  if (!imageUrl) return "";
+  if (imageUrl.length > 2_500_000) {
+    const err = new Error("Question picture is too large. Use an image under 1.5 MB.");
+    err.statusCode = 400;
+    throw err;
+  }
+  return imageUrl;
+}
+
 // ── POST /api/questions/add (legacy) ─────────────────────────
 router.post("/add", authMiddleware, requireAdminFeature("canManageQuestions", "Question management access denied"), async (req, res) => {
   try {
@@ -91,6 +102,7 @@ router.post("/add", authMiddleware, requireAdminFeature("canManageQuestions", "Q
     const newQuestion = new Question({
       testSuite:     testSuiteId,
       questionText:  question.trim(),
+      imageUrl:      sanitizeImageUrl(req.body.imageUrl),
       options:       filledOptions,
       correctAnswer: [correctIndex],
       category:      Array.isArray(category) ? category.filter(Boolean) : (category ? [category] : []),
@@ -99,7 +111,7 @@ router.post("/add", authMiddleware, requireAdminFeature("canManageQuestions", "Q
     res.status(201).json({ message: "Question Added Successfully" });
   } catch (err) {
     console.log(err);
-    res.status(500).json({ message: "Error Adding Question" });
+    res.status(err.statusCode || 500).json({ message: err.statusCode ? err.message : "Error Adding Question" });
   }
 });
 
@@ -135,6 +147,7 @@ router.put("/:id", authMiddleware, requireAdminFeature("canManageQuestions", "Qu
       req.params.id,
       {
         questionText:  questionText.trim(),
+        imageUrl:      sanitizeImageUrl(req.body.imageUrl),
         questionType,
         options:       questionType === "theory" ? [] : filledOptions,
         correctAnswer: questionType === "theory" ? [] : correctArr,
@@ -151,7 +164,7 @@ router.put("/:id", authMiddleware, requireAdminFeature("canManageQuestions", "Qu
     res.json(updated);
   } catch (err) {
     console.error("PUT /api/questions/:id error:", err);
-    res.status(500).json({ message: "Failed to update question" });
+    res.status(err.statusCode || 500).json({ message: err.statusCode ? err.message : "Failed to update question" });
   }
 });
 

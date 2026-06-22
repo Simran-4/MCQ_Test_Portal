@@ -220,6 +220,12 @@ function formatDateTime(value) {
   }) : "-";
 }
 
+function validTime(value) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
 function resultTimeTakenSeconds(result) {
   if (result?.timeTakenSeconds === null || result?.timeTakenSeconds === undefined || result?.timeTakenSeconds === "") {
     if (!result?.startedAt || !result?.submittedAt) return null;
@@ -508,6 +514,8 @@ export default function Dashboard() {
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
   const [suiteSearch, setSuiteSearch] = useState("");
+  const [suiteDateFrom, setSuiteDateFrom] = useState("");
+  const [suiteDateTo, setSuiteDateTo] = useState("");
   const [reportUserId, setReportUserId] = useState("");
   const [activePanel, setActivePanel] = useState("dashboard");
   const [deleteResultsSuite, setDeleteResultsSuite] = useState(null);
@@ -638,15 +646,25 @@ export default function Dashboard() {
     percentage: `${resultPct(result)}%`,
     result: resultStatus(result),
   })), [reportResults]);
-  const filteredSuites = suites.filter(suite =>
-    [
+  const suiteFromTime = validTime(suiteDateFrom);
+  const suiteToTime = validTime(suiteDateTo);
+  const filteredSuites = suites.filter(suite => {
+    const matchesText = [
       suite.name,
       suite.description,
       suite.status,
       suite.isPublic === false ? "private assigned" : "public",
       `${suite.questionCount ?? 0} questions`,
-    ].join(" ").toLowerCase().includes(suiteSearch.toLowerCase())
-  );
+      formatDateTime(suite.createdAt),
+    ].join(" ").toLowerCase().includes(suiteSearch.toLowerCase());
+    if (!matchesText) return false;
+
+    const uploadedTime = validTime(suite.createdAt);
+    if (suiteFromTime !== null && (uploadedTime === null || uploadedTime < suiteFromTime)) return false;
+    if (suiteToTime !== null && (uploadedTime === null || uploadedTime > suiteToTime)) return false;
+    return true;
+  });
+  const suiteFiltersActive = Boolean(suiteSearch || suiteDateFrom || suiteDateTo);
 
   const suiteResultCount = (suiteId) =>
     reportResults.filter(result => resultSuiteId(result) === String(suiteId)).length;
@@ -1736,7 +1754,7 @@ export default function Dashboard() {
               <h3>Test Suites</h3>
               <p>Create, manage and monitor your test suites.</p>
             </div>
-            <div>
+            <div className="admin-suite-tools">
               <input
                 type="search"
                 value={suiteSearch}
@@ -1744,6 +1762,37 @@ export default function Dashboard() {
                 placeholder="Search test suites..."
                 className="admin-suite-search"
               />
+              <div className="admin-suite-date-filters">
+                <label>
+                  <span>From</span>
+                  <input
+                    type="datetime-local"
+                    value={suiteDateFrom}
+                    onChange={(e) => setSuiteDateFrom(e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>To</span>
+                  <input
+                    type="datetime-local"
+                    value={suiteDateTo}
+                    onChange={(e) => setSuiteDateTo(e.target.value)}
+                  />
+                </label>
+                {suiteFiltersActive && (
+                  <button
+                    type="button"
+                    className="admin-clear-filter-btn"
+                    onClick={() => {
+                      setSuiteSearch("");
+                      setSuiteDateFrom("");
+                      setSuiteDateTo("");
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
               <button type="button" className="admin-primary-btn" onClick={openNewSuite} disabled={!canManageSuites}>
                 ＋ New test suite
               </button>
@@ -1755,7 +1804,7 @@ export default function Dashboard() {
           ) : suites.length === 0 ? (
             <div className="admin-empty-state">No suites available. Create your first one above.</div>
           ) : filteredSuites.length === 0 ? (
-            <div className="admin-empty-state">No test suites match "{suiteSearch}".</div>
+            <div className="admin-empty-state">No test suites match the selected search or date/time period.</div>
           ) : (
             <div className="admin-suite-list">
               {filteredSuites.map(suite => (

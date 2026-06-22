@@ -20,7 +20,7 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: "8mb" }));
 
 // ── MongoDB ───────────────────────────────────────────────────
 let isConnected = false;

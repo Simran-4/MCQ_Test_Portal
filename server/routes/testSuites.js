@@ -189,6 +189,17 @@ function canAccessSuite(suite, user) {
   return true;
 }
 
+function sanitizeImageUrl(value) {
+  const imageUrl = String(value || "").trim();
+  if (!imageUrl) return "";
+  if (imageUrl.length > 2_500_000) {
+    const err = new Error("Question picture is too large. Use an image under 1.5 MB.");
+    err.statusCode = 400;
+    throw err;
+  }
+  return imageUrl;
+}
+
 function metaUserId(entry) {
   return String(entry?.user?._id || entry?.user || "");
 }
@@ -292,6 +303,7 @@ router.post("/:id/questions", authMiddleware, requireAdminFeature("canManageQues
       : correctAnswer.length > 0 ? correctAnswer : maxScoreIndexes(optionScores);
     const newQuestion = new Question({
       ...req.body,
+      imageUrl: sanitizeImageUrl(req.body.imageUrl),
       questionType,
       options: questionType === "theory" ? [] : options,
       correctAnswer: finalCorrectAnswer,
@@ -311,7 +323,7 @@ router.post("/:id/questions", authMiddleware, requireAdminFeature("canManageQues
     res.status(201).json(saved);
   } catch (err) {
     console.error("Add Question Error:", err);
-    res.status(500).json({ message: "Error adding question" });
+    res.status(err.statusCode || 500).json({ message: err.statusCode ? err.message : "Error adding question" });
   }
 });
 
@@ -373,19 +385,24 @@ router.post("/:id/import-excel", authMiddleware, requireAdminFeature("canManageQ
         options
       );
 
-      questions.push({
-        testSuite: req.params.id,
-        questionText,
-        questionType,
-        options: questionType === "theory" ? [] : options,
-        correctAnswer: questionType === "theory" ? [] : inferredCorrectAnswer,
-        optionScores,
-        categoryCorrectAnswers: questionType === "theory" ? {} : categoryCorrectAnswers,
-        explanation: String(row.explanation || row.Explanation || "").trim(),
-        marks: parseInt(row.marks || row.Marks || 1, 10) || 1,
-        language: String(row.language || row.Language || "en").trim(),
-        category,
-      });
+      try {
+        questions.push({
+          testSuite: req.params.id,
+          questionText,
+          imageUrl: sanitizeImageUrl(row.imageUrl || row.ImageUrl || row.image || row.Image || row.picture || row.Picture || ""),
+          questionType,
+          options: questionType === "theory" ? [] : options,
+          correctAnswer: questionType === "theory" ? [] : inferredCorrectAnswer,
+          optionScores,
+          categoryCorrectAnswers: questionType === "theory" ? {} : categoryCorrectAnswers,
+          explanation: String(row.explanation || row.Explanation || "").trim(),
+          marks: parseInt(row.marks || row.Marks || 1, 10) || 1,
+          language: String(row.language || row.Language || "en").trim(),
+          category,
+        });
+      } catch (err) {
+        errors.push(`Row ${rowNum}: ${err.message}`);
+      }
     });
 
     if (questions.length === 0) {

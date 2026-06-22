@@ -932,6 +932,10 @@ body {
   justify-content: flex-end;
 }
 
+.admin-suite-tools {
+  align-items: flex-end;
+}
+
 .admin-suite-search {
   min-height: 44px;
   width: min(280px, 100%);
@@ -949,6 +953,56 @@ body {
 .admin-suite-search:focus {
   border-color: var(--admin-green);
   box-shadow: 0 0 0 3px rgba(45, 95, 63, 0.12);
+}
+
+.admin-suite-date-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-suite-date-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-suite-date-filters input {
+  min-height: 44px;
+  width: 190px;
+  padding: 9px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--admin-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+
+.admin-suite-date-filters input:focus {
+  border-color: var(--admin-green);
+  box-shadow: 0 0 0 3px rgba(45, 95, 63, 0.12);
+}
+
+.admin-clear-filter-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--admin-green-dark);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .admin-primary-btn,
@@ -1673,6 +1727,17 @@ body {
   .admin-suite-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .admin-suite-tools,
+  .admin-suite-date-filters {
+    width: 100%;
+  }
+
+  .admin-suite-search,
+  .admin-suite-date-filters label,
+  .admin-suite-date-filters input {
+    width: 100%;
   }
 
   .admin-stat-card {

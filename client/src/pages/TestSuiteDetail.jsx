@@ -9,9 +9,11 @@ const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
 const BG         = "#EEE9E0";
 const WHITE      = "#ffffff";
+const QUESTION_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024;
 
 const emptyForm = {
   questionText:   "",
+  imageUrl:       "",
   questionType:   "mcq",
   options:        ["", "", "", ""],
   correctAnswers: [],
@@ -136,6 +138,11 @@ function hasWeightedOptionScores(optionScores) {
     .some(score => Number.isFinite(Number(score)));
 }
 
+function isQuestionImage(value) {
+  const source = String(value || "").trim();
+  return source.startsWith("data:image/") || /^https?:\/\/.+/i.test(source);
+}
+
 function normalizeImportRow(row, rowNum) {
   const questionText = String(rowValue(row, ["questionText", "Question", "question"])).trim();
   const questionType = String(rowValue(row, ["questionType", "QuestionType", "type", "Type"]) || "mcq")
@@ -163,6 +170,7 @@ function normalizeImportRow(row, rowNum) {
 
   return {
     questionText,
+    imageUrl: String(rowValue(row, ["imageUrl", "ImageUrl", "image", "Image", "picture", "Picture"])).trim(),
     questionType,
     options: questionType === "theory" ? [] : options,
     correctAnswer: questionType === "theory" ? [] : inferredCorrectAnswer,
@@ -314,6 +322,7 @@ export default function TestSuiteDetail() {
     const XLSX = await import("xlsx");
     const headers = [
       "questionText",
+      "imageUrl",
       "option1",
       "option2",
       "option3",
@@ -331,6 +340,7 @@ export default function TestSuiteDetail() {
     ];
     const example = [
       "What is 2+2?",
+      "https://example.com/question-image.png",
       "3",
       "4",
       "5",
@@ -585,6 +595,25 @@ export default function TestSuiteDetail() {
     setForm({ ...form, optionScores: scores });
   };
 
+  const handleQuestionImageFile = (file) => {
+    setError("");
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file.");
+      return;
+    }
+    if (file.size > QUESTION_IMAGE_MAX_BYTES) {
+      setError("Question picture must be under 1.5 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm(f => ({ ...f, imageUrl: String(reader.result || "") }));
+    };
+    reader.onerror = () => setError("Unable to read the selected image.");
+    reader.readAsDataURL(file);
+  };
+
   const addOption = () => {
     if (form.options.length >= 6) return;
     setForm({ ...form, options: [...form.options, ""], optionScores: [...(form.optionScores || []), ""] });
@@ -668,6 +697,7 @@ export default function TestSuiteDetail() {
 
     const payload = {
       questionText:  form.questionText.trim(),
+      imageUrl:      form.imageUrl.trim(),
       questionType,
       options:       trimmedOptions,
       correctAnswer: questionType === "theory" ? [] : finalCorrect,
@@ -710,6 +740,7 @@ export default function TestSuiteDetail() {
     }, {});
     setForm({
       questionText:   q.questionText,
+      imageUrl:       q.imageUrl || "",
       questionType:   q.questionType === "theory" ? "theory" : "mcq",
       options:        opts,
       correctAnswers: defaultCorrect,
@@ -1125,6 +1156,36 @@ export default function TestSuiteDetail() {
                 <textarea rows={3} style={{ ...inputStyle, resize: "vertical" }} placeholder="Enter the question text here…"
                   value={form.questionText} onChange={e => setForm({ ...form, questionText: e.target.value })} />
               </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "end" }}>
+                <div>
+                  <label style={labelStyle}>Question picture (optional)</label>
+                  <input
+                    style={inputStyle}
+                    placeholder="Paste image URL, or upload below"
+                    value={form.imageUrl}
+                    onChange={e => setForm({ ...form, imageUrl: e.target.value })}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, imageUrl: "" })}
+                  disabled={!form.imageUrl}
+                  style={{ padding: "10px 14px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "13px", fontWeight: "700", cursor: form.imageUrl ? "pointer" : "not-allowed", opacity: form.imageUrl ? 1 : 0.55 }}
+                >
+                  Remove
+                </button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={e => handleQuestionImageFile(e.target.files?.[0])}
+                  style={{ ...inputStyle, gridColumn: "1 / -1", padding: "8px 12px" }}
+                />
+                {isQuestionImage(form.imageUrl) && (
+                  <div style={{ gridColumn: "1 / -1", border: "1px solid #d8e9df", borderRadius: "12px", padding: "10px", background: "#f8faf9" }}>
+                    <img src={form.imageUrl} alt="Question preview" style={{ maxWidth: "100%", maxHeight: "260px", objectFit: "contain", display: "block", margin: "0 auto", borderRadius: "10px" }} />
+                  </div>
+                )}
+              </div>
               <div>
                 <label style={labelStyle}>Question Type *</label>
                 <div style={{ display: "inline-flex", gap: "8px", background: "#f4f7f5", borderRadius: "12px", padding: "4px", border: "1px solid #d8e9df" }}>
@@ -1347,6 +1408,9 @@ export default function TestSuiteDetail() {
                             <p style={{ fontSize: "14px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 10px" }}>
                               <span style={{ color: "#aaa", marginRight: "6px" }}>Q{questionNumber}.</span>{q.questionText}
                             </p>
+                            {isQuestionImage(q.imageUrl) && (
+                              <img src={q.imageUrl} alt={`Question ${questionNumber}`} style={{ width: "100%", maxHeight: "320px", objectFit: "contain", background: "#f8faf9", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "8px", margin: "0 0 12px" }} />
+                            )}
                             {theory ? (
                               <div style={{ background: "#f8faf9", border: "1px solid #d8e9df", color: GREEN_DARK, borderRadius: "8px", padding: "8px 10px", fontSize: "13px", fontWeight: "600" }}>
                                 Theory question - written answer
