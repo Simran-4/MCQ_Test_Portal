@@ -35,6 +35,12 @@ function formatDateTime(value) {
   }) : "-";
 }
 
+function validTime(value) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
 // ── Helper: get categories for a question (always returns array) ──
 function getQuestionCats(q) {
   if (Array.isArray(q.category) && q.category.length > 0) return q.category;
@@ -115,6 +121,8 @@ export default function AdminSuiteResults() {
   const [showDownloads, setShowDownloads] = useState(false);
   const [error, setError]           = useState("");
   const [search, setSearch]         = useState("");
+  const [attemptFrom, setAttemptFrom] = useState("");
+  const [attemptTo, setAttemptTo]   = useState("");
   const [suiteStatus, setSuiteStatus] = useState(null);
   const currentUser = getCurrentUser();
   const canDownloadReports = canAdmin("canDownloadReports", currentUser);
@@ -217,10 +225,27 @@ export default function AdminSuiteResults() {
     return { ...r, catMap, pct };
   });
 
+  const attemptFromTime = validTime(attemptFrom);
+  const attemptToTime = validTime(attemptTo);
+  const filtersActive = Boolean(search || attemptFrom || attemptTo);
+
   const filtered = enriched.filter(r => {
-    const q = search.toLowerCase();
-    return [r.CandidateName, r.CandidateEmail, r.userName, r.userEmail, r.project, r.designation]
-      .join(" ").toLowerCase().includes(q);
+    const q = search.trim().toLowerCase();
+    const matchesSearch = [
+      r.CandidateName,
+      r.CandidateEmail,
+      r.userName,
+      r.userEmail,
+      r.project,
+      r.designation,
+      formatDateTime(r.submittedAt),
+    ].join(" ").toLowerCase().includes(q);
+    if (!matchesSearch) return false;
+
+    const submittedTime = validTime(r.submittedAt);
+    if (attemptFromTime !== null && (submittedTime === null || submittedTime < attemptFromTime)) return false;
+    if (attemptToTime !== null && (submittedTime === null || submittedTime > attemptToTime)) return false;
+    return true;
   });
 
   const now = new Date();
@@ -346,14 +371,47 @@ export default function AdminSuiteResults() {
       <div className="suite-results-content" style={{ padding:"24px 28px", overflowX:"auto" }}>
         {results.length > 0 && (
           <div style={{ marginBottom:"16px" }}>
-            <input
-              type="text"
-              placeholder="🔍  Search by name, email, project, department…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ width:"100%", padding:"12px 18px", borderRadius:"14px", border:"1.5px solid #ddd", fontSize:"14px", background: WHITE, outline:"none", boxSizing:"border-box" }}
-            />
-            {search && (
+            <div style={{ display:"flex", flexWrap:"wrap", gap:"10px", alignItems:"end" }}>
+              <input
+                type="text"
+                placeholder="🔍  Search by name, email, project, department…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ flex:"1 1 320px", minWidth:"220px", padding:"12px 18px", borderRadius:"14px", border:"1.5px solid #ddd", fontSize:"14px", background: WHITE, outline:"none", boxSizing:"border-box" }}
+              />
+              <label style={{ flex:"0 1 220px", display:"grid", gap:"5px", fontSize:"11px", fontWeight:"800", color:"#6B6B5E", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                From
+                <input
+                  type="datetime-local"
+                  value={attemptFrom}
+                  onChange={e => setAttemptFrom(e.target.value)}
+                  style={{ width:"100%", padding:"12px 14px", borderRadius:"14px", border:"1.5px solid #ddd", fontSize:"14px", background: WHITE, outline:"none", boxSizing:"border-box", color:"#2f3a34" }}
+                />
+              </label>
+              <label style={{ flex:"0 1 220px", display:"grid", gap:"5px", fontSize:"11px", fontWeight:"800", color:"#6B6B5E", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                To
+                <input
+                  type="datetime-local"
+                  value={attemptTo}
+                  onChange={e => setAttemptTo(e.target.value)}
+                  style={{ width:"100%", padding:"12px 14px", borderRadius:"14px", border:"1.5px solid #ddd", fontSize:"14px", background: WHITE, outline:"none", boxSizing:"border-box", color:"#2f3a34" }}
+                />
+              </label>
+              {filtersActive && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setAttemptFrom("");
+                    setAttemptTo("");
+                  }}
+                  style={{ flex:"0 0 auto", padding:"12px 18px", borderRadius:"14px", border:"1.5px solid rgba(45,95,63,0.25)", background:"#f8fbf8", color:GREEN, fontSize:"14px", fontWeight:"800", cursor:"pointer" }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {filtersActive && (
               <div style={{ fontSize:"12px", color:"#888", marginTop:"6px", paddingLeft:"4px" }}>
                 Showing {filtered.length} of {results.length} result{results.length !== 1 ? "s" : ""}
               </div>
@@ -363,7 +421,7 @@ export default function AdminSuiteResults() {
 
         {filtered.length === 0 && results.length > 0 ? (
           <div style={{ background: WHITE, borderRadius:"16px", border:"0.5px solid rgba(0,0,0,0.08)", padding:"32px", textAlign:"center" }}>
-            <p style={{ color:"#A0A098", fontSize:"15px", margin:0 }}>No results match "{search}"</p>
+            <p style={{ color:"#A0A098", fontSize:"15px", margin:0 }}>No results match the selected search or date/time period.</p>
           </div>
         ) : results.length === 0 ? (
           <div style={{ background: WHITE, borderRadius:"16px", border:"0.5px solid rgba(0,0,0,0.08)", padding:"48px 28px", textAlign:"center" }}>
