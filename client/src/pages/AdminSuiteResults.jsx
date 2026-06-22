@@ -41,6 +41,23 @@ function validTime(value) {
   return Number.isFinite(time) ? time : null;
 }
 
+function toDateTimeLocalValue(date) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function getPresetRange(preset) {
+  const end = new Date();
+  const start = new Date(end);
+  if (preset === "last-day") start.setDate(start.getDate() - 1);
+  else if (preset === "last-week") start.setDate(start.getDate() - 7);
+  else if (preset === "last-month") start.setMonth(start.getMonth() - 1);
+  else if (preset === "three-months") start.setMonth(start.getMonth() - 3);
+  else if (preset === "last-year") start.setFullYear(start.getFullYear() - 1);
+  else return { from: "", to: "" };
+  return { from: toDateTimeLocalValue(start), to: toDateTimeLocalValue(end) };
+}
+
 // ── Helper: get categories for a question (always returns array) ──
 function getQuestionCats(q) {
   if (Array.isArray(q.category) && q.category.length > 0) return q.category;
@@ -121,6 +138,7 @@ export default function AdminSuiteResults() {
   const [showDownloads, setShowDownloads] = useState(false);
   const [error, setError]           = useState("");
   const [search, setSearch]         = useState("");
+  const [attemptPreset, setAttemptPreset] = useState("");
   const [attemptFrom, setAttemptFrom] = useState("");
   const [attemptTo, setAttemptTo]   = useState("");
   const [suiteStatus, setSuiteStatus] = useState(null);
@@ -228,6 +246,12 @@ export default function AdminSuiteResults() {
   const attemptFromTime = validTime(attemptFrom);
   const attemptToTime = validTime(attemptTo);
   const filtersActive = Boolean(search || attemptFrom || attemptTo);
+  const handleAttemptPresetChange = (preset) => {
+    setAttemptPreset(preset);
+    const range = getPresetRange(preset);
+    setAttemptFrom(range.from);
+    setAttemptTo(range.to);
+  };
 
   const filtered = enriched.filter(r => {
     const q = search.trim().toLowerCase();
@@ -379,12 +403,31 @@ export default function AdminSuiteResults() {
                 onChange={e => setSearch(e.target.value)}
                 style={{ flex:"1 1 320px", minWidth:"220px", padding:"12px 18px", borderRadius:"14px", border:"1.5px solid #ddd", fontSize:"14px", background: WHITE, outline:"none", boxSizing:"border-box" }}
               />
+              <label style={{ flex:"0 1 210px", display:"grid", gap:"5px", fontSize:"11px", fontWeight:"800", color:"#6B6B5E", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                Period
+                <select
+                  value={attemptPreset}
+                  onChange={e => handleAttemptPresetChange(e.target.value)}
+                  style={{ width:"100%", padding:"12px 14px", borderRadius:"14px", border:"1.5px solid #ddd", fontSize:"14px", background: WHITE, outline:"none", boxSizing:"border-box", color:"#2f3a34" }}
+                >
+                  <option value="">All time</option>
+                  <option value="last-day">Last day</option>
+                  <option value="last-week">Last week</option>
+                  <option value="last-month">Last month</option>
+                  <option value="three-months">Last 3 months</option>
+                  <option value="last-year">Last year</option>
+                  {attemptPreset === "custom" && <option value="custom">Custom range</option>}
+                </select>
+              </label>
               <label style={{ flex:"0 1 220px", display:"grid", gap:"5px", fontSize:"11px", fontWeight:"800", color:"#6B6B5E", letterSpacing:"0.04em", textTransform:"uppercase" }}>
                 From
                 <input
                   type="datetime-local"
                   value={attemptFrom}
-                  onChange={e => setAttemptFrom(e.target.value)}
+                  onChange={e => {
+                    setAttemptPreset("custom");
+                    setAttemptFrom(e.target.value);
+                  }}
                   style={{ width:"100%", padding:"12px 14px", borderRadius:"14px", border:"1.5px solid #ddd", fontSize:"14px", background: WHITE, outline:"none", boxSizing:"border-box", color:"#2f3a34" }}
                 />
               </label>
@@ -393,7 +436,10 @@ export default function AdminSuiteResults() {
                 <input
                   type="datetime-local"
                   value={attemptTo}
-                  onChange={e => setAttemptTo(e.target.value)}
+                  onChange={e => {
+                    setAttemptPreset("custom");
+                    setAttemptTo(e.target.value);
+                  }}
                   style={{ width:"100%", padding:"12px 14px", borderRadius:"14px", border:"1.5px solid #ddd", fontSize:"14px", background: WHITE, outline:"none", boxSizing:"border-box", color:"#2f3a34" }}
                 />
               </label>
@@ -402,6 +448,7 @@ export default function AdminSuiteResults() {
                   type="button"
                   onClick={() => {
                     setSearch("");
+                    setAttemptPreset("");
                     setAttemptFrom("");
                     setAttemptTo("");
                   }}
