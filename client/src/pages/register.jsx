@@ -40,6 +40,11 @@ function Register() {
   const [contactType, setContactType] = useState("email");
   const [email,       setEmail]       = useState("");
   const [emailCheck,  setEmailCheck]  = useState({ status: "idle", message: "" });
+  const [emailOtp,    setEmailOtp]    = useState("");
+  const [emailOtpSent, setEmailOtpSent] = useState(false);
+  const [emailVerificationToken, setEmailVerificationToken] = useState("");
+  const [otpSending, setOtpSending]   = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
   const [mobile,      setMobile]      = useState("");
   const [password,    setPassword]    = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -68,22 +73,60 @@ function Register() {
     return () => { ignore = true; };
   }, []);
 
-  const verifyEmail = async (value = email) => {
-    const normalized = String(value || "").trim().toLowerCase();
+  const resetEmailOtp = () => {
+    setEmailOtp("");
+    setEmailOtpSent(false);
+    setEmailVerificationToken("");
+  };
+
+  const sendEmailOtp = async () => {
+    const normalized = email.trim().toLowerCase();
     const basicMessage = basicEmailMessage(normalized);
     if (basicMessage) {
       setEmailCheck({ status: "invalid", message: basicMessage });
-      return false;
+      return;
     }
-    setEmailCheck({ status: "checking", message: "Checking email..." });
+    setOtpSending(true);
+    setEmailCheck({ status: "checking", message: "Sending OTP..." });
     try {
-      const res = await axios.post(`${API}/api/auth/validate-email`, { email: normalized });
-      setEmailCheck({ status: "valid", message: res.data?.message || "Email looks valid." });
-      return true;
+      const res = await axios.post(`${API}/api/auth/request-email-otp`, { email: normalized });
+      setEmailOtpSent(true);
+      setEmailVerificationToken("");
+      setEmailCheck({ status: "valid", message: res.data?.message || "OTP sent to your email." });
     } catch (err) {
-      const message = err.response?.data?.message || "Email could not be verified. Please use a working email address.";
-      setEmailCheck({ status: "invalid", message });
-      return false;
+      setEmailOtpSent(false);
+      setEmailCheck({
+        status: "invalid",
+        message: err.response?.data?.message || "Unable to send OTP. Please try again.",
+      });
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const verifyEmailOtp = async () => {
+    const normalized = email.trim().toLowerCase();
+    if (!/^\d{6}$/.test(emailOtp.trim())) {
+      setEmailCheck({ status: "invalid", message: "Enter the 6 digit OTP sent to your email." });
+      return;
+    }
+    setOtpVerifying(true);
+    setEmailCheck({ status: "checking", message: "Verifying OTP..." });
+    try {
+      const res = await axios.post(`${API}/api/auth/verify-email-otp`, {
+        email: normalized,
+        otp: emailOtp.trim(),
+      });
+      setEmailVerificationToken(res.data?.emailVerificationToken || "");
+      setEmailCheck({ status: "valid", message: res.data?.message || "Email verified successfully." });
+    } catch (err) {
+      setEmailVerificationToken("");
+      setEmailCheck({
+        status: "invalid",
+        message: err.response?.data?.message || "Unable to verify OTP.",
+      });
+    } finally {
+      setOtpVerifying(false);
     }
   };
 
@@ -102,8 +145,9 @@ function Register() {
     if (!username || username.trim().replace(/\s+/g, "").length < 3)
       return alert("Please enter a username with at least 3 characters");
     if (contactType === "email") {
-      const emailOk = await verifyEmail(email);
-      if (!emailOk) return alert("Please enter a valid working email address");
+      const basicMessage = basicEmailMessage(email);
+      if (basicMessage) return alert(basicMessage);
+      if (!emailVerificationToken) return alert("Please verify your email OTP before registration");
     }
     if (contactType === "mobile" && mobile.replace(/\D/g, "").length < 10)
       return alert("Please enter a valid mobile number");
@@ -124,6 +168,7 @@ function Register() {
         name:        fullName,
         username:    username.trim(),
         email:       contactType === "email" ? email.trim().toLowerCase() : "",
+        emailVerificationToken: contactType === "email" ? emailVerificationToken : "",
         mobile:      contactType === "mobile" ? mobile.trim() : "",
         password,
         role: "candidate",
@@ -374,6 +419,8 @@ function Register() {
                 onChange={(e) => {
                   setContactType(e.target.value);
                   setEmail("");
+                  setEmailCheck({ status: "idle", message: "" });
+                  resetEmailOtp();
                   setMobile("");
                 }}
               >
@@ -392,12 +439,10 @@ function Register() {
                   if (contactType === "email") {
                     setEmail(e.target.value);
                     setEmailCheck({ status: "idle", message: "" });
+                    resetEmailOtp();
                   } else {
                     setMobile(e.target.value);
                   }
-                }}
-                onBlur={(e) => {
-                  if (contactType === "email" && e.target.value.trim()) verifyEmail(e.target.value);
                 }}
               />
               {contactType === "email" && emailCheck.message && (
@@ -409,6 +454,42 @@ function Register() {
                 }}>
                   {emailCheck.message}
                 </p>
+              )}
+              {contactType === "email" && (
+                <div style={{ display: "grid", gridTemplateColumns: emailOtpSent ? "1fr auto auto" : "auto", gap: "8px", marginTop: "8px", alignItems: "center" }}>
+                  {emailOtpSent && (
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="Enter 6 digit OTP"
+                      style={{ ...inputStyle, minHeight: "40px", padding: "9px 12px" }}
+                      value={emailOtp}
+                      onChange={(e) => {
+                        setEmailOtp(e.target.value.replace(/\D/g, "").slice(0, 6));
+                        setEmailVerificationToken("");
+                      }}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={sendEmailOtp}
+                    disabled={otpSending || Boolean(emailVerificationToken)}
+                    style={{ minHeight: "40px", padding: "0 12px", border: "1px solid rgba(255,255,255,0.42)", borderRadius: "10px", background: emailVerificationToken ? "rgba(187,247,208,0.25)" : "rgba(255,255,255,0.16)", color: WHITE, fontWeight: 800, cursor: otpSending || emailVerificationToken ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
+                  >
+                    {emailVerificationToken ? "Verified" : otpSending ? "Sending..." : emailOtpSent ? "Resend OTP" : "Send OTP"}
+                  </button>
+                  {emailOtpSent && !emailVerificationToken && (
+                    <button
+                      type="button"
+                      onClick={verifyEmailOtp}
+                      disabled={otpVerifying || emailOtp.length !== 6}
+                      style={{ minHeight: "40px", padding: "0 12px", border: "none", borderRadius: "10px", background: GREEN, color: WHITE, fontWeight: 800, cursor: otpVerifying || emailOtp.length !== 6 ? "not-allowed" : "pointer", opacity: otpVerifying || emailOtp.length !== 6 ? 0.65 : 1, whiteSpace: "nowrap" }}
+                    >
+                      {otpVerifying ? "Verifying..." : "Verify"}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </Row>
