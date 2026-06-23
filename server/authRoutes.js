@@ -2,13 +2,10 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const dns = require("dns").promises;
-const crypto = require("crypto");
-const nodemailer = require("nodemailer");
 const User = require("./models/User");
 const Result = require("./models/Result");
 const RoleDefinition = require("./models/RoleDefinition");
 const OrgOption = require("./models/OrgOption");
-const EmailOtp = require("./models/EmailOtp");
 const authMiddleware = require("./middleware/authMiddleware");
 const {
     ADMIN_PERMISSION_DEFAULTS,
@@ -20,9 +17,6 @@ const {
 const router = express.Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const DNS_CHECK_TIMEOUT_MS = 3500;
-const EMAIL_OTP_TTL_MINUTES = 10;
-const EMAIL_OTP_MAX_ATTEMPTS = 5;
-const EMAIL_VERIFICATION_TOKEN_TTL = "20m";
 
 // Helper to restrict to Super Admin
 const requireSuperAdmin = (req, res, next) => {
@@ -96,10 +90,6 @@ async function createUserFromPayload(payload, options = {}) {
     if (normalizedEmail) {
         const emailCheck = await verifyDeliverableEmail(normalizedEmail);
         if (!emailCheck.valid) return { status: 400, error: emailCheck.message };
-        if (options.requireEmailOtp) {
-            const tokenCheck = verifyEmailVerificationToken(payload.emailVerificationToken, normalizedEmail);
-            if (!tokenCheck.valid) return { status: 400, error: tokenCheck.message };
-        }
     }
 
     if (normalizedMobile && normalizedMobile.replace(/\D/g, "").length < 10) {
@@ -252,73 +242,6 @@ function normalizeEmail(value) {
     return String(value || "").toLowerCase().trim();
 }
 
-function jwtSecret() {
-    return process.env.JWT_SECRET || "snehalaya2024";
-}
-
-function smtpTransportConfig() {
-    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
-    const port = Number(process.env.SMTP_PORT || 587);
-    return {
-        host: process.env.SMTP_HOST,
-        port,
-        secure: String(process.env.SMTP_SECURE || "").toLowerCase() === "true" || port === 465,
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-        },
-    };
-}
-
-function createOtpCode() {
-    return String(crypto.randomInt(100000, 1000000));
-}
-
-async function sendOtpEmail(email, code) {
-    const config = smtpTransportConfig();
-    if (!config) {
-        const err = new Error("Email OTP service is not configured. Add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM on the server.");
-        err.statusCode = 503;
-        throw err;
-    }
-    const transporter = nodemailer.createTransport(config);
-    await transporter.sendMail({
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
-        to: email,
-        subject: "Your MCQ Test Portal verification code",
-        text: [
-            "Your MCQ Test Portal email verification code is:",
-            "",
-            code,
-            "",
-            `This code expires in ${EMAIL_OTP_TTL_MINUTES} minutes.`,
-            "If you did not request this, please ignore this email.",
-        ].join("\n"),
-        html: `
-          <div style="font-family:Arial,sans-serif;line-height:1.5;color:#173d2a">
-            <h2>Email verification</h2>
-            <p>Your MCQ Test Portal verification code is:</p>
-            <p style="font-size:28px;font-weight:800;letter-spacing:4px">${code}</p>
-            <p>This code expires in ${EMAIL_OTP_TTL_MINUTES} minutes.</p>
-            <p>If you did not request this, please ignore this email.</p>
-          </div>
-        `,
-    });
-}
-
-function verifyEmailVerificationToken(token, expectedEmail) {
-    if (!token) return { valid: false, message: "Please verify your email OTP before registration." };
-    try {
-        const payload = jwt.verify(token, jwtSecret());
-        if (payload.purpose !== "email_verification" || normalizeEmail(payload.email) !== expectedEmail) {
-            return { valid: false, message: "Email verification does not match this email address." };
-        }
-        return { valid: true };
-    } catch {
-        return { valid: false, message: "Email verification expired. Please request a new OTP." };
-    }
-}
-
 function basicEmailValidation(email) {
     const normalized = normalizeEmail(email);
     if (!normalized) return { valid: false, message: "Enter an email address" };
@@ -402,86 +325,9 @@ router.post("/validate-email", async (req, res) => {
     }
 });
 
-router.post("/request-email-otp", async (req, res) => {
-    try {
-        const email = normalizeEmail(req.body.email);
-        const emailCheck = await verifyDeliverableEmail(email);
-        if (!emailCheck.valid) return res.status(400).json({ message: emailCheck.message });
-
-        const existing = await User.findOne({ email });
-        if (existing) return res.status(400).json({ message: "This email is already registered. Please login instead." });
-
-        const recentOtp = await EmailOtp.findOne({
-            email,
-            purpose: "registration",
-            consumedAt: null,
-            createdAt: { $gte: new Date(Date.now() - 60 * 1000) },
-        }).sort({ createdAt: -1 });
-        if (recentOtp) {
-            return res.status(429).json({ message: "OTP already sent. Please wait one minute before requesting again." });
-        }
-
-        const code = createOtpCode();
-        await EmailOtp.deleteMany({ email, purpose: "registration", consumedAt: null });
-        await EmailOtp.create({
-            email,
-            purpose: "registration",
-            codeHash: await bcrypt.hash(code, 10),
-            expiresAt: new Date(Date.now() + EMAIL_OTP_TTL_MINUTES * 60 * 1000),
-        });
-        await sendOtpEmail(email, code);
-        res.json({ message: `OTP sent to ${email}. It expires in ${EMAIL_OTP_TTL_MINUTES} minutes.` });
-    } catch (err) {
-        res.status(err.statusCode || 500).json({ message: err.statusCode ? err.message : "Unable to send email OTP." });
-    }
-});
-
-router.post("/verify-email-otp", async (req, res) => {
-    try {
-        const email = normalizeEmail(req.body.email);
-        const code = String(req.body.otp || "").trim();
-        const basic = basicEmailValidation(email);
-        if (!basic.valid) return res.status(400).json({ message: basic.message });
-        if (!/^\d{6}$/.test(code)) return res.status(400).json({ message: "Enter the 6 digit OTP." });
-
-        const otpDoc = await EmailOtp.findOne({
-            email,
-            purpose: "registration",
-            consumedAt: null,
-            expiresAt: { $gt: new Date() },
-        }).sort({ createdAt: -1 });
-
-        if (!otpDoc) return res.status(400).json({ message: "OTP expired or not found. Please request a new OTP." });
-        if (otpDoc.attempts >= EMAIL_OTP_MAX_ATTEMPTS) {
-            return res.status(429).json({ message: "Too many incorrect attempts. Please request a new OTP." });
-        }
-
-        const ok = await bcrypt.compare(code, otpDoc.codeHash);
-        if (!ok) {
-            otpDoc.attempts += 1;
-            await otpDoc.save();
-            return res.status(400).json({ message: "Incorrect OTP." });
-        }
-
-        otpDoc.consumedAt = new Date();
-        await otpDoc.save();
-        const emailVerificationToken = jwt.sign(
-            { purpose: "email_verification", email },
-            jwtSecret(),
-            { expiresIn: EMAIL_VERIFICATION_TOKEN_TTL }
-        );
-        res.json({ message: "Email verified successfully.", emailVerificationToken });
-    } catch (err) {
-        res.status(500).json({ message: "Unable to verify email OTP." });
-    }
-});
-
 router.post("/register", async (req, res) => {
     try {
-        const result = await createUserFromPayload(
-            { ...req.body, role: "candidate" },
-            { allowAdmin: false, requireEmailOtp: Boolean(normalizeEmail(req.body.email)) }
-        );
+        const result = await createUserFromPayload({ ...req.body, role: "candidate" }, { allowAdmin: false });
         if (result.error) return res.status(result.status).json({ message: result.error });
         const token = jwt.sign(
             { id: result.user._id, role: result.user.role },
