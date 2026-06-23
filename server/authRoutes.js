@@ -1,6 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const dns = require("dns").promises;
 const User = require("./models/User");
 const Result = require("./models/Result");
 const RoleDefinition = require("./models/RoleDefinition");
@@ -14,6 +15,8 @@ const {
 } = require("./utils/adminPermissions");
 
 const router = express.Router();
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const DNS_CHECK_TIMEOUT_MS = 3500;
 
 // Helper to restrict to Super Admin
 const requireSuperAdmin = (req, res, next) => {
@@ -84,8 +87,9 @@ async function createUserFromPayload(payload, options = {}) {
         return { status: 400, error: "Enter either email or mobile number" };
     }
 
-    if (normalizedEmail && (!normalizedEmail.includes("@") || !normalizedEmail.includes("."))) {
-        return { status: 400, error: "Enter a valid email address" };
+    if (normalizedEmail) {
+        const emailCheck = await verifyDeliverableEmail(normalizedEmail);
+        if (!emailCheck.valid) return { status: 400, error: emailCheck.message };
     }
 
     if (normalizedMobile && normalizedMobile.replace(/\D/g, "").length < 10) {
@@ -161,8 +165,9 @@ async function updateUserFromPayload(userId, payload, requesterId) {
         return { status: 400, error: "Enter either email or mobile number" };
     }
 
-    if (normalizedEmail && (!normalizedEmail.includes("@") || !normalizedEmail.includes("."))) {
-        return { status: 400, error: "Enter a valid email address" };
+    if (normalizedEmail) {
+        const emailCheck = await verifyDeliverableEmail(normalizedEmail);
+        if (!emailCheck.valid) return { status: 400, error: emailCheck.message };
     }
 
     if (normalizedMobile && normalizedMobile.replace(/\D/g, "").length < 10) {
@@ -237,6 +242,54 @@ function normalizeEmail(value) {
     return String(value || "").toLowerCase().trim();
 }
 
+function basicEmailValidation(email) {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return { valid: false, message: "Enter an email address" };
+    if (!EMAIL_RE.test(normalized)) return { valid: false, message: "Enter a valid email address" };
+    const domain = normalized.split("@").pop();
+    if (!domain || domain.includes("..")) return { valid: false, message: "Enter a valid email address" };
+    return { valid: true, email: normalized, domain };
+}
+
+function withTimeout(promise, timeoutMs) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => {
+            const err = new Error("Email validation timed out");
+            err.code = "ETIMEOUT";
+            reject(err);
+        }, timeoutMs)),
+    ]);
+}
+
+async function verifyDeliverableEmail(email) {
+    const basic = basicEmailValidation(email);
+    if (!basic.valid) return basic;
+    try {
+        const mxRecords = await withTimeout(dns.resolveMx(basic.domain), DNS_CHECK_TIMEOUT_MS);
+        if (Array.isArray(mxRecords) && mxRecords.length > 0) {
+            return { valid: true, email: basic.email };
+        }
+    } catch (err) {
+        if (!["ENODATA", "ENOTFOUND", "ESERVFAIL", "ETIMEOUT"].includes(err.code)) {
+            return { valid: true, email: basic.email };
+        }
+    }
+
+    try {
+        const addresses = await withTimeout(dns.resolve4(basic.domain), DNS_CHECK_TIMEOUT_MS);
+        if (Array.isArray(addresses) && addresses.length > 0) {
+            return { valid: true, email: basic.email };
+        }
+    } catch (err) {
+        if (!["ENODATA", "ENOTFOUND", "ESERVFAIL", "ETIMEOUT"].includes(err.code)) {
+            return { valid: true, email: basic.email };
+        }
+    }
+
+    return { valid: false, message: "Email domain could not be verified. Enter a working email address." };
+}
+
 function isSyntheticMobileEmail(email) {
     return /@mobile\.local$/i.test(String(email || ""));
 }
@@ -260,6 +313,18 @@ function publicUser(user) {
 }
 
 // ── REGISTER ──────────────────────────────────────────────────
+router.post("/validate-email", async (req, res) => {
+    try {
+        const result = await verifyDeliverableEmail(req.body.email);
+        if (!result.valid) {
+            return res.status(400).json({ valid: false, message: result.message });
+        }
+        res.json({ valid: true, message: "Email looks valid." });
+    } catch (err) {
+        res.status(500).json({ valid: false, message: "Unable to verify email right now." });
+    }
+});
+
 router.post("/register", async (req, res) => {
     try {
         const result = await createUserFromPayload({ ...req.body, role: "candidate" }, { allowAdmin: false });
@@ -314,6 +379,12 @@ router.post("/login", async (req, res) => {
             return res.status(400).json({ message: "Password is required" });
         }
         const normalizedIdentifier = normalizeEmail(rawIdentifier);
+        if (rawIdentifier.includes("@")) {
+            const basicEmail = basicEmailValidation(normalizedIdentifier);
+            if (!basicEmail.valid) {
+                return res.status(400).json({ message: basicEmail.message });
+            }
+        }
         const normalizedUsername = normalizeUsername(rawIdentifier);
         const normalizedMobile = normalizeMobile(rawIdentifier);
 

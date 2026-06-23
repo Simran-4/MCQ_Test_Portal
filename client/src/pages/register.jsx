@@ -10,6 +10,7 @@ const WHITE      = "#ffffff";
 
 const API = import.meta.env.VITE_API_URL ||
   "https://charismatic-happiness-production-dc36.up.railway.app";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function Row({ children }) {
   return (
@@ -24,6 +25,13 @@ function capitalizeFirst(value) {
   return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
 }
 
+function basicEmailMessage(value) {
+  const email = String(value || "").trim().toLowerCase();
+  if (!email) return "Please enter your email address";
+  if (!EMAIL_RE.test(email)) return "Please enter a valid email address";
+  return "";
+}
+
 function Register() {
   const [firstName,   setFirstName]   = useState("");
   const [middleName,  setMiddleName]  = useState("");
@@ -31,6 +39,7 @@ function Register() {
   const [username,    setUsername]    = useState("");
   const [contactType, setContactType] = useState("email");
   const [email,       setEmail]       = useState("");
+  const [emailCheck,  setEmailCheck]  = useState({ status: "idle", message: "" });
   const [mobile,      setMobile]      = useState("");
   const [password,    setPassword]    = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -59,6 +68,25 @@ function Register() {
     return () => { ignore = true; };
   }, []);
 
+  const verifyEmail = async (value = email) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    const basicMessage = basicEmailMessage(normalized);
+    if (basicMessage) {
+      setEmailCheck({ status: "invalid", message: basicMessage });
+      return false;
+    }
+    setEmailCheck({ status: "checking", message: "Checking email..." });
+    try {
+      const res = await axios.post(`${API}/api/auth/validate-email`, { email: normalized });
+      setEmailCheck({ status: "valid", message: res.data?.message || "Email looks valid." });
+      return true;
+    } catch (err) {
+      const message = err.response?.data?.message || "Email could not be verified. Please use a working email address.";
+      setEmailCheck({ status: "invalid", message });
+      return false;
+    }
+  };
+
   const handleRegister = async () => {
     // ── Validation ──────────────────────────────────────────
     const fullName = [firstName, middleName, lastName]
@@ -73,8 +101,10 @@ function Register() {
       return alert("Please enter your last name");
     if (!username || username.trim().replace(/\s+/g, "").length < 3)
       return alert("Please enter a username with at least 3 characters");
-    if (contactType === "email" && (!email || !email.includes("@") || !email.includes(".")))
-      return alert("Please enter a valid email address");
+    if (contactType === "email") {
+      const emailOk = await verifyEmail(email);
+      if (!emailOk) return alert("Please enter a valid working email address");
+    }
     if (contactType === "mobile" && mobile.replace(/\D/g, "").length < 10)
       return alert("Please enter a valid mobile number");
     if (!password || password.length < 6)
@@ -358,8 +388,28 @@ function Register() {
                 placeholder={contactType === "email" ? "you@example.com" : "10 digit mobile"}
                 style={inputStyle}
                 value={contactType === "email" ? email : mobile}
-                onChange={(e) => contactType === "email" ? setEmail(e.target.value) : setMobile(e.target.value)}
+                onChange={(e) => {
+                  if (contactType === "email") {
+                    setEmail(e.target.value);
+                    setEmailCheck({ status: "idle", message: "" });
+                  } else {
+                    setMobile(e.target.value);
+                  }
+                }}
+                onBlur={(e) => {
+                  if (contactType === "email" && e.target.value.trim()) verifyEmail(e.target.value);
+                }}
               />
+              {contactType === "email" && emailCheck.message && (
+                <p style={{
+                  margin: "5px 0 0",
+                  color: emailCheck.status === "valid" ? "#bbf7d0" : emailCheck.status === "checking" ? "rgba(255,255,255,0.75)" : "#fecaca",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                }}>
+                  {emailCheck.message}
+                </p>
+              )}
             </div>
           </Row>
 

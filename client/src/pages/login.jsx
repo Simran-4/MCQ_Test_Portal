@@ -8,6 +8,7 @@ const GREEN_DARK = "#1A3D28";
 const WHITE      = "#ffffff";
 const API = import.meta.env.VITE_API_URL || "https://charismatic-happiness-production-dc36.up.railway.app";
 const API_AUTH = `${API}/api/auth`;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function Login() {
   const [identifier, setIdentifier] = useState("");
@@ -22,11 +23,16 @@ function Login() {
   const nextPath = getSafeNextPath(searchParams.get("next"));
 
   const handleLogin = async () => {
+    const loginId = identifier.trim();
+    if (!loginId) return alert("Enter your username, email, or mobile number");
+    if (loginId.includes("@") && !EMAIL_RE.test(loginId.toLowerCase())) {
+      return alert("Enter a valid email address, or use your username/mobile number.");
+    }
     setLoginLoading(true);
     try {
       const res = await axios.post(
         `${API_AUTH}/login`,
-        { identifier, email: identifier, password }
+        { identifier: loginId, email: loginId, password }
       );
 
       localStorage.setItem("token", `Bearer ${res.data.token}`);
