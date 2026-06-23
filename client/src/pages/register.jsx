@@ -95,12 +95,9 @@ function Register() {
       setEmailCheck({ status: "valid", message: res.data?.message || "OTP sent to your email." });
     } catch (err) {
       setEmailOtpSent(false);
-      const setupRequired = err.response?.data?.setupRequired;
       setEmailCheck({
         status: "invalid",
-        message: setupRequired
-          ? "Email OTP is not active yet. Please contact the administrator."
-          : err.response?.data?.message || "Unable to send OTP. Please try again.",
+        message: err.response?.data?.message || "Unable to send OTP. Please try again.",
       });
     } finally {
       setOtpSending(false);

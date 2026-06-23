@@ -277,9 +277,8 @@ function createOtpCode() {
 async function sendOtpEmail(email, code) {
     const config = smtpTransportConfig();
     if (!config) {
-        const err = new Error("Email OTP service is not configured yet. Please contact the administrator.");
+        const err = new Error("Email OTP service is not configured. Add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM on the server.");
         err.statusCode = 503;
-        err.setupRequired = true;
         throw err;
     }
     const transporter = nodemailer.createTransport(config);
@@ -433,10 +432,7 @@ router.post("/request-email-otp", async (req, res) => {
         await sendOtpEmail(email, code);
         res.json({ message: `OTP sent to ${email}. It expires in ${EMAIL_OTP_TTL_MINUTES} minutes.` });
     } catch (err) {
-        res.status(err.statusCode || 500).json({
-            message: err.statusCode ? err.message : "Unable to send email OTP.",
-            setupRequired: Boolean(err.setupRequired),
-        });
+        res.status(err.statusCode || 500).json({ message: err.statusCode ? err.message : "Unable to send email OTP." });
     }
 });
 
