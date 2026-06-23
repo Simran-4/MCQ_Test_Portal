@@ -69,6 +69,11 @@ function templateBaseName(language) {
   return `certificate-${language === "marathi" ? "marathi" : "english"}`;
 }
 
+function certificateFileName(data, language) {
+  const normalizedLanguage = language === "marathi" ? "marathi" : "english";
+  return `certificate_${cleanName(data.candidateName)}_${cleanName(data.testName)}_${normalizedLanguage}.pdf`;
+}
+
 function templateSources(language) {
   const name = templateBaseName(language);
   return ["png", "jpg", "jpeg"].map(extension => `${basePath()}${name}.${extension}`);
@@ -660,15 +665,12 @@ async function tryTemplateCertificatePDF(data, language) {
   }
 }
 
-export async function downloadCertificatePDF(result, fallbackSuite = {}, language = "english") {
+async function buildCertificatePDFDocument(result, fallbackSuite = {}, language = "english") {
   const normalizedLanguage = language === "marathi" ? "marathi" : "english";
   const data = certificateDataFromResult(result, fallbackSuite);
 
   const templateDoc = await tryTemplateCertificatePDF(data, normalizedLanguage);
-  if (templateDoc) {
-    templateDoc.save(`certificate_${cleanName(data.candidateName)}_${cleanName(data.testName)}_${normalizedLanguage}.pdf`);
-    return;
-  }
+  if (templateDoc) return { doc: templateDoc, data, language: normalizedLanguage };
 
   const canvas = await renderCertificateCanvas(data, normalizedLanguage);
   if (!canvas.width || !canvas.height || canvasLooksBlank(canvas)) {
@@ -678,17 +680,39 @@ export async function downloadCertificatePDF(result, fallbackSuite = {}, languag
 
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   doc.addImage(image, "JPEG", 0, 0, 297, 210);
-  doc.save(`certificate_${cleanName(data.candidateName)}_${cleanName(data.testName)}_${normalizedLanguage}.pdf`);
+  return { doc, data, language: normalizedLanguage };
+}
+
+async function buildCertificatePDFFile(result, fallbackSuite = {}, language = "english") {
+  const built = await buildCertificatePDFDocument(result, fallbackSuite, language);
+  const fileName = certificateFileName(built.data, built.language);
+  const blob = built.doc.output("blob");
+  const file = new File([blob], fileName, { type: "application/pdf" });
+  return { ...built, file, fileName };
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function downloadCertificatePDF(result, fallbackSuite = {}, language = "english") {
+  const { doc, data, language: normalizedLanguage } = await buildCertificatePDFDocument(result, fallbackSuite, language);
+  doc.save(certificateFileName(data, normalizedLanguage));
 }
 
 export async function openCertificateEmail(result, fallbackSuite = {}, language = "english") {
   const normalizedLanguage = language === "marathi" ? "marathi" : "english";
-  const data = certificateDataFromResult(result, fallbackSuite);
+  const { data, file, fileName } = await buildCertificatePDFFile(result, fallbackSuite, normalizedLanguage);
   if (!data.candidateEmail || !data.candidateEmail.includes("@")) {
     throw new Error("Candidate email is not available.");
   }
-
-  await downloadCertificatePDF(result, fallbackSuite, normalizedLanguage);
 
   const subject = `Certificate - ${data.testName} (${LANGUAGE_LABELS[normalizedLanguage]})`;
   const body = normalizedLanguage === "marathi"
@@ -698,7 +722,7 @@ export async function openCertificateEmail(result, fallbackSuite = {}, language 
         `${data.testName} ही चाचणी यशस्वीरित्या पूर्ण केल्याबद्दल अभिनंदन.`,
         `Score: ${data.score}/${data.totalMarks} (${data.percentage}%)`,
         "",
-        "आपले प्रमाणपत्र PDF तयार करण्यात आले आहे.",
+        `आपले प्रमाणपत्र PDF जोडले आहे. जर ते जोडले नसेल, तर डाउनलोड केलेली फाइल जोडा: ${fileName}`,
         "",
         "Regards,",
         "Snehalaya",
@@ -709,11 +733,25 @@ export async function openCertificateEmail(result, fallbackSuite = {}, language 
         `Congratulations on successfully completing ${data.testName}.`,
         `Score: ${data.score}/${data.totalMarks} (${data.percentage}%)`,
         "",
-        "Your certificate PDF has been prepared by Snehalaya.",
+        `Your certificate PDF is attached. If it is not attached automatically, please attach the downloaded file: ${fileName}`,
         "",
         "Regards,",
         "Snehalaya",
       ].join("\n");
 
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: subject,
+        text: `${body}\n\nTo: ${data.candidateEmail}`,
+      });
+      return;
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+    }
+  }
+
+  downloadBlob(file, fileName);
   window.location.href = `mailto:${data.candidateEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
