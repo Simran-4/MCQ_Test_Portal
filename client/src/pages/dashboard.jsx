@@ -22,6 +22,11 @@ function userLabel(user) {
   return `${user.name}${contact ? ` - ${contact}` : ""}`;
 }
 
+function uniqueSortedValues(values) {
+  return [...new Set(values.map(value => String(value || "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
 function deletedByLabel(user) {
   if (!user) return "-";
   return user.name || user.email || user.username || "-";
@@ -598,6 +603,8 @@ export default function Dashboard() {
   const [reportResults, setReportResults] = useState([]);
   const [assignmentUserIds, setAssignmentUserIds] = useState([]);
   const [assignmentSearch, setAssignmentSearch] = useState("");
+  const [assignmentProject, setAssignmentProject] = useState("");
+  const [assignmentDesignation, setAssignmentDesignation] = useState("");
   const [assignedSuiteIds, setAssignedSuiteIds] = useState([]);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
@@ -705,12 +712,21 @@ export default function Dashboard() {
   const assignableUsers = users.filter(item => ["candidate", "admin"].includes(item.role) && item.isActive !== false);
   const selectedAssignmentUsers = assignableUsers.filter(item => assignmentUserIds.includes(item._id));
   const selectedReportUser = users.find(item => item._id === reportUserId);
-  const assignmentFilteredUsers = assignableUsers.filter(item =>
-    userLabel(item).toLowerCase().includes(assignmentSearch.toLowerCase()) ||
-    (item.role || "").toLowerCase().includes(assignmentSearch.toLowerCase()) ||
-    (item.project || "").toLowerCase().includes(assignmentSearch.toLowerCase()) ||
-    (item.designation || "").toLowerCase().includes(assignmentSearch.toLowerCase())
-  );
+  const assignmentProjectOptions = uniqueSortedValues(assignableUsers.map(item => item.project));
+  const assignmentDesignationOptions = uniqueSortedValues(assignableUsers
+    .filter(item => !assignmentProject || item.project === assignmentProject)
+    .map(item => item.designation));
+  const assignmentFilteredUsers = assignableUsers.filter(item => {
+    const q = assignmentSearch.toLowerCase();
+    const matchesSearch =
+      userLabel(item).toLowerCase().includes(q) ||
+      (item.role || "").toLowerCase().includes(q) ||
+      (item.project || "").toLowerCase().includes(q) ||
+      (item.designation || "").toLowerCase().includes(q);
+    const matchesProject = !assignmentProject || item.project === assignmentProject;
+    const matchesDesignation = !assignmentDesignation || item.designation === assignmentDesignation;
+    return matchesSearch && matchesProject && matchesDesignation;
+  });
   const reportFilteredUsers = users.filter(item =>
     userLabel(item).toLowerCase().includes(reportSearch.toLowerCase()) ||
     (item.project || "").toLowerCase().includes(reportSearch.toLowerCase()) ||
@@ -921,7 +937,7 @@ export default function Dashboard() {
   };
 
   const selectVisibleAssignmentUsers = () => {
-    const next = assignmentFilteredUsers.slice(0, 80).map(item => item._id);
+    const next = assignmentFilteredUsers.map(item => item._id);
     setAssignmentUserIds(next);
     if (next.length === 1) {
       setAssignedSuiteIds(assignmentSuiteIdsForUser(next[0]));
@@ -931,6 +947,12 @@ export default function Dashboard() {
   const clearAssignmentUsers = () => {
     setAssignmentUserIds([]);
     setAssignedSuiteIds([]);
+  };
+
+  const clearAssignmentFilters = () => {
+    setAssignmentSearch("");
+    setAssignmentProject("");
+    setAssignmentDesignation("");
   };
 
   const toggleAssignedSuite = (suiteId) => {
@@ -1492,11 +1514,56 @@ export default function Dashboard() {
               placeholder="Search user by name, contact, role, project..."
             />
 
+            <div className="assignment-scope-grid">
+              <label>
+                <span>Project / Department</span>
+                <select
+                  value={assignmentProject}
+                  onChange={(e) => {
+                    setAssignmentProject(e.target.value);
+                    setAssignmentDesignation("");
+                  }}
+                >
+                  <option value="">All project/departments</option>
+                  {assignmentProjectOptions.map(project => (
+                    <option key={project} value={project}>{project}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Designation</span>
+                <select
+                  value={assignmentDesignation}
+                  onChange={(e) => setAssignmentDesignation(e.target.value)}
+                >
+                  <option value="">All designations</option>
+                  {assignmentDesignationOptions.map(designation => (
+                    <option key={designation} value={designation}>{designation}</option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={selectVisibleAssignmentUsers}
+                disabled={assignmentFilteredUsers.length === 0}
+              >
+                Select Matching
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={clearAssignmentFilters}
+                disabled={!assignmentSearch && !assignmentProject && !assignmentDesignation}
+              >
+                Clear Filters
+              </button>
+            </div>
+
             <div className="admin-panel-footer">
-              <span>{assignmentUserIds.length} user(s) selected</span>
+              <span>{assignmentUserIds.length} user(s) selected · {assignmentFilteredUsers.length} matching</span>
               <div>
                 <button type="button" onClick={selectVisibleAssignmentUsers} disabled={assignmentFilteredUsers.length === 0}>
-                  Select Visible
+                  Select Matching
                 </button>
                 <button type="button" onClick={clearAssignmentUsers} disabled={assignmentUserIds.length === 0}>
                   Clear Users

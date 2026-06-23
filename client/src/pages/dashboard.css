@@ -531,6 +531,49 @@ body {
   box-shadow: 0 0 0 4px rgba(31, 107, 58, 0.1);
 }
 
+.assignment-scope-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.assignment-scope-grid label {
+  display: grid;
+  gap: 5px;
+}
+
+.assignment-scope-grid label span {
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.assignment-scope-grid button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--admin-green);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.assignment-scope-grid button.secondary {
+  border: 1px solid #dbe4dd;
+  background: #fff;
+  color: var(--admin-green-dark);
+}
+
+.assignment-scope-grid button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .admin-check-row {
   display: flex;
   align-items: center;
@@ -1804,6 +1847,10 @@ body {
   .admin-suite-date-filters input,
   .admin-suite-date-filters select {
     width: 100%;
+  }
+
+  .assignment-scope-grid {
+    grid-template-columns: 1fr;
   }
 
   .admin-stat-card {
