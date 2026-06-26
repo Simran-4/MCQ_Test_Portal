@@ -5,7 +5,7 @@ import "../styles/quiz.css";
 import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
 import { openCertificateEmail } from "../utils/certificate";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API = import.meta.env.VITE_API_URL || "";
 
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString("en-IN", {

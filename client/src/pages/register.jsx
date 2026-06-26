@@ -9,7 +9,7 @@ const GREEN_DARK = "#1A3D28";
 const WHITE      = "#ffffff";
 
 const API = import.meta.env.VITE_API_URL ||
-  "https://charismatic-happiness-production-dc36.up.railway.app";
+  "";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function Row({ children }) {

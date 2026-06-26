@@ -3,7 +3,7 @@ import axios from "axios";
 import "./dashboard.css";
 import { getAuthHeaders } from "../utils/auth";
 
-const API = import.meta.env.VITE_API_URL || "https://charismatic-happiness-production-dc36.up.railway.app";
+const API = import.meta.env.VITE_API_URL || "";
 
 function AddQuestion() {
   const [question, setQuestion]       = useState("");

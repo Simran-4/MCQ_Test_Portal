@@ -6,7 +6,7 @@ import { downloadResultsPDF, downloadResultsExcel } from "../utils/downloadResul
 import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
 import { openCertificateEmail } from "../utils/certificate";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API = import.meta.env.VITE_API_URL || "";
 
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";

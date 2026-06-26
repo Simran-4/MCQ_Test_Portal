@@ -9,7 +9,7 @@ import "./dashboard.css";
 import { canAdmin, getAuthHeaders } from "../utils/auth";
 import BulkMailPanel from "../components/BulkMailPanel";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API = import.meta.env.VITE_API_URL || "";
 const DEVANAGARI_FONT_NAME = "Sarala";
 const DEVANAGARI_FONT_FILE = "Sarala-Regular.ttf";
 

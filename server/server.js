@@ -1,15 +1,16 @@
 const express    = require("express");
 const cors       = require("cors");
-const mongoose   = require("mongoose");
+const path       = require("path");
+const { connectDatabase } = require("./db/postgres");
 require("dotenv").config();
 
 const app = express();
 
 // ── CORS ──────────────────────────────────────────────────────
+const allowedOrigins = (process.env.CORS_ORIGINS || "").split(",").map(value => value.trim()).filter(Boolean);
 app.use(cors({
   origin: function(origin, callback) {
-    // Allows Vercel, Firebase (web.app), and Localhost
-    if (!origin || origin.includes("vercel.app") || origin.includes("localhost") || origin.includes("web.app")) {
+    if (!origin || allowedOrigins.includes(origin) || origin.includes("localhost")) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -23,27 +24,7 @@ app.use(cors({
 app.use(express.json({ limit: "8mb" }));
 
 // ── MongoDB ───────────────────────────────────────────────────
-let isConnected = false;
-
-const connectDB = async () => {
-  if (isConnected) return;
-  // Make sure MONGO_URI is set in your Railway Variables!
-  await mongoose.connect(process.env.MONGO_URI, {
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 30000,
-  });
-  isConnected = true;
-  console.log("MongoDB Connected");
-};
-
-app.use(async (req, res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (err) {
-    res.status(500).json({ error: "Database connection failed" });
-  }
-});
+app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 // ── Routes ────────────────────────────────────────────────────
 // 1. Import the Route Files
@@ -66,19 +47,25 @@ app.use("/api/test-suite",  testSuitesRouter);
 // IMPORTANT: Removed app.use("/api", questionsRoutes) to prevent 404 conflicts
 
 // ── Health check ──────────────────────────────────────────────
-app.get("/", (req, res) => {
-  res.send("<h1>MCQ Test Server Running</h1>");
-});
+app.get("/", (req, res) => res.json({ service: "mcq-test-portal", status: "ok" }));
 
 app.get("/api/protected", authMiddleware, (req, res) => {
   res.json({ message: "Protected Route Accessed", user: req.user });
 });
 
-// ── Start ─────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-// Added '0.0.0.0' for better Railway networking compatibility
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+const clientBuild = path.join(__dirname, "..", "client", "dist");
+app.use(express.static(clientBuild));
+app.get("/{*splat}", (req, res, next) => {
+  if (req.path.startsWith("/api/")) return next();
+  res.sendFile(path.join(clientBuild, "index.html"), err => err && next());
 });
+
+// ── Start ─────────────────────────────────────────────────────
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  connectDatabase()
+    .then(() => app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT}`)))
+    .catch(err => { console.error("PostgreSQL connection failed:", err.message); process.exit(1); });
+}
 
 module.exports = app;

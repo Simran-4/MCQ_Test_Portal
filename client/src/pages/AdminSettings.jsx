@@ -3,7 +3,7 @@ import axios from "axios";
 import "./auth.css";
 import { getAuthHeaders } from "../utils/auth";
 
-const API_BASE = `${import.meta.env.VITE_API_URL || "https://charismatic-happiness-production-dc36.up.railway.app"}/api`;
+const API_BASE = `${import.meta.env.VITE_API_URL || ""}/api`;
 
 function AdminSettings() {
   const [settings, setSettings] = useState({

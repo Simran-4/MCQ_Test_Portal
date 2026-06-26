@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
 
-const API = import.meta.env.VITE_API_URL || "https://charismatic-happiness-production-dc36.up.railway.app";
+const API = import.meta.env.VITE_API_URL || "";
 
 function uniqueEmails(users) {
   return [...new Set(users.map(user => user.email).filter(Boolean))];

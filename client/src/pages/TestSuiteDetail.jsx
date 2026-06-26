@@ -4,7 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
 
-const API        = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API        = import.meta.env.VITE_API_URL || "";
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
 const BG         = "#EEE9E0";

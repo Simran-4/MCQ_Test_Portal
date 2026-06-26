@@ -9,7 +9,7 @@ import { ADMIN_PERMISSION_DEFAULTS, getAuthHeaders, getCurrentUser } from "../ut
 import BulkMailPanel from "../components/BulkMailPanel";
 import { apiProjectsToMap, defaultOrgOptions, mergeOrgOptions, readLocalOrgOptions, writeLocalOrgOptions } from "../utils/orgOptions";
 
-const API_BASE = `${import.meta.env.VITE_API_URL || "https://charismatic-happiness-production-dc36.up.railway.app"}/api`;
+const API_BASE = `${import.meta.env.VITE_API_URL || ""}/api`;
 const API_URL = `${API_BASE}/auth`;
 const LOCAL_ROLES_KEY = "snehalaya_custom_roles";
 const LOCAL_RIGHTS_KEY = "snehalaya_custom_rights";
