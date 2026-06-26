@@ -2,6 +2,7 @@ const express    = require("express");
 const cors       = require("cors");
 const path       = require("path");
 const { connectDatabase } = require("./db/postgres");
+const activityLogger = require("./middleware/activityLogger");
 require("dotenv").config();
 
 const app = express();
@@ -22,6 +23,7 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: "8mb" }));
+app.use(activityLogger);
 
 // ── PostgreSQL ───────────────────────────────────────────────────
 app.get("/health", (req, res) => res.json({ status: "ok" }));

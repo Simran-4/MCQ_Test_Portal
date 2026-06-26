@@ -10,8 +10,8 @@ import { canAdmin, getAuthHeaders } from "../utils/auth";
 import BulkMailPanel from "../components/BulkMailPanel";
 
 const API = import.meta.env.VITE_API_URL || "";
-const DEVANAGARI_FONT_NAME = "Sarala";
-const DEVANAGARI_FONT_FILE = "Sarala-Regular.ttf";
+const DEVANAGARI_FONT_NAME = "NotoSansDevanagari";
+const DEVANAGARI_FONT_FILE = "NotoSansDevanagari-Regular.ttf";
 
 function userContact(user) {
   return user.email || user.mobile || user.username || "";
@@ -1172,18 +1172,36 @@ export default function Dashboard() {
         "Description": category.description || "-",
       }))
     );
+    const questionRows = selectedUserResults.flatMap(result =>
+      questionReviewRows(result).map(row => ({
+        "Test Name": resultTestName(result),
+        "Submitted At": formatDateTime(result.submittedAt),
+        "Question No.": row.number,
+        "Question": row.question,
+        "Category": row.categories,
+        "Selected Answer": row.selected,
+        "Correct Answer": row.correct,
+        "Review": row.review,
+        "Marks": row.marks,
+      }))
+    );
     const wb = XLSX.utils.book_new();
     const overviewWs = XLSX.utils.json_to_sheet(overviewRows);
     const ws = XLSX.utils.json_to_sheet(rows);
     const categoryWs = XLSX.utils.json_to_sheet(categoryRows.length > 0 ? categoryRows : [{ "Category": "No category breakdown available" }]);
+    const questionWs = XLSX.utils.json_to_sheet(questionRows.length > 0 ? questionRows : [{ "Question": "No question-wise answer data available" }]);
     overviewWs["!cols"] = Object.keys(overviewRows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }));
     ws["!cols"] = Object.keys(rows[0]).map(key => ({ wch: Math.max(16, key.length + 4) }));
     categoryWs["!cols"] = categoryRows.length > 0
       ? Object.keys(categoryRows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }))
       : [{ wch: 34 }];
+    questionWs["!cols"] = questionRows.length > 0
+      ? Object.keys(questionRows[0]).map(key => ({ wch: key === "Question" || key.includes("Answer") ? 42 : 20 }))
+      : [{ wch: 42 }];
     XLSX.utils.book_append_sheet(wb, overviewWs, "Overview");
     XLSX.utils.book_append_sheet(wb, ws, "Test Attempts");
     XLSX.utils.book_append_sheet(wb, categoryWs, "Category Details");
+    XLSX.utils.book_append_sheet(wb, questionWs, "Question Details");
     XLSX.writeFile(wb, `personal_report_${fileSafeName(selectedReportUser.name)}.xlsx`);
   };
 

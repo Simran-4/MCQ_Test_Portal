@@ -6,6 +6,7 @@ const User = require("./models/User");
 const Result = require("./models/Result");
 const RoleDefinition = require("./models/RoleDefinition");
 const OrgOption = require("./models/OrgOption");
+const ActivityLog = require("./models/ActivityLog");
 const authMiddleware = require("./middleware/authMiddleware");
 const {
     ADMIN_PERMISSION_DEFAULTS,
@@ -486,6 +487,15 @@ router.get("/superadmin/overview", authMiddleware, requireSuperAdmin, async (req
         });
     } catch (err) {
         res.status(500).json({ message: "Error fetching overview" });
+    }
+});
+
+router.get("/superadmin/activity-logs", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const logs = await ActivityLog.find().sort({ occurredAt: -1, createdAt: -1 });
+        res.json(logs.slice(0, 500));
+    } catch (err) {
+        res.status(500).json({ message: "Unable to load activity logs" });
     }
 });
 

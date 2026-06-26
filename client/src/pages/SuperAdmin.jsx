@@ -622,6 +622,8 @@ function SuperAdmin() {
   const [suitesById, setSuitesById] = useState({});
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
   const [controlMode, setControlMode] = useState("rights");
   const [roles, setRoles] = useState([
     { name: "candidate", baseRole: "candidate", system: true },
@@ -717,6 +719,17 @@ function SuperAdmin() {
     axios.get(`${API_URL}/org-options`, { headers })
       .then(res => setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data))))
       .catch(() => setOrgOptions(defaultOrgOptions()));
+  }, [activeNav]);
+
+  useEffect(() => {
+    if (activeNav !== "activity") return;
+    let ignore = false;
+    setActivityLoading(true);
+    axios.get(`${API_URL}/superadmin/activity-logs`, { headers: getAuthHeaders() })
+      .then(res => { if (!ignore) setActivityLogs(res.data); })
+      .catch(err => { if (!ignore) setError(err.response?.data?.message || "Unable to load activity logs"); })
+      .finally(() => { if (!ignore) setActivityLoading(false); });
+    return () => { ignore = true; };
   }, [activeNav]);
 
   const updateAccess = async (userId, isActive) => {
@@ -1326,6 +1339,7 @@ function SuperAdmin() {
     if (activeNav === "Candidates") return "Candidates";
     if (activeNav === "administrators") return "Administrators";
     if (activeNav === "reports") return "Reports";
+    if (activeNav === "activity") return "Activity Logs";
     if (activeNav === "management") return "Controls";
     return "User Management";
   };
@@ -1376,6 +1390,13 @@ function SuperAdmin() {
             onClick={() => { setActiveNav("management"); setSearch(""); }}
           >
             🧩 Controls
+          </button>
+          <button
+            type="button"
+            className={activeNav === "activity" ? "active" : ""}
+            onClick={() => { setActiveNav("activity"); setSearch(""); }}
+          >
+            Activity Logs
           </button>
           <button type="button" onClick={logout}>
             🚪 Logout
@@ -1484,6 +1505,35 @@ function SuperAdmin() {
                   </tbody>
                 </table>
                 {filteredReports.length === 0 && <p className="empty-message">No reports found.</p>}
+              </div>
+            )}
+          </section>
+        )}
+
+        {activeNav === "activity" && (
+          <section className="card">
+            <div className="section-header">
+              <div>
+                <h2>Activity Logs</h2>
+                <p>Successful changes made by candidates, administrators, and super admins.</p>
+              </div>
+              <button type="button" onClick={() => setActiveNav("activity")}>Refresh</button>
+            </div>
+            {activityLoading ? <p className="empty-message">Loading activity…</p> : (
+              <div className="table-wrapper">
+                <table>
+                  <thead><tr><th>Date & Time</th><th>Actor</th><th>Role</th><th>Action</th><th>Target</th></tr></thead>
+                  <tbody>{activityLogs.map(log => (
+                    <tr key={log._id}>
+                      <td>{formatDateTime(log.occurredAt || log.createdAt)}</td>
+                      <td>{log.actorName || "System"}</td>
+                      <td>{log.actorRole || "-"}</td>
+                      <td>{log.action}</td>
+                      <td>{log.targetId || "-"}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+                {activityLogs.length === 0 && <p className="empty-message">No recorded activity yet.</p>}
               </div>
             )}
           </section>
