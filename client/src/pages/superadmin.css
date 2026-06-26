@@ -861,7 +861,8 @@ table {
 }
 
 .user-management-table {
-  min-width: 980px;
+  min-width: 1240px;
+  table-layout: fixed;
 }
 
 thead tr {
@@ -900,10 +901,17 @@ td {
 }
 
 .user-management-table th:nth-child(3),
-.user-management-table td:nth-child(3),
 .user-management-table th:nth-child(4),
+.user-management-table td:nth-child(3),
 .user-management-table td:nth-child(4) {
-  max-width: 150px;
+  width: 180px;
+  min-width: 180px;
+}
+
+.user-management-table th:nth-child(3),
+.user-management-table th:nth-child(4) {
+  white-space: nowrap;
+  font-size: 12px;
 }
 
 .user-management-table th:nth-child(8),
