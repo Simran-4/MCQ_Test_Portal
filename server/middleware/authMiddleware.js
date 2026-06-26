@@ -12,7 +12,7 @@ const authMiddleware = async (req, res, next) => {
     const token = authHeader.split(" ")[1];
 
     try {
-        // We use the Railway variable first, then the hardcoded fallback
+        // Validate the configured JWT secret
         const secret = process.env.JWT_SECRET || "snehalaya2024";
         const verified = jwt.verify(token, secret);
         const user = await User.findById(verified.id).select(

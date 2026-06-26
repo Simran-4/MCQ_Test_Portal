@@ -810,7 +810,7 @@ function SuperAdmin() {
       setEditUserForm(userToEditForm(res.data));
       alert("User updated successfully.");
     } catch (err) {
-      alert(err.response?.data?.message || "Unable to update user. Railway backend may need redeploy.");
+      alert(err.response?.data?.message || "Unable to update user. CloudJiffy backend may need redeploy.");
     } finally {
       setSavingEditUser(false);
     }
@@ -880,7 +880,7 @@ function SuperAdmin() {
         writeLocalRoles(nextRoles);
         setRoles(prev => [...prev.filter(role => role.system), ...nextRoles]);
         setRoleForm({ name: "", baseRole: "candidate", description: "" });
-        alert("Role saved locally. Redeploy Railway backend to save roles for all admins.");
+        alert("Role saved locally. Redeploy CloudJiffy backend to save roles for all admins.");
       } else {
         alert(err.response?.data?.message || "Unable to create role");
       }
@@ -899,7 +899,7 @@ function SuperAdmin() {
       setAssignUserId("");
       setAssignRole("candidate");
     } catch (err) {
-      alert(err.response?.data?.message || "Unable to assign role. Railway backend may need redeploy.");
+      alert(err.response?.data?.message || "Unable to assign role. CloudJiffy backend may need redeploy.");
     }
   };
 
@@ -1006,7 +1006,7 @@ function SuperAdmin() {
       setResetPassword("");
       alert("Password reset successfully. Share the temporary password securely with the user.");
     } catch (err) {
-      alert(err.response?.data?.message || "Unable to reset password. Railway backend may need redeploy.");
+      alert(err.response?.data?.message || "Unable to reset password. CloudJiffy backend may need redeploy.");
     } finally {
       setResetSaving(false);
     }
@@ -1139,7 +1139,7 @@ function SuperAdmin() {
       setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
     } catch {
       saveProjectLocal(name);
-      alert("Project saved locally. Redeploy Railway backend to save it for everyone.");
+      alert("Project saved locally. Redeploy CloudJiffy backend to save it for everyone.");
     }
     setProjectName("");
   };
@@ -1155,7 +1155,7 @@ function SuperAdmin() {
       const nextOptions = mergeOrgOptions(orgOptions, { [project]: [...(orgOptions[project] || []), department] });
       writeLocalOrgOptions(nextOptions);
       setOrgOptions(nextOptions);
-      alert("Designation saved locally. Redeploy Railway backend to save it for everyone.");
+      alert("Designation saved locally. Redeploy CloudJiffy backend to save it for everyone.");
     }
     setDepartmentName("");
   };
@@ -1178,7 +1178,7 @@ function SuperAdmin() {
       if (saveEditedProjectLocal(currentName, nextName)) {
         setEditProjectOriginal(nextName);
         setEditProjectName(nextName);
-        alert(err.response?.data?.message || "Project updated locally. Redeploy Railway backend to save it for everyone.");
+        alert(err.response?.data?.message || "Project updated locally. Redeploy CloudJiffy backend to save it for everyone.");
       }
     }
   };
@@ -1204,7 +1204,7 @@ function SuperAdmin() {
       if (saveEditedDepartmentLocal(project, currentDepartment, nextDepartment)) {
         setEditDepartmentOriginal(nextDepartment);
         setEditDepartmentName(nextDepartment);
-        alert(err.response?.data?.message || "Designation updated locally. Redeploy Railway backend to save it for everyone.");
+        alert(err.response?.data?.message || "Designation updated locally. Redeploy CloudJiffy backend to save it for everyone.");
       }
     }
   };
@@ -1235,7 +1235,7 @@ function SuperAdmin() {
       alert("Project/department deleted successfully.");
     } catch (err) {
       deleteProjectLocal(project);
-      alert(err.response?.data?.message || "Project deleted locally. Redeploy Railway backend to save it for everyone.");
+      alert(err.response?.data?.message || "Project deleted locally. Redeploy CloudJiffy backend to save it for everyone.");
     }
   };
 
@@ -1258,7 +1258,7 @@ function SuperAdmin() {
       alert("Designation deleted successfully.");
     } catch (err) {
       deleteDepartmentLocal(project, department);
-      alert(err.response?.data?.message || "Designation deleted locally. Redeploy Railway backend to save it for everyone.");
+      alert(err.response?.data?.message || "Designation deleted locally. Redeploy CloudJiffy backend to save it for everyone.");
     }
   };
 

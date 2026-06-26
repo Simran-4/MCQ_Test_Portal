@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "main": "server/server.js",
   "scripts": {
-    "start": "node server/server.js"
+    "start": "node server/server.js",
+    "build": "npm --prefix client ci && npm --prefix client run build"
+  },
+  "engines": {
+    "node": ">=22 <23"
   },
   "type": "commonjs",
   "dependencies": {

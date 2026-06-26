@@ -410,7 +410,7 @@ router.post("/login", async (req, res) => {
 
       const token = jwt.sign(
     { id: user._id, role: user.role },
-    process.env.JWT_SECRET || "snehalaya2024", // Match the Railway value
+    process.env.JWT_SECRET || "snehalaya2024", // Read from the CloudJiffy environment
     { expiresIn: "1d" }
 );
 
