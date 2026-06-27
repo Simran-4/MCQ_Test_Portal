@@ -55,12 +55,31 @@ app.get("/api/protected", authMiddleware, (req, res) => {
 });
 
 const clientBuild = path.join(__dirname, "..", "client", "dist");
+const clientAssets = path.join(clientBuild, "assets");
+
+app.get("/legacy-app.js", (req, res, next) => {
+  fs.readdir(clientAssets, (dirErr, files) => {
+    if (dirErr) return next(dirErr);
+
+    const bundleFile = files.find(file => /^index-.*\.js$/.test(file));
+    if (!bundleFile) return next(new Error("Client bundle not found"));
+
+    fs.readFile(path.join(clientAssets, bundleFile), "utf8", (fileErr, code) => {
+      if (fileErr) return next(fileErr);
+      res.type("application/javascript").send(code.replace(/\s*export\{[^}]+\};?\s*$/, ""));
+    });
+  });
+});
+
 app.use(express.static(clientBuild, { index: false }));
 app.get("/{*splat}", (req, res, next) => {
   if (req.path.startsWith("/api/")) return next();
   fs.readFile(path.join(clientBuild, "index.html"), "utf8", (err, html) => {
     if (err) return next(err);
-    res.type("html").send(html.replace(/\s+crossorigin/g, ""));
+    const compatibleHtml = html
+      .replace(/<script type="module"[^>]+src="\/assets\/index-[^"]+\.js"[^>]*><\/script>/, '<script src="/legacy-app.js"></script>')
+      .replace(/\s+crossorigin/g, "");
+    res.type("html").send(compatibleHtml);
   });
 });
 
