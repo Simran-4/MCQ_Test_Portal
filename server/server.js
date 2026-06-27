@@ -49,8 +49,6 @@ app.use("/api/test-suite",  testSuitesRouter);
 // IMPORTANT: Removed app.use("/api", questionsRoutes) to prevent 404 conflicts
 
 // ── Health check ──────────────────────────────────────────────
-app.get("/", (req, res) => res.json({ service: "mcq-test-portal", status: "ok" }));
-
 app.get("/api/protected", authMiddleware, (req, res) => {
   res.json({ message: "Protected Route Accessed", user: req.user });
 });

@@ -4,7 +4,8 @@
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
-    "build": "npm --prefix client ci && npm --prefix client run build"
+    "build": "npm --prefix client ci --include=dev && npm --prefix client run build",
+    "postinstall": "npm run build"
   },
   "engines": {
     "node": ">=22 <23"
