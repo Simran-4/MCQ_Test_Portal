@@ -96,34 +96,14 @@
       <span class="arrow">▼</span>
     </div>
 
-    <!-- HIDDEN GOOGLE TRANSLATE ELEMENT -->
-    <div id="google_translate_element"></div>
-
     <div id="root"></div>
 
     <script type="module" src="/src/main.jsx"></script>
 
     <script>
-      // INIT GOOGLE TRANSLATE
-      function googleTranslateElementInit() {
-        new google.translate.TranslateElement(
-          {
-            pageLanguage: "en",
-            includedLanguages: "en,hi,mr",
-            autoDisplay: false,
-          },
-          "google_translate_element"
-        );
-      }
-
       // CHANGE LANGUAGE FUNCTION
       function changeLanguage(lang) {
-        // find the google translate select
-        const gtSelect = document.querySelector(".goog-te-combo");
-        if (gtSelect) {
-          gtSelect.value = lang;
-          gtSelect.dispatchEvent(new Event("change"));
-        }
+        document.documentElement.lang = lang || "en";
       }
 
       // RESTORE SELECTED LANGUAGE ON RELOAD
@@ -131,7 +111,7 @@
         const saved = localStorage.getItem("selectedLang");
         if (saved && saved !== "en") {
           document.getElementById("lang-select").value = saved;
-          setTimeout(() => changeLanguage(saved), 1500);
+          changeLanguage(saved);
         }
       });
 
@@ -203,6 +183,5 @@
       });
     </script>
 
-    <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
   </body>
 </html> 
