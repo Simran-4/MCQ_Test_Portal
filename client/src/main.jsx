@@ -6,8 +6,23 @@ import "./styles/responsive.css";
 import App from './App.jsx'
 import "./i18n";
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+const mountApp = () => {
+  const rootElement = document.getElementById('root');
+
+  if (!rootElement) {
+    console.error('Unable to start MCQ Test Portal: #root element was not found.');
+    return;
+  }
+
+  createRoot(rootElement).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', mountApp, { once: true });
+} else {
+  mountApp();
+}
