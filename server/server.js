@@ -57,16 +57,26 @@ app.get("/api/protected", authMiddleware, (req, res) => {
 const clientBuild = path.join(__dirname, "..", "client", "dist");
 const clientAssets = path.join(clientBuild, "assets");
 
-app.get("/legacy-app.js", (req, res, next) => {
+function findClientBundle(callback) {
   fs.readdir(clientAssets, (dirErr, files) => {
-    if (dirErr) return next(dirErr);
+    if (dirErr) return callback(dirErr);
 
     const bundleFile = files.find(file => /^index-.*\.js$/.test(file));
-    if (!bundleFile) return next(new Error("Client bundle not found"));
+    if (!bundleFile) return callback(new Error("Client bundle not found"));
 
+    callback(null, bundleFile);
+  });
+}
+
+app.get("/legacy-app.js", (req, res, next) => {
+  findClientBundle((bundleErr, bundleFile) => {
+    if (bundleErr) return next(bundleErr);
     fs.readFile(path.join(clientAssets, bundleFile), "utf8", (fileErr, code) => {
       if (fileErr) return next(fileErr);
-      res.type("application/javascript").send(code.replace(/\s*export\{[^}]+\};?\s*$/, ""));
+      res
+        .type("application/javascript")
+        .set("Cache-Control", "no-store")
+        .send(code.replace(/\s*export\{[^}]+\};?\s*$/, ""));
     });
   });
 });
@@ -74,12 +84,16 @@ app.get("/legacy-app.js", (req, res, next) => {
 app.use(express.static(clientBuild, { index: false }));
 app.get("/{*splat}", (req, res, next) => {
   if (req.path.startsWith("/api/")) return next();
-  fs.readFile(path.join(clientBuild, "index.html"), "utf8", (err, html) => {
-    if (err) return next(err);
-    const compatibleHtml = html
-      .replace(/<script type="module"[^>]+src="\/assets\/index-[^"]+\.js"[^>]*><\/script>/, '<script src="/legacy-app.js"></script>')
-      .replace(/\s+crossorigin/g, "");
-    res.type("html").send(compatibleHtml);
+  findClientBundle((bundleErr, bundleFile) => {
+    if (bundleErr) return next(bundleErr);
+    fs.readFile(path.join(clientBuild, "index.html"), "utf8", (err, html) => {
+      if (err) return next(err);
+      const legacyScript = `<script src="/legacy-app.js?v=${encodeURIComponent(bundleFile)}"></script>`;
+      const compatibleHtml = html
+        .replace(/<script type="module"[^>]+src="\/assets\/index-[^"]+\.js"[^>]*><\/script>/, legacyScript)
+        .replace(/\s+crossorigin/g, "");
+      res.type("html").set("Cache-Control", "no-store").send(compatibleHtml);
+    });
   });
 });
 
