@@ -1,6 +1,7 @@
 const express    = require("express");
 const cors       = require("cors");
 const path       = require("path");
+const fs         = require("fs");
 const { connectDatabase } = require("./db/postgres");
 const activityLogger = require("./middleware/activityLogger");
 require("dotenv").config();
@@ -54,10 +55,13 @@ app.get("/api/protected", authMiddleware, (req, res) => {
 });
 
 const clientBuild = path.join(__dirname, "..", "client", "dist");
-app.use(express.static(clientBuild));
+app.use(express.static(clientBuild, { index: false }));
 app.get("/{*splat}", (req, res, next) => {
   if (req.path.startsWith("/api/")) return next();
-  res.sendFile(path.join(clientBuild, "index.html"), err => err && next());
+  fs.readFile(path.join(clientBuild, "index.html"), "utf8", (err, html) => {
+    if (err) return next(err);
+    res.type("html").send(html.replace(/\s+crossorigin/g, ""));
+  });
 });
 
 // ── Start ─────────────────────────────────────────────────────
