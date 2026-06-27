@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import axios from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getSafeNextPath, registerPathForNext } from "../utils/authRedirect";
@@ -18,13 +18,17 @@ function Login() {
   const [resetLoading, setResetLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginChoiceUser, setLoginChoiceUser] = useState(null);
+  const identifierInputRef = useRef(null);
+  const passwordInputRef = useRef(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const nextPath = getSafeNextPath(searchParams.get("next"));
 
   const handleLogin = async () => {
-    const loginId = identifier.trim();
+    const loginId = (identifierInputRef.current?.value || identifier).trim();
+    const loginPassword = passwordInputRef.current?.value ?? password;
     if (!loginId) return alert("Enter your username, email, or mobile number");
+    if (!loginPassword) return alert("Enter your password");
     if (loginId.includes("@") && !EMAIL_RE.test(loginId.toLowerCase())) {
       return alert("Enter a valid email address, or use your username/mobile number.");
     }
@@ -32,7 +36,7 @@ function Login() {
     try {
       const res = await axios.post(
         `${API_AUTH}/login`,
-        { identifier: loginId, email: loginId, password }
+        { identifier: loginId, email: loginId, password: loginPassword }
       );
 
       localStorage.setItem("token", `Bearer ${res.data.token}`);
@@ -46,7 +50,8 @@ function Login() {
       if (nextPath.startsWith("/test/")) navigate(nextPath);
       else navigate("/candidate");
     } catch (err) {
-      alert(err.response?.data?.message || "Login Failed");
+      const message = err.response?.data?.message || err.message || "Login Failed";
+      alert(message === "Network Error" ? "Login failed: unable to reach the server. Please refresh and try again." : message);
     } finally {
       setLoginLoading(false);
     }
@@ -259,8 +264,10 @@ function Login() {
           <div>
             <label style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)", display: "block", marginBottom: "5px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Username / Email / Mobile</label>
             <input
+              ref={identifierInputRef}
               type="text"
               placeholder="username, email, or mobile"
+              autoComplete="username"
               style={inputStyle}
               value={identifier}
               onChange={e => setIdentifier(e.target.value)}
@@ -270,7 +277,9 @@ function Login() {
             <label style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)", display: "block", marginBottom: "5px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Password</label>
             <div style={{ position: "relative" }}>
               <input
+                ref={passwordInputRef}
                 type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
                 placeholder="••••••••"
                 style={passwordInputStyle}
                 value={password}
