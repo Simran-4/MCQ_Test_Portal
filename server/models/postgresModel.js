@@ -12,14 +12,22 @@ function valueAt(object, path) {
 function same(left, right) {
   if (left instanceof Date) left = left.toISOString();
   if (right instanceof Date) right = right.toISOString();
+  if (right === null) return left === null || left === undefined;
   return String(left) === String(right);
 }
 
 function matchesValue(actual, expected) {
+  if (Array.isArray(actual) && !(expected && typeof expected === "object" && !Array.isArray(expected))) {
+    return actual.some(item => matchesValue(item, expected));
+  }
   if (expected instanceof RegExp) return expected.test(String(actual || ""));
   if (!isObject(expected)) return same(actual, expected);
   return Object.entries(expected).every(([operator, value]) => {
-    if (operator === "$in") return value.some(item => same(actual, item));
+    if (operator === "$in") {
+      return Array.isArray(actual)
+        ? actual.some(item => value.some(expectedItem => same(item, expectedItem)))
+        : value.some(item => same(actual, item));
+    }
     if (operator === "$ne") return !same(actual, value);
     if (operator === "$gte") return new Date(actual).getTime() >= new Date(value).getTime();
     if (operator === "$lte") return new Date(actual).getTime() <= new Date(value).getTime();
@@ -75,6 +83,7 @@ function createModel(collection, defaults = {}, references = {}) {
       if (!this._id) this._id = crypto.randomUUID();
     }
     toJSON() { const output = {}; Object.keys(this).forEach(key => output[key] = this[key]); return output; }
+    toObject() { return this.toJSON(); }
     async save() {
       const now = new Date().toISOString();
       if (!this.createdAt) this.createdAt = now;
