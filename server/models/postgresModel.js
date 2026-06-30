@@ -121,7 +121,15 @@ function createModel(collection, defaults = {}, references = {}) {
       const parts = path.split(".");
       if (parts.length === 1) { const id = document[path]; if (id) document[path] = await Related.findById(id).select(fields); return; }
       if (path === "answers.questionId" && Array.isArray(document.answers)) {
-        await Promise.all(document.answers.map(async answer => { if (answer.questionId) answer.questionId = await Related.findById(answer.questionId).select(fields); }));
+        const ids = [...new Set(document.answers.map(answer => answer.questionId).filter(Boolean).map(String))];
+        if (!ids.length) return;
+        const relatedDocs = await Related.find({ _id: { $in: ids } }).select(fields);
+        const byId = new Map(relatedDocs.map(doc => [String(doc._id), doc]));
+        document.answers.forEach(answer => {
+          if (answer.questionId && byId.has(String(answer.questionId))) {
+            answer.questionId = byId.get(String(answer.questionId));
+          }
+        });
       }
     }
   }
