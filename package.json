@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node server/server.js",
     "build": "npm --prefix client ci --include=dev && npm --prefix client run build",
-    "postinstall": "npm run build"
+    "postinstall": "npm run build",
+    "import:mongo-dump": "node server/scripts/import-mongo-dump-to-postgres.js"
   },
   "engines": {
     "node": ">=22 <23"
