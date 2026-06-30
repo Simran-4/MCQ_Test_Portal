@@ -12,7 +12,9 @@ const app = express();
 const allowedOrigins = (process.env.CORS_ORIGINS || "").split(",").map(value => value.trim()).filter(Boolean);
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin) || origin.includes("localhost")) {
+    const isLocalhost = origin && origin.includes("localhost");
+    const isCloudJiffyApp = origin && /^https?:\/\/([a-z0-9-]+\.)?cloudjiffy\.net$/i.test(origin);
+    if (!origin || allowedOrigins.includes(origin) || isLocalhost || isCloudJiffyApp) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
