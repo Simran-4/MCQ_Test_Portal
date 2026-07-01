@@ -158,6 +158,48 @@ function resultStatus(result) {
   return resultPct(result) >= 50 ? "Pass" : "Fail";
 }
 
+function readableActivityAction(log) {
+  const action = String(log?.action || "");
+  const path = String(log?.path || "");
+  const method = String(log?.method || "").toUpperCase();
+
+  if (!action || /^[A-Z]+\s+\//.test(action)) {
+    if (path.includes("/superadmin/users/") && path.endsWith("/access")) {
+      return log?.details?.isActive === false ? "Disabled user account" : "Enabled user account";
+    }
+    if (path.includes("/superadmin/users/") && path.endsWith("/password")) return "Reset user password";
+    if (path.includes("/superadmin/users/") && path.endsWith("/role")) return "Changed user role";
+    if (path.includes("/superadmin/users/") && path.endsWith("/permissions")) return "Updated admin rights";
+    if (path.includes("/superadmin/users")) {
+      if (method === "POST") return "Created user account";
+      if (method === "PUT" || method === "PATCH") return "Updated user account";
+      if (method === "DELETE") return "Deleted user account";
+    }
+    if (path.includes("/permanent") && method === "DELETE") return "Permanently deleted test suite";
+    if (path.includes("/suite/") && method === "DELETE") return "Deleted test results";
+    if (path.includes("/test-suite") || path.includes("/test-suites")) {
+      if (method === "POST") return "Created test suite";
+      if (method === "PUT" || method === "PATCH") return "Updated test suite";
+      if (method === "DELETE") return "Moved test suite to trash";
+    }
+    if (path.includes("/questions") && method === "DELETE") return "Deleted question";
+    return action
+      .replace(/^POST\s+/i, "Created ")
+      .replace(/^PUT\s+/i, "Updated ")
+      .replace(/^PATCH\s+/i, "Updated ")
+      .replace(/^DELETE\s+/i, "Deleted ")
+      .replace(/^\/?api\/?/i, "")
+      .replace(/^auth\//i, "")
+      .replace(/\/[0-9a-f-]{20,}/gi, "")
+      .replace(/\/permanent/gi, " permanently")
+      .replace(/[/-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  return action;
+}
+
 function categoryScaleLabel(row) {
   return row?.scaleScore ? `${row.scaleScore}/10` : "-";
 }
@@ -624,6 +666,9 @@ function SuperAdmin() {
   const [reportSearch, setReportSearch] = useState("");
   const [activityLogs, setActivityLogs] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [activitySearch, setActivitySearch] = useState("");
+  const [activityFromDate, setActivityFromDate] = useState("");
+  const [activityToDate, setActivityToDate] = useState("");
   const [controlMode, setControlMode] = useState("rights");
   const [roles, setRoles] = useState([
     { name: "candidate", baseRole: "candidate", system: true },
@@ -675,6 +720,29 @@ function SuperAdmin() {
     }
   };
 
+  const loadActivityLogs = useCallback(async (overrides = {}) => {
+    const nextSearch = overrides.search ?? activitySearch;
+    const nextFrom = overrides.from ?? activityFromDate;
+    const nextTo = overrides.to ?? activityToDate;
+    setActivityLoading(true);
+    setError("");
+    try {
+      const res = await axios.get(`${API_URL}/superadmin/activity-logs`, {
+        headers: getAuthHeaders(),
+        params: {
+          search: nextSearch.trim() || undefined,
+          from: nextFrom || undefined,
+          to: nextTo || undefined,
+        },
+      });
+      setActivityLogs(res.data);
+    } catch (err) {
+      setError(err.response?.data?.message || "Unable to load activity logs");
+    } finally {
+      setActivityLoading(false);
+    }
+  }, [activitySearch, activityFromDate, activityToDate]);
+
   useEffect(() => {
     let ignore = false;
     getOverview()
@@ -723,13 +791,13 @@ function SuperAdmin() {
 
   useEffect(() => {
     if (activeNav !== "activity") return;
-    let ignore = false;
-    setActivityLoading(true);
-    axios.get(`${API_URL}/superadmin/activity-logs`, { headers: getAuthHeaders() })
-      .then(res => { if (!ignore) setActivityLogs(res.data); })
-      .catch(err => { if (!ignore) setError(err.response?.data?.message || "Unable to load activity logs"); })
-      .finally(() => { if (!ignore) setActivityLoading(false); });
-    return () => { ignore = true; };
+    loadActivityLogs({
+      search: activitySearch,
+      from: activityFromDate,
+      to: activityToDate,
+    });
+    // Only auto-load when opening the tab; Search/Refresh buttons handle filter changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNav]);
 
   const updateAccess = async (userId, isActive) => {
@@ -1469,8 +1537,8 @@ function SuperAdmin() {
             {reportsLoading ? (
               <p className="empty-message">Loading reports...</p>
             ) : (
-              <div className="table-wrapper">
-                <table>
+              <div className="table-wrapper reports-table-wrapper">
+                <table className="reports-table">
                   <thead>
                     <tr>
                       <th>Test Name</th>
@@ -1517,19 +1585,53 @@ function SuperAdmin() {
                 <h2>Activity Logs</h2>
                 <p>Successful changes made by candidates, administrators, and super admins.</p>
               </div>
-              <button type="button" onClick={() => setActiveNav("activity")}>Refresh</button>
+              <button type="button" onClick={() => loadActivityLogs()}>Refresh</button>
             </div>
+            <form className="activity-filters" onSubmit={(event) => { event.preventDefault(); loadActivityLogs(); }}>
+              <input
+                type="text"
+                value={activitySearch}
+                onChange={(e) => setActivitySearch(e.target.value)}
+                placeholder="Search admin, action, project, department..."
+              />
+              <label>
+                From
+                <input type="date" value={activityFromDate} onChange={(e) => setActivityFromDate(e.target.value)} />
+              </label>
+              <label>
+                To
+                <input type="date" value={activityToDate} onChange={(e) => setActivityToDate(e.target.value)} />
+              </label>
+              <button type="submit">Search</button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setActivitySearch("");
+                  setActivityFromDate("");
+                  setActivityToDate("");
+                  loadActivityLogs({ search: "", from: "", to: "" });
+                }}
+              >
+                Clear
+              </button>
+              <button type="button" onClick={loadActivityLogs}>Refresh</button>
+            </form>
             {activityLoading ? <p className="empty-message">Loading activity…</p> : (
-              <div className="table-wrapper">
-                <table>
-                  <thead><tr><th>Date & Time</th><th>Actor</th><th>Role</th><th>Action</th><th>Target</th></tr></thead>
+              <div className="table-wrapper activity-table-wrapper">
+                <table className="activity-table">
+                  <thead><tr><th>Date & Time</th><th>Actor</th><th>Role</th><th>Action</th><th>Details</th></tr></thead>
                   <tbody>{activityLogs.map(log => (
                     <tr key={log._id}>
                       <td>{formatDateTime(log.occurredAt || log.createdAt)}</td>
                       <td>{log.actorName || "System"}</td>
                       <td>{log.actorRole || "-"}</td>
-                      <td>{log.action}</td>
-                      <td>{log.targetId || "-"}</td>
+                      <td>{readableActivityAction(log)}</td>
+                      <td>
+                        {[log.details?.name, log.details?.email, log.details?.project, log.details?.designation]
+                          .filter(Boolean)
+                          .join(" • ") || "-"}
+                      </td>
                     </tr>
                   ))}</tbody>
                 </table>

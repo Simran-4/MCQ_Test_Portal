@@ -492,8 +492,30 @@ router.get("/superadmin/overview", authMiddleware, requireSuperAdmin, async (req
 
 router.get("/superadmin/activity-logs", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
+        const { search, from, to } = req.query;
         const logs = await ActivityLog.find().sort({ occurredAt: -1, createdAt: -1 });
-        res.json(logs.slice(0, 500));
+        const searchTerm = String(search || "").trim().toLowerCase();
+        const fromTime = from ? new Date(`${from}T00:00:00.000`).getTime() : null;
+        const toTime = to ? new Date(`${to}T23:59:59.999`).getTime() : null;
+        const filtered = logs.filter(log => {
+            const occurred = new Date(log.occurredAt || log.createdAt || 0).getTime();
+            if (fromTime && occurred < fromTime) return false;
+            if (toTime && occurred > toTime) return false;
+            if (!searchTerm) return true;
+            const haystack = [
+                log.actorName,
+                log.actorRole,
+                log.action,
+                log.path,
+                log.details?.project,
+                log.details?.designation,
+                log.details?.department,
+                log.details?.name,
+                log.details?.email,
+            ].join(" ").toLowerCase();
+            return haystack.includes(searchTerm);
+        });
+        res.json(filtered.slice(0, 500));
     } catch (err) {
         res.status(500).json({ message: "Unable to load activity logs" });
     }
@@ -516,7 +538,7 @@ router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, as
             req.params.id,
             { isActive },
             { new: true }
-        ).select("_id name username email mobile role customRole isActive age gender project designation adminPermissions");
+        );
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
@@ -543,7 +565,7 @@ router.put("/superadmin/users/:id/password", authMiddleware, requireSuperAdmin, 
             req.params.id,
             { password: hashedPassword },
             { new: true }
-        ).select("_id name username email mobile role customRole isActive age gender project designation adminPermissions");
+        );
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
@@ -705,7 +727,7 @@ router.put("/superadmin/users/:id/role", authMiddleware, requireSuperAdmin, asyn
             req.params.id,
             { role: nextRole, customRole },
             { new: true }
-        ).select("_id name username email mobile role customRole isActive age gender project designation adminPermissions");
+        );
 
         if (!user) return res.status(404).json({ message: "User not found" });
         res.json(publicUser(user));
@@ -739,7 +761,7 @@ router.put("/superadmin/users/:id/permissions", authMiddleware, requireSuperAdmi
             req.params.id,
             { adminPermissions: { permissions, scopeProjects, scopeDepartments } },
             { new: true }
-        ).select("_id name username email mobile role customRole isActive age gender project designation adminPermissions");
+        );
 
         if (!user) return res.status(404).json({ message: "User not found" });
         if (!["admin", "superadmin"].includes(user.role)) {
