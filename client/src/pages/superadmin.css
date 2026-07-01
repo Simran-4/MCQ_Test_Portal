@@ -863,7 +863,7 @@ table {
 }
 
 .user-management-table {
-  min-width: 1180px;
+  min-width: 1320px;
   table-layout: auto;
 }
 
@@ -894,6 +894,10 @@ td {
   word-break: normal;
 }
 
+.user-management-table th {
+  white-space: nowrap;
+}
+
 .user-management-table th:nth-child(1),
 .user-management-table td:nth-child(1) {
   min-width: 190px;
@@ -920,8 +924,17 @@ td {
 
 .user-management-table th:nth-child(8),
 .user-management-table td:nth-child(8) {
-  width: 140px;
-  min-width: 140px;
+  width: 170px;
+  min-width: 170px;
+}
+
+.user-management-table th:nth-child(5),
+.user-management-table td:nth-child(5),
+.user-management-table th:nth-child(6),
+.user-management-table td:nth-child(6),
+.user-management-table th:nth-child(7),
+.user-management-table td:nth-child(7) {
+  min-width: 120px;
 }
 
 .user-org-text {
@@ -941,7 +954,8 @@ td {
 }
 
 .reports-table {
-  min-width: 1040px;
+  min-width: 1280px;
+  table-layout: auto;
 }
 
 .reports-table th,
@@ -950,6 +964,49 @@ td {
 .activity-table td {
   vertical-align: top;
   overflow-wrap: anywhere;
+}
+
+.reports-table th,
+.activity-table th {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.reports-table th:nth-child(1),
+.reports-table td:nth-child(1) {
+  min-width: 150px;
+}
+
+.reports-table th:nth-child(2),
+.reports-table td:nth-child(2) {
+  min-width: 160px;
+}
+
+.reports-table th:nth-child(3),
+.reports-table td:nth-child(3) {
+  min-width: 220px;
+}
+
+.reports-table th:nth-child(4),
+.reports-table td:nth-child(4),
+.reports-table th:nth-child(5),
+.reports-table td:nth-child(5) {
+  min-width: 170px;
+}
+
+.reports-table th:nth-child(6),
+.reports-table td:nth-child(6),
+.reports-table th:nth-child(7),
+.reports-table td:nth-child(7),
+.reports-table th:nth-child(8),
+.reports-table td:nth-child(8) {
+  min-width: 92px;
+  text-align: center;
+}
+
+.reports-table th:nth-child(9),
+.reports-table td:nth-child(9) {
+  min-width: 150px;
 }
 
 .activity-table {

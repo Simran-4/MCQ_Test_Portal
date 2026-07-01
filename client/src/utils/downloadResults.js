@@ -477,7 +477,7 @@ function buildDescriptiveReportHtml(stats, logoDataUrl) {
         padding: 28px;
         background: #f8f7f4;
         color: #1b1f1d;
-        font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Mangal", "Arial Unicode MS", Arial, sans-serif;
+        font-family: "Segoe UI", "Noto Sans Devanagari", "Kohinoor Devanagari", "Mangal", "Arial Unicode MS", Arial, sans-serif;
       }
       .report-header {
         display: grid;
@@ -643,8 +643,11 @@ function buildDescriptiveReportHtml(stats, logoDataUrl) {
       .questions th:nth-child(5) { width: 230px; }
       .questions th:nth-child(6) { width: 200px; }
       .q-text {
-        font-weight: 800;
-        color: #123323;
+        font-family: "Segoe UI", "Noto Sans Devanagari", "Kohinoor Devanagari", "Mangal", "Arial Unicode MS", Arial, sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 1.45;
+        color: #1b1f1d;
       }
       .report-table span,
       .mini-cat span {

@@ -210,6 +210,7 @@ export default function TestSuiteDetail() {
 
   const [showDuration, setShowDuration] = useState(false);
   const [durationVal, setDurationVal]   = useState(30);
+  const [submitDelayVal, setSubmitDelayVal] = useState(0);
   const [savingDur, setSavingDur]       = useState(false);
 
   // Feature 5: Questions to serve
@@ -263,6 +264,7 @@ export default function TestSuiteDetail() {
       ]);
       setSuite(suiteRes.data);
       setDurationVal(suiteRes.data.duration || 30);
+      setSubmitDelayVal(suiteRes.data.submitDelayMinutes || 0);
       setQuestionMode(suiteRes.data.questionSelectionMode || (suiteRes.data.selectedQuestionIds?.length ? "selected" : suiteRes.data.questionsToServe ? "random" : "all"));
       setSelectedQuestionIds((suiteRes.data.selectedQuestionIds || []).map(id => String(id?._id || id)));
       setQtsServeVal(suiteRes.data.questionsToServe || "");
@@ -414,15 +416,18 @@ export default function TestSuiteDetail() {
 
   const handleSaveDuration = async () => {
     if (!durationVal || durationVal < 1) return alert("Please enter a valid duration");
+    const submitDelay = Number(submitDelayVal) || 0;
+    if (submitDelay < 0) return alert("Submit button delay cannot be negative.");
+    if (submitDelay > Number(durationVal)) return alert("Submit button delay cannot be greater than the test duration.");
     setSavingDur(true);
     try {
       await axios.put(`${API}/api/test-suites/${suiteId}`,
-        { duration: Number(durationVal) },
+        { duration: Number(durationVal), submitDelayMinutes: submitDelay },
         { headers: getAuthHeaders() }
       );
-      setSuite(prev => ({ ...prev, duration: Number(durationVal) }));
+      setSuite(prev => ({ ...prev, duration: Number(durationVal), submitDelayMinutes: submitDelay }));
       setShowDuration(false);
-      alert("Duration saved!");
+      alert("Duration and submit timing saved!");
     } catch { alert("Failed to save duration"); }
     finally { setSavingDur(false); }
   };
@@ -915,7 +920,7 @@ export default function TestSuiteDetail() {
             <>
               <button onClick={() => setShowDuration(s => !s)}
                 style={{ padding: "10px 20px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-                ⏱ Set duration ({suite.duration || 30} min)
+                ⏱ Duration / submit ({suite.duration || 30} min{suite.submitDelayMinutes ? `, submit after ${suite.submitDelayMinutes} min` : ""})
               </button>
               <button onClick={() => setShowPassing(s => !s)}
                 style={{ padding: "10px 20px", background: WHITE, color: "#166534", border: "1px solid #86efac", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
@@ -964,15 +969,28 @@ export default function TestSuiteDetail() {
         {/* ── Duration Panel ── */}
         {showDuration && (
           <div style={{ background: WHITE, border: "1px solid #e5e7eb", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
-            <h2 style={{ fontSize: "15px", fontWeight: "700", color: GREEN_DARK, marginTop: 0, marginBottom: "14px" }}>⏱ Test Duration</h2>
-            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-              <input type="number" min={1} max={300} value={durationVal} onChange={e => setDurationVal(e.target.value)} style={{ ...inputStyle, width: "120px" }} />
-              <span style={{ fontSize: "14px", color: "#666" }}>minutes</span>
+            <h2 style={{ fontSize: "15px", fontWeight: "700", color: GREEN_DARK, marginTop: 0, marginBottom: "6px" }}>⏱ Test Duration & Submit Button Timing</h2>
+            <p style={{ fontSize: "13px", color: "#888", marginBottom: "14px" }}>
+              Set the total test duration and optionally delay when candidates can manually submit. Use 0 to allow immediate submission.
+            </p>
+            <div style={{ display: "flex", gap: "14px", alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div>
+                <label style={labelStyle}>Test duration</label>
+                <input type="number" min={1} max={300} value={durationVal} onChange={e => setDurationVal(e.target.value)} style={{ ...inputStyle, width: "140px" }} />
+              </div>
+              <div>
+                <label style={labelStyle}>Enable submit after</label>
+                <input type="number" min={0} max={durationVal || 300} value={submitDelayVal} onChange={e => setSubmitDelayVal(e.target.value)} style={{ ...inputStyle, width: "160px" }} />
+              </div>
+              <span style={{ fontSize: "14px", color: "#666", paddingBottom: "11px" }}>minutes</span>
               <button onClick={handleSaveDuration} disabled={savingDur} style={{ padding: "10px 20px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: savingDur ? 0.6 : 1 }}>
                 {savingDur ? "Saving…" : "Save"}
               </button>
               <button onClick={() => setShowDuration(false)} style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}>Cancel</button>
             </div>
+            <p style={{ fontSize: "12px", color: "#6b7280", margin: "10px 0 0" }}>
+              Example: duration 30 and submit-after 20 means candidates can answer immediately, but the manual submit button unlocks after 20 minutes. Auto-submit still happens at 30 minutes.
+            </p>
           </div>
         )}
 

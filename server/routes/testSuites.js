@@ -150,6 +150,18 @@ function sanitizeSuiteUpdatePayload(body) {
     const numeric = Number(payload.questionsToServe);
     payload.questionsToServe = Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : null;
   }
+  if (payload.duration !== undefined) {
+    const numeric = Number(payload.duration);
+    payload.duration = Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 30;
+  }
+  if (payload.submitDelayMinutes !== undefined) {
+    const numeric = Number(payload.submitDelayMinutes);
+    const duration = Number(payload.duration ?? body.duration);
+    const maxDelay = Number.isFinite(duration) && duration > 0 ? Math.floor(duration) : 300;
+    payload.submitDelayMinutes = Number.isFinite(numeric) && numeric > 0
+      ? Math.min(Math.floor(numeric), maxDelay)
+      : 0;
+  }
   if (payload.selectedQuestionIds !== undefined) {
     payload.selectedQuestionIds = [...new Set(
       (Array.isArray(payload.selectedQuestionIds) ? payload.selectedQuestionIds : [])

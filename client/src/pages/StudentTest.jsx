@@ -323,6 +323,13 @@ export default function StudentTest() {
   };
 
   const handleSubmitClick = () => {
+    const durationSeconds = (Number(suite?.duration) || 30) * 60;
+    const submitDelaySeconds = Math.max(0, Math.min(durationSeconds, (Number(suite?.submitDelayMinutes) || 0) * 60));
+    const elapsedSeconds = timeLeft === null ? 0 : Math.max(0, durationSeconds - timeLeft);
+    if (submitDelaySeconds > 0 && elapsedSeconds < submitDelaySeconds) {
+      alert(`The submit button will unlock after ${formatTime(submitDelaySeconds - elapsedSeconds)}.`);
+      return;
+    }
     const unanswered = questions.filter(q => !isQuestionAnswered(q, answers)).length;
     if (unanswered > 0) {
       const firstIdx = questions.findIndex(q => !isQuestionAnswered(q, answers));
@@ -623,6 +630,11 @@ export default function StudentTest() {
   const attemptedCount = answeredCount;
   const reviewCount    = markedForReview.length;
   const totalCount     = questions.length;
+  const durationSeconds = (Number(suite?.duration) || 30) * 60;
+  const submitDelaySeconds = Math.max(0, Math.min(durationSeconds, (Number(suite?.submitDelayMinutes) || 0) * 60));
+  const elapsedSeconds = timeLeft === null ? 0 : Math.max(0, durationSeconds - timeLeft);
+  const submitLocked = submitDelaySeconds > 0 && elapsedSeconds < submitDelaySeconds;
+  const submitUnlockText = submitLocked ? `Submit unlocks in ${formatTime(submitDelaySeconds - elapsedSeconds)}` : "";
 
   return (
     <div className="student-test-page" style={{ minHeight:"100vh", background: BG, fontFamily:"'Segoe UI', sans-serif" }}>
@@ -811,8 +823,13 @@ export default function StudentTest() {
 
       {/* Submit Footer */}
       <div className="student-submit-footer" style={{ position:"fixed", bottom:0, left:0, right:0, background: WHITE, padding:"20px", textAlign:"center", borderTop:"1px solid #eee" }}>
-        <button className="student-submit-button" onClick={handleSubmitClick} disabled={submitting} style={{ padding:"14px 60px", background: GREEN, color: WHITE, border:"none", borderRadius:"999px", fontSize:"16px", fontWeight:"bold", cursor:"pointer" }}>
-          {submitting ? "Submitting..." : "Finish & Submit"}
+        {submitLocked && (
+          <div style={{ color:"#6b7280", fontSize:"13px", fontWeight:"700", marginBottom:"8px" }}>
+            {submitUnlockText}
+          </div>
+        )}
+        <button className="student-submit-button" onClick={handleSubmitClick} disabled={submitting || submitLocked} style={{ padding:"14px 60px", background: submitLocked ? "#9ca3af" : GREEN, color: WHITE, border:"none", borderRadius:"999px", fontSize:"16px", fontWeight:"bold", cursor: submitLocked ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}>
+          {submitting ? "Submitting..." : submitLocked ? "Submit locked" : "Finish & Submit"}
         </button>
       </div>
     </div>
