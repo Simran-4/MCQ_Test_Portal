@@ -182,6 +182,15 @@ function sanitizeSuiteUpdatePayload(body) {
   return payload;
 }
 
+function suiteToObject(suite) {
+  const data = typeof suite?.toObject === "function" ? suite.toObject() : { ...(suite || {}) };
+  return {
+    submitDelayMinutes: 0,
+    ...data,
+    submitDelayMinutes: Number(data.submitDelayMinutes) > 0 ? Math.floor(Number(data.submitDelayMinutes)) : 0,
+  };
+}
+
 function readOptionalUser(req) {
   const authHeader = req.header("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
@@ -474,7 +483,7 @@ router.get("/", async (req, res) => {
         const effectiveCount = getEffectiveQuestionCount(suite, totalCount);
         const mode = resolveQuestionSelectionMode(suite);
         return {
-          ...suite.toObject(),
+          ...suiteToObject(suite),
           questionSelectionMode: mode,
           questionCount: user?.role === "candidate" ? effectiveCount : totalCount,
           totalQuestionCount: totalCount,
@@ -570,7 +579,7 @@ router.put("/:id", authMiddleware, requireAdminFeature("canManageSuites", "Test 
       { new: true }
     );
     if (!updatedSuite) return res.status(404).json({ message: "Suite not found" });
-    res.json(updatedSuite);
+    res.json(suiteToObject(updatedSuite));
   } catch (err) {
     res.status(500).json({ message: "Error updating suite" });
   }
@@ -623,7 +632,7 @@ router.get("/trash/list", authMiddleware, requireAdminFeature("canManageSuites",
       .sort({ deletedAt: -1 });
     const suitesWithCount = await Promise.all(
       suites.map(async (suite) => ({
-        ...suite.toObject(),
+        ...suiteToObject(suite),
         questionCount: await Question.countDocuments({ testSuite: suite._id }),
       }))
     );
@@ -645,7 +654,7 @@ router.put("/:id/recover", authMiddleware, requireAdminFeature("canManageSuites"
       : "draft";
     const recovered = await suite.save();
     const questionCount = await Question.countDocuments({ testSuite: recovered._id });
-    res.json({ ...recovered.toObject(), questionCount });
+    res.json({ ...suiteToObject(recovered), questionCount });
   } catch (err) {
     res.status(500).json({ message: "Error recovering suite" });
   }
@@ -677,7 +686,7 @@ router.get("/:id", async (req, res) => {
     if (!canAccessSuite(suite, user)) {
       return res.status(403).json({ message: "This test is not available" });
     }
-    res.json(suite);
+    res.json(suiteToObject(suite));
   } catch (err) {
     res.status(500).json({ message: "Error fetching suite details" });
   }
