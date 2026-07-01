@@ -163,7 +163,7 @@ function readableActivityAction(log) {
   const path = String(log?.path || "");
   const method = String(log?.method || "").toUpperCase();
 
-  if (!action || /^[A-Z]+\s+\//.test(action)) {
+  if (!action || /^[A-Z]+\s+\//.test(action) || /^(Created|Updated|Deleted)\s+\//i.test(action) || /\/[0-9a-f-]{20,}/i.test(action)) {
     if (path.includes("/superadmin/users/") && path.endsWith("/access")) {
       return log?.details?.isActive === false ? "Disabled user account" : "Enabled user account";
     }

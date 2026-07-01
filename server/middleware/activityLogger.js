@@ -1,10 +1,18 @@
 const ActivityLog = require("../models/ActivityLog");
 
-const IGNORED_PATHS = new Set(["/api/auth/login", "/api/auth/validate-email", "/api/auth/forgot-password"]);
+const IGNORED_PATHS = new Set([
+  "/login",
+  "/validate-email",
+  "/forgot-password",
+  "/api/auth/login",
+  "/api/auth/validate-email",
+  "/api/auth/forgot-password",
+]);
 
 function cleanRoute(path = "") {
   return String(path)
-    .replace(/^\/api\//, "")
+    .replace(/^\/+/, "")
+    .replace(/^api\//, "")
     .replace(/^auth\//, "")
     .replace(/^test-suites?/, "test suite")
     .replace(/^questions?/, "question")
