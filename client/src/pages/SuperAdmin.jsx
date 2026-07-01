@@ -13,6 +13,7 @@ const API_BASE = `${import.meta.env.VITE_API_URL || ""}/api`;
 const API_URL = `${API_BASE}/auth`;
 const LOCAL_ROLES_KEY = "snehalaya_custom_roles";
 const LOCAL_RIGHTS_KEY = "snehalaya_custom_rights";
+const USERS_PER_PAGE = 10;
 const emptyCreateUserForm = {
   firstName: "",
   middleName: "",
@@ -657,6 +658,7 @@ function SuperAdmin() {
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(emptyStats);
   const [search, setSearch] = useState("");
+  const [userPage, setUserPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeNav, setActiveNav] = useState("dashboard");
@@ -1366,6 +1368,11 @@ function SuperAdmin() {
   };
 
   const filteredUsers = getFilteredUsers();
+  const totalUserPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
+  const safeUserPage = Math.min(userPage, totalUserPages);
+  const paginatedUsers = filteredUsers.slice((safeUserPage - 1) * USERS_PER_PAGE, safeUserPage * USERS_PER_PAGE);
+  const userPageStart = filteredUsers.length === 0 ? 0 : (safeUserPage - 1) * USERS_PER_PAGE + 1;
+  const userPageEnd = Math.min(filteredUsers.length, safeUserPage * USERS_PER_PAGE);
   const filteredReports = reportResults.filter(result =>
     [
       resultTestName(result, suitesById),
@@ -1411,6 +1418,14 @@ function SuperAdmin() {
     if (activeNav === "management") return "Controls";
     return "User Management";
   };
+
+  useEffect(() => {
+    setUserPage(1);
+  }, [activeNav, search]);
+
+  useEffect(() => {
+    if (userPage > totalUserPages) setUserPage(totalUserPages);
+  }, [userPage, totalUserPages]);
 
   return (
     <div className="container">
@@ -2189,6 +2204,7 @@ function SuperAdmin() {
               <table className="user-management-table">
                 <thead>
                   <tr>
+                    <th>Sr. No.</th>
                     <th>Name</th>
                     <th>Email</th>
                     <th>Project/Department</th>
@@ -2200,8 +2216,9 @@ function SuperAdmin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((user) => (
+                  {paginatedUsers.map((user, index) => (
                     <tr key={user._id}>
+                      <td className="serial-cell">{userPageStart + index}</td>
                       <td>{user.name}</td>
                       <td>{user.email || user.mobile || user.username || "—"}</td>
                       <td>
@@ -2263,6 +2280,23 @@ function SuperAdmin() {
                 </tbody>
               </table>
             </div>
+
+            {filteredUsers.length > USERS_PER_PAGE && (
+              <div className="table-pagination">
+                <span>
+                  Showing {userPageStart}-{userPageEnd} of {filteredUsers.length} user{filteredUsers.length !== 1 ? "s" : ""}
+                </span>
+                <div>
+                  <button type="button" onClick={() => setUserPage(page => Math.max(1, page - 1))} disabled={safeUserPage === 1}>
+                    Previous
+                  </button>
+                  <strong>Page {safeUserPage} of {totalUserPages}</strong>
+                  <button type="button" onClick={() => setUserPage(page => Math.min(totalUserPages, page + 1))} disabled={safeUserPage === totalUserPages}>
+                    Next page
+                  </button>
+                </div>
+              </div>
+            )}
 
             {!loading && !error && filteredUsers.length === 0 && (
               <p className="empty-message">No users found.</p>

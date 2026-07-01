@@ -30,9 +30,9 @@ body {
 
 /* ========== SIDEBAR ========== */
 .sidebar {
-  width: 270px;
+  width: 240px;
   min-height: 100vh;
-  padding: 34px 20px;
+  padding: 24px 16px 20px;
   background: linear-gradient(160deg, #0f5132, #1f5d42, #2c7744);
   color: var(--admin-white);
   position: sticky;
@@ -45,15 +45,15 @@ body {
 .superadmin-brand {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 40px;
-  padding-bottom: 24px;
+  gap: 12px;
+  margin-bottom: 28px;
+  padding: 8px 8px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .superadmin-brand img {
-  width: 60px;
-  height: 60px;
+  width: 56px;
+  height: 56px;
   padding: 5px;
   border-radius: 50%;
   background: var(--admin-white);
@@ -70,7 +70,7 @@ body {
 }
 
 .superadmin-brand h2 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: white;
 }
@@ -79,19 +79,21 @@ body {
 .sidebar nav {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   flex: 1;
 }
 
 .sidebar button {
   width: 100%;
-  padding: 13px 16px;
+  min-height: 48px;
+  padding: 11px 14px;
   border: none;
   border-radius: 14px;
   background: transparent;
   color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 700;
   font-family: Arial, sans-serif;
   text-align: left;
   transition: all 0.25s ease;
@@ -105,7 +107,7 @@ body {
 }
 
 .sidebar button.active {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.22);
   color: white;
   font-weight: 700;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
@@ -128,7 +130,8 @@ body {
 /* ========== MAIN CONTENT ========== */
 .main-content {
   flex: 1;
-  padding: 40px;
+  min-width: 0;
+  padding: 36px;
   background: var(--admin-background);
 }
 
@@ -856,6 +859,10 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+.reports-table-wrapper {
+  overflow-x: scroll;
+}
+
 table {
   width: 100%;
   min-width: 720px;
@@ -863,7 +870,7 @@ table {
 }
 
 .user-management-table {
-  min-width: 1320px;
+  min-width: 1380px;
   table-layout: auto;
 }
 
@@ -900,40 +907,51 @@ td {
 
 .user-management-table th:nth-child(1),
 .user-management-table td:nth-child(1) {
-  min-width: 190px;
+  min-width: 86px;
+  text-align: center;
+}
+
+.serial-cell {
+  color: var(--admin-muted);
+  font-weight: 800;
 }
 
 .user-management-table th:nth-child(2),
 .user-management-table td:nth-child(2) {
-  min-width: 220px;
+  min-width: 190px;
 }
 
 .user-management-table th:nth-child(3),
+.user-management-table td:nth-child(3) {
+  min-width: 220px;
+}
+
 .user-management-table th:nth-child(4),
-.user-management-table td:nth-child(3),
-.user-management-table td:nth-child(4) {
+.user-management-table th:nth-child(5),
+.user-management-table td:nth-child(4),
+.user-management-table td:nth-child(5) {
   width: 170px;
   min-width: 170px;
 }
 
-.user-management-table th:nth-child(3),
-.user-management-table th:nth-child(4) {
+.user-management-table th:nth-child(4),
+.user-management-table th:nth-child(5) {
   white-space: nowrap;
   font-size: 12px;
 }
 
-.user-management-table th:nth-child(8),
-.user-management-table td:nth-child(8) {
+.user-management-table th:nth-child(9),
+.user-management-table td:nth-child(9) {
   width: 170px;
   min-width: 170px;
 }
 
-.user-management-table th:nth-child(5),
-.user-management-table td:nth-child(5),
 .user-management-table th:nth-child(6),
 .user-management-table td:nth-child(6),
 .user-management-table th:nth-child(7),
-.user-management-table td:nth-child(7) {
+.user-management-table td:nth-child(7),
+.user-management-table th:nth-child(8),
+.user-management-table td:nth-child(8) {
   min-width: 120px;
 }
 
@@ -951,10 +969,12 @@ td {
 .reports-table-wrapper,
 .activity-table-wrapper {
   width: 100%;
+  padding-bottom: 12px;
+  scrollbar-gutter: stable;
 }
 
 .reports-table {
-  min-width: 1280px;
+  min-width: 1480px;
   table-layout: auto;
 }
 
@@ -1007,6 +1027,43 @@ td {
 .reports-table th:nth-child(9),
 .reports-table td:nth-child(9) {
   min-width: 150px;
+}
+
+.table-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e8eeea;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--admin-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.table-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.table-pagination button {
+  padding: 8px 12px;
+  border: 1px solid #d8e9df;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--admin-primary-dark);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.table-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .activity-table {

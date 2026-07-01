@@ -612,6 +612,9 @@ export default function Dashboard() {
   const [suiteDatePreset, setSuiteDatePreset] = useState("");
   const [suiteDateFrom, setSuiteDateFrom] = useState("");
   const [suiteDateTo, setSuiteDateTo] = useState("");
+  const [reportSpanPreset, setReportSpanPreset] = useState("last-week");
+  const [reportSpanFrom, setReportSpanFrom] = useState(() => getPresetDateRange("last-week").from);
+  const [reportSpanTo, setReportSpanTo] = useState(() => getPresetDateRange("last-week").to);
   const [reportUserId, setReportUserId] = useState("");
   const [activePanel, setActivePanel] = useState("dashboard");
   const [deleteResultsSuite, setDeleteResultsSuite] = useState(null);
@@ -753,6 +756,31 @@ export default function Dashboard() {
     percentage: `${resultPct(result)}%`,
     result: resultStatus(result),
   })), [reportResults]);
+  const reportSpanFromTime = validTime(reportSpanFrom);
+  const reportSpanToTime = validTime(reportSpanTo);
+  const reportSpanResults = useMemo(() => reportResults.filter(result => {
+    const attemptedTime = validTime(result.submittedAt);
+    if (attemptedTime === null) return false;
+    if (reportSpanFromTime !== null && attemptedTime < reportSpanFromTime) return false;
+    if (reportSpanToTime !== null && attemptedTime > reportSpanToTime) return false;
+    return true;
+  }), [reportResults, reportSpanFromTime, reportSpanToTime]);
+  const reportSpanSummaryRows = useMemo(() => buildTestSummaryRows(reportSpanResults), [reportSpanResults]);
+  const reportSpanCandidates = useMemo(() => new Set(
+    reportSpanResults.map(result => String(resultCandidateContact(result) || resultCandidateName(result) || result._id).toLowerCase())
+  ).size, [reportSpanResults]);
+  const reportSpanPassed = reportSpanResults.filter(result => resultStatus(result) === "Pass").length;
+  const reportSpanFailed = Math.max(0, reportSpanResults.length - reportSpanPassed);
+  const reportSpanAverage = reportSpanResults.length
+    ? Math.round((reportSpanResults.reduce((sum, result) => sum + resultPct(result), 0) / reportSpanResults.length) * 100) / 100
+    : 0;
+  const reportSpanLabel = `${reportSpanFrom ? formatDateTime(reportSpanFrom) : "Beginning"} to ${reportSpanTo ? formatDateTime(reportSpanTo) : "Now"}`;
+  const handleReportSpanPresetChange = (preset) => {
+    setReportSpanPreset(preset);
+    const range = getPresetDateRange(preset);
+    setReportSpanFrom(range.from);
+    setReportSpanTo(range.to);
+  };
   const suiteFromTime = validTime(suiteDateFrom);
   const suiteToTime = validTime(suiteDateTo);
   const handleSuiteDatePresetChange = (preset) => {
@@ -1136,8 +1164,8 @@ export default function Dashboard() {
     const overviewRows = [{
       "Candidate": selectedReportUser.name || "-",
       "Contact": userContact(selectedReportUser) || "-",
-      "Project": selectedReportUser.project || "-",
-      "Department": selectedReportUser.designation || "-",
+      "Project/Department": selectedReportUser.project || "-",
+      "Designation": selectedReportUser.designation || "-",
       "Total Reports": selectedUserResults.length,
       "Passed": selectedUserPassed,
       "Failed": selectedUserFailed,
@@ -1150,14 +1178,15 @@ export default function Dashboard() {
       "Test Name": resultTestName(result),
       "Candidate": resultCandidateName(result),
       "Contact": resultCandidateContact(result),
-      "Project": result.project || "-",
-      "Department": result.designation || "-",
+      "Project/Department": result.project || "-",
+      "Designation": result.designation || "-",
       "Score": `${result.score || 0}/${result.totalMarks || 0}`,
       "Correct Answers": result.correctAnswers ?? "-",
       "Total Questions": result.totalQuestions ?? "-",
       "Percentage": `${resultPct(result)}%`,
       "Grade": resultGrade(result),
       "Result": resultStatus(result),
+      "Time Taken": formatDuration(resultTimeTakenSeconds(result)),
       "Submitted At": formatDateTime(result.submittedAt),
     }));
     const categoryRows = selectedUserResults.flatMap(result =>
@@ -1231,7 +1260,7 @@ export default function Dashboard() {
 
     autoTable(doc, {
       startY: 38,
-      head: [["Project", "Department", "Reports", "Passed", "Failed", "Average", "Latest Test"]],
+      head: [["Project/Department", "Designation", "Reports", "Passed", "Failed", "Average", "Latest Test"]],
       body: [[
         selectedReportUser.project || "-",
         selectedReportUser.designation || "-",
@@ -1248,7 +1277,7 @@ export default function Dashboard() {
 
     autoTable(doc, {
       startY: doc.lastAutoTable.finalY + 8,
-      head: [["#", "Test Name", "Score", "%", "Grade", "Result", "Attempted At", "Category Breakdown"]],
+      head: [["#", "Test Name", "Score", "%", "Grade", "Result", "Time Taken", "Attempted At", "Category Breakdown"]],
       body: selectedUserResults.map((result, index) => [
         index + 1,
         resultTestName(result),
@@ -1256,10 +1285,11 @@ export default function Dashboard() {
         `${resultPct(result)}%`,
         resultGrade(result),
         resultStatus(result),
+        formatDuration(resultTimeTakenSeconds(result)),
         formatDateTime(result.submittedAt),
         categoryRowsForResult(result).length > 0
           ? categoryRowsForResult(result)
-            .map(category => `${category.category || "-"}: ${category.percentage || 0}% (${categoryLabel(category)})`)
+            .map(category => `${category.category || "-"}: ${category.score ?? category.earnedMarks ?? 0}/${category.total ?? 0}, ${category.percentage || 0}% (${categoryLabel(category)}${category.scaleScore ? `, ${category.scaleScore}/10` : ""})`)
             .join("\n")
           : "-",
       ]),
@@ -1269,13 +1299,14 @@ export default function Dashboard() {
       alternateRowStyles: { fillColor: [248, 247, 244] },
       columnStyles: {
         1: { cellWidth: 54 },
-        7: { cellWidth: 72 },
+        8: { cellWidth: 72 },
       },
     });
 
     let reviewY = doc.lastAutoTable.finalY + 10;
     selectedUserResults.forEach((result, resultIndex) => {
       const rows = questionReviewRows(result);
+      const categories = categoryRowsForResult(result);
       if (reviewY > 178) {
         doc.addPage();
         reviewY = 18;
@@ -1293,19 +1324,49 @@ export default function Dashboard() {
       doc.setFontSize(8);
       doc.setTextColor(90, 95, 92);
       doc.text(
-        `Attempted: ${formatDateTime(result.submittedAt)} | Score: ${result.score || 0}/${result.totalMarks || 0} | Result: ${resultStatus(result)}`,
+        `Attempted: ${formatDateTime(result.submittedAt)} | Time: ${formatDuration(resultTimeTakenSeconds(result))} | Score: ${result.score || 0}/${result.totalMarks || 0} | Result: ${resultStatus(result)}`,
         14,
         reviewY + 5
       );
 
+      if (categories.length > 0) {
+        autoTable(doc, {
+          startY: reviewY + 10,
+          head: [["Category", "Score", "%", "Level", "Scale", "Description"]],
+          body: categories.map(category => [
+            category.category || "-",
+            `${category.score ?? category.earnedMarks ?? 0}/${category.total ?? 0}`,
+            `${category.percentage || 0}%`,
+            categoryLabel(category),
+            category.scaleScore ? `${category.scaleScore}/10` : "-",
+            category.description || "-",
+          ]),
+          theme: "grid",
+          margin: { left: 14, right: 14 },
+          tableWidth: 269,
+          styles: { fontSize: 7, cellPadding: 1.7, overflow: "linebreak", valign: "top", font: reportFont, fontStyle: "normal" },
+          headStyles: { fillColor: [231, 244, 235], textColor: [26, 61, 40], font: "helvetica", fontStyle: "bold" },
+          bodyStyles: { font: reportFont, fontStyle: "normal", textColor: [36, 48, 40] },
+          columnStyles: {
+            0: { cellWidth: 42 },
+            1: { cellWidth: 24 },
+            2: { cellWidth: 20 },
+            3: { cellWidth: 28 },
+            4: { cellWidth: 20 },
+            5: { cellWidth: 135 },
+          },
+        });
+        reviewY = doc.lastAutoTable.finalY + 6;
+      }
+
       if (rows.length === 0) {
         doc.setTextColor(120, 120, 112);
-        doc.text("No question-wise answer data is available for this attempt.", 14, reviewY + 13);
+        doc.text("No question-wise answer data is available for this attempt.", 14, reviewY + 8);
         reviewY += 22;
         return;
       }
 
-      reviewY += 9;
+      reviewY += categories.length > 0 ? 0 : 9;
       rows.forEach(row => {
         if (reviewY > 184) {
           doc.addPage();
@@ -1766,6 +1827,64 @@ export default function Dashboard() {
               <div>
                 <h3>Test Report</h3>
                 <p>Download statistical summary and descriptive reports for all submitted test attempts.</p>
+              </div>
+            </div>
+
+            <div className="admin-report-span-panel">
+              <div className="admin-report-span-head">
+                <div>
+                  <h4>Attempt analysis by time span</h4>
+                  <p>{reportSpanLabel}</p>
+                </div>
+                <div className="admin-report-span-filters">
+                  <select value={reportSpanPreset} onChange={(e) => handleReportSpanPresetChange(e.target.value)}>
+                    <option value="">Custom</option>
+                    <option value="last-day">Last 24 hours</option>
+                    <option value="last-week">Last 7 days</option>
+                    <option value="last-month">Last month</option>
+                    <option value="three-months">Last 3 months</option>
+                    <option value="last-year">Last year</option>
+                  </select>
+                  <input type="datetime-local" value={reportSpanFrom} onChange={(e) => { setReportSpanPreset(""); setReportSpanFrom(e.target.value); }} />
+                  <input type="datetime-local" value={reportSpanTo} onChange={(e) => { setReportSpanPreset(""); setReportSpanTo(e.target.value); }} />
+                </div>
+              </div>
+              <div className="admin-report-span-stats">
+                <div><strong>{reportSpanResults.length}</strong><span>Total attempts</span></div>
+                <div><strong>{reportSpanSummaryRows.length}</strong><span>Tests attempted</span></div>
+                <div><strong>{reportSpanCandidates}</strong><span>Unique users</span></div>
+                <div><strong>{reportSpanPassed}</strong><span>Passed</span></div>
+                <div><strong>{reportSpanFailed}</strong><span>Failed</span></div>
+                <div><strong>{reportSpanAverage}%</strong><span>Average score</span></div>
+              </div>
+              <div className="admin-table-scroll">
+                <table className="admin-span-table">
+                  <thead>
+                    <tr>
+                      <th>Test Name</th>
+                      <th>Attempts</th>
+                      <th>Users</th>
+                      <th>Passed</th>
+                      <th>Failed</th>
+                      <th>Pass Rate</th>
+                      <th>Average Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportSpanSummaryRows.map((row, index) => (
+                      <tr key={`${row.testName}-span-${index}`}>
+                        <td>{row.testName}</td>
+                        <td>{row.totalAttempts}</td>
+                        <td>{row.usersAttempted}</td>
+                        <td><span className="report-good">{row.passed}</span></td>
+                        <td><span className="report-bad">{row.failed}</span></td>
+                        <td>{row.passRate.toFixed(2)}%</td>
+                        <td>{row.averageScore.toFixed(2)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {reportSpanSummaryRows.length === 0 && <p className="admin-personal-empty">No attempts found in this time span.</p>}
               </div>
             </div>
 

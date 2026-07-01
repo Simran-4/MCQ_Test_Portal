@@ -42,13 +42,17 @@ function Login() {
       localStorage.setItem("token", `Bearer ${res.data.token}`);
       localStorage.setItem("user", JSON.stringify(res.data.user));
 
+      if (nextPath.startsWith("/test/")) {
+        navigate(nextPath);
+        return;
+      }
+
       if (["admin", "superadmin"].includes(res.data.user.role)) {
         setLoginChoiceUser(res.data.user);
         return;
       }
 
-      if (nextPath.startsWith("/test/")) navigate(nextPath);
-      else navigate("/candidate");
+      navigate("/candidate");
     } catch (err) {
       const message = err.response?.data?.message || err.message || "Login Failed";
       alert(message === "Network Error" ? "Login failed: unable to reach the server. Please refresh and try again." : message);

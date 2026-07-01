@@ -1172,6 +1172,85 @@ body {
   line-height: 1.45;
 }
 
+.admin-report-span-panel {
+  margin: 18px 0 22px;
+  padding: 18px;
+  border: 1px solid var(--admin-border);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.admin-report-span-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.admin-report-span-head h4 {
+  margin: 0 0 4px;
+  color: var(--admin-green-dark);
+  font-size: 18px;
+}
+
+.admin-report-span-head p {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-report-span-filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.admin-report-span-filters select,
+.admin-report-span-filters input {
+  min-height: 42px;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: #fff;
+  color: var(--admin-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.admin-report-span-stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.admin-report-span-stats > div {
+  border: 1px solid #dfece4;
+  border-radius: 12px;
+  padding: 12px;
+  background: #f7fbf8;
+}
+
+.admin-report-span-stats strong {
+  display: block;
+  color: var(--admin-green-dark);
+  font-size: 24px;
+}
+
+.admin-report-span-stats span {
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.admin-span-table {
+  min-width: 900px;
+}
+
 .admin-report-actions.inline {
   flex: 0 0 auto;
   display: grid;
@@ -1801,6 +1880,19 @@ body {
     grid-template-columns: 58px minmax(0, 1fr);
   }
 
+  .admin-report-span-head {
+    flex-direction: column;
+  }
+
+  .admin-report-span-filters {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .admin-report-span-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .admin-report-actions.inline {
     grid-column: 1 / -1;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1933,5 +2025,14 @@ body {
 
   .admin-report-actions.inline {
     grid-template-columns: 1fr;
+  }
+
+  .admin-report-span-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-report-span-filters select,
+  .admin-report-span-filters input {
+    width: 100%;
   }
 }
