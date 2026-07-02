@@ -29,10 +29,10 @@ table {
 
 #lang-switcher {
   position: fixed !important;
-  top: 20px !important;
-  right: 28px !important;
-  left: auto !important;
-  bottom: auto !important;
+  top: auto !important;
+  right: auto !important;
+  left: 18px !important;
+  bottom: 18px !important;
   transform: none !important;
   z-index: 3000 !important;
 }
@@ -327,6 +327,8 @@ table {
 
 @media (max-width: 640px) {
   #lang-switcher {
+    left: 12px !important;
+    bottom: 12px !important;
     max-width: calc(100vw - 24px);
     padding: 8px 12px !important;
   }

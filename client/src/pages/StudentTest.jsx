@@ -447,6 +447,48 @@ export default function StudentTest() {
   }
 
   if (submitted && result && suite?.showResultsAfterSubmission === false) {
+    const displayName = user.name || user.username || "Candidate";
+    const suiteName = suite?.name || "assessment";
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #f4efe6 0%, #fbfaf6 100%)", display: "grid", placeItems: "center", padding: "26px 16px", fontFamily: "'Segoe UI', sans-serif" }}>
+        <div style={{ position: "relative", overflow: "hidden", background: "rgba(255,255,255,0.96)", border: "1px solid #eee7dc", borderRadius: "26px", padding: "48px 42px", maxWidth: "720px", width: "100%", textAlign: "center", boxShadow: "0 24px 70px rgba(31, 77, 48, 0.12)" }}>
+          <div style={{ position: "absolute", inset: "-30% auto auto -18%", width: "260px", height: "260px", borderRadius: "50%", background: "rgba(45,95,63,0.06)" }} />
+          <div style={{ position: "absolute", right: "-70px", bottom: "-90px", width: "240px", height: "240px", borderRadius: "50%", background: "rgba(245,158,11,0.08)" }} />
+          <div style={{ position: "relative", width: "158px", height: "158px", borderRadius: "50%", display: "grid", placeItems: "center", margin: "0 auto 22px", background: "#eaf3e8", color: GREEN_DARK, fontSize: "76px", boxShadow: "inset 0 0 0 1px rgba(31,107,58,0.08)" }}>
+            🏆
+          </div>
+          <h1 style={{ position: "relative", color: GREEN_DARK, margin: "0 0 12px", fontSize: "clamp(42px, 8vw, 72px)", lineHeight: 1, fontWeight: 900 }}>
+            Great Job!
+          </h1>
+          <p style={{ position: "relative", color: "#26372e", margin: "0 auto 28px", maxWidth: "560px", fontSize: "clamp(20px, 3vw, 30px)", lineHeight: 1.45 }}>
+            <strong>{displayName}</strong>, you did an excellent job attempting the{" "}
+            <strong style={{ color: GREEN }}>{suiteName}</strong>.
+          </p>
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: "20px", margin: "0 auto 28px", maxWidth: "460px", padding: "26px 28px", borderRadius: "22px", background: "linear-gradient(135deg, #edf6ec, #f7fbf6)", color: GREEN_DARK }}>
+            <div style={{ width: "70px", height: "70px", flex: "0 0 auto", borderRadius: "50%", display: "grid", placeItems: "center", background: GREEN, color: WHITE, fontSize: "42px", fontWeight: 900 }}>
+              ✓
+            </div>
+            <div style={{ textAlign: "left", fontSize: "clamp(24px, 4vw, 34px)", lineHeight: 1.18, fontWeight: 900 }}>
+              Submitted<br />successfully!
+            </div>
+          </div>
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: "18px", color: "#9ca3a0", margin: "0 auto 24px", maxWidth: "420px" }}>
+            <span style={{ height: "1px", flex: 1, background: "#d8d6ce" }} />
+            <span style={{ color: GREEN, fontSize: "26px" }}>★</span>
+            <span style={{ height: "1px", flex: 1, background: "#d8d6ce" }} />
+          </div>
+          <p style={{ position: "relative", color: "#33423a", margin: "0 auto 28px", maxWidth: "520px", fontSize: "20px", lineHeight: 1.55 }}>
+            Your answers have been saved. Results for this test will be shared by the administrator when available.
+          </p>
+          <button onClick={() => navigate("/candidate")} style={{ position: "relative", width: "100%", maxWidth: "420px", padding: "17px 22px", background: "linear-gradient(180deg, #237047, #165a35)", color: WHITE, border: "none", borderRadius: "15px", cursor: "pointer", fontSize: "20px", fontWeight: "900", boxShadow: "0 14px 28px rgba(31, 107, 58, 0.18)" }}>
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (submitted && result && suite?.showResultsAfterSubmission === false) {
     return (
       <div style={{ minHeight: "100vh", background: BG, display: "grid", placeItems: "center", padding: "20px", fontFamily: "'Segoe UI', sans-serif" }}>
         <div style={{ background: WHITE, borderRadius: "20px", padding: "32px", maxWidth: "460px", width: "100%", textAlign: "center", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" }}>
