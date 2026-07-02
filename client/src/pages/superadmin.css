@@ -30,23 +30,38 @@ body {
 
 #lang-switcher {
   position: fixed !important;
-  top: 22px !important;
-  right: 34px !important;
-  z-index: 1000 !important;
-  min-height: 38px;
-  padding: 8px 14px !important;
-  border: 1px solid #dbe8df !important;
-  border-radius: 14px !important;
-  background: rgba(255, 255, 255, 0.92) !important;
-  box-shadow: 0 10px 30px rgba(22, 63, 43, 0.08) !important;
+  top: 18px !important;
+  right: 28px !important;
+  left: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  z-index: 3000 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  width: auto !important;
+  max-width: 190px !important;
+  min-height: 36px;
+  padding: 8px 12px !important;
+  border: 1px solid #d9e8df !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 8px 24px rgba(22, 63, 43, 0.1) !important;
   backdrop-filter: blur(10px);
+  white-space: nowrap !important;
 }
 
 #lang-switcher select {
+  width: auto !important;
+  max-width: 125px !important;
+  min-height: auto !important;
+  padding: 0 18px 0 0 !important;
   border: 0 !important;
+  outline: 0 !important;
   background: transparent !important;
   color: var(--admin-primary-dark) !important;
+  font-size: 13px !important;
   font-weight: 800 !important;
+  box-shadow: none !important;
 }
 
 /* ========== SIDEBAR ========== */
@@ -156,7 +171,7 @@ body {
 .main-content {
   flex: 1;
   min-width: 0;
-  padding: 68px 34px 44px;
+  padding: 72px 34px 44px;
   background: var(--admin-background);
   max-width: 1580px;
   margin: 0 auto;
@@ -165,8 +180,8 @@ body {
 /* ========== WELCOME CARD ========== */
 .welcome-card {
   margin-bottom: 26px;
-  padding: 22px 34px;
-  border-radius: 8px;
+  padding: 26px 34px;
+  border-radius: 10px;
   background:
     radial-gradient(circle at 94% 36%, rgba(255, 255, 255, 0.08), transparent 18%),
     linear-gradient(135deg, #07512e, #006438 62%, #07512e);
@@ -200,35 +215,35 @@ body {
 
 .welcome-card h1 {
   margin-bottom: 8px;
-  font-size: 21px;
+  font-size: 24px;
   font-weight: 800;
 }
 
 .welcome-card p {
   color: rgba(255, 255, 255, 0.82);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 /* ========== STATS GRID ========== */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(180px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 18px;
   margin-bottom: 28px;
 }
 
 .stat-card {
   display: flex;
   align-items: center;
-  gap: 20px;
-  min-height: 126px;
-  padding: 22px;
-  border: 1px solid #e8eee9;
-  border-radius: 8px;
+  gap: 18px;
+  min-height: 132px;
+  padding: 24px 26px;
+  border: 1px solid #e5ede8;
+  border-radius: 10px;
   background: var(--admin-white);
-  box-shadow: 0 10px 26px rgba(23, 58, 39, 0.08);
+  box-shadow: 0 12px 28px rgba(23, 58, 39, 0.08);
   transition: all 0.3s ease;
-  border: 2px solid transparent;
+  overflow: hidden;
 }
 
 .stat-card:hover {
@@ -240,14 +255,14 @@ body {
 .stat-card h3 {
   margin-bottom: 8px;
   color: var(--admin-muted);
-  font-size: 14px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
 .stat-card h2 {
   color: var(--admin-primary);
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 800;
 }
 
@@ -1273,19 +1288,19 @@ tbody tr:last-child td {
 .user-actions {
   display: flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: 7px;
   align-items: center;
   justify-content: center;
 }
 
 .icon-action-btn {
-  width: 28px;
+  width: 34px;
   height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 0;
-  border-radius: 8px;
+  border: 1px solid #cfe3d7;
+  border-radius: 10px;
   background: #fff;
   color: var(--admin-primary-dark);
   font: inherit;
@@ -1297,6 +1312,7 @@ tbody tr:last-child td {
 
 .icon-action-btn:hover {
   background: #edf7f1;
+  border-color: var(--admin-primary);
 }
 
 .user-actions .icon-action-btn:not(:first-child) {
@@ -1326,6 +1342,22 @@ tbody tr:last-child td {
   border-color: #fecaca;
   color: #b91c1c;
   background: #fff7f7;
+}
+
+.user-actions .icon-action-btn,
+.user-actions .icon-action-btn:not(:first-child),
+.user-actions:hover .icon-action-btn:not(:first-child),
+.user-actions:focus-within .icon-action-btn:not(:first-child) {
+  display: inline-flex;
+  width: 34px;
+}
+
+.user-actions .icon-action-btn:first-child {
+  color: var(--admin-primary-dark);
+}
+
+.user-actions .icon-action-btn:first-child::before {
+  content: none;
 }
 
 .icon-action-btn.danger:hover {
