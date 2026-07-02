@@ -1302,7 +1302,7 @@ tbody tr:last-child td {
   border: 1px solid #cfe3d7;
   border-radius: 10px;
   background: #fff;
-  color: var(--admin-primary-dark);
+  color: transparent;
   font: inherit;
   font-size: 17px;
   font-weight: 900;
@@ -1313,6 +1313,22 @@ tbody tr:last-child td {
 .icon-action-btn:hover {
   background: #edf7f1;
   border-color: var(--admin-primary);
+}
+
+.icon-action-btn::before {
+  color: var(--admin-primary-dark);
+}
+
+.icon-action-btn[title="Edit user"]::before {
+  content: "✎";
+}
+
+.icon-action-btn[title="Reset password"]::before {
+  content: "↻";
+}
+
+.icon-action-btn[title="Delete user"]::before {
+  content: "×";
 }
 
 .user-actions .icon-action-btn:not(:first-child) {
@@ -1340,8 +1356,12 @@ tbody tr:last-child td {
 
 .icon-action-btn.danger {
   border-color: #fecaca;
-  color: #b91c1c;
+  color: transparent;
   background: #fff7f7;
+}
+
+.icon-action-btn.danger::before {
+  color: #b91c1c;
 }
 
 .user-actions .icon-action-btn,
@@ -1371,6 +1391,11 @@ tbody tr:last-child td {
   cursor: not-allowed;
   background: #f3f4f6;
   border-color: #d1d5db;
+  color: transparent;
+}
+
+.icon-action-btn:disabled::before,
+.icon-action-btn:disabled:hover::before {
   color: #6b7280;
 }
 
