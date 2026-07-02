@@ -22,6 +22,11 @@ function userLabel(user) {
   return `${user.name}${contact ? ` - ${contact}` : ""}`;
 }
 
+function keepSelectedUserVisible(options, selectedUser) {
+  if (!selectedUser?._id || options.some(user => user._id === selectedUser._id)) return options;
+  return [selectedUser, ...options];
+}
+
 function uniqueSortedValues(values) {
   return [...new Set(values.map(value => String(value || "").trim()).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
@@ -342,6 +347,7 @@ function SuiteModal({ suite, onClose, onSave }) {
   const [description, setDescription] = useState(suite?.description || "");
   const [status, setStatus] = useState(suite?.status || "draft");
   const [passingPercentage, setPassingPercentage] = useState(suite?.passingPercentage ?? 50);
+  const [showResultsAfterSubmission, setShowResultsAfterSubmission] = useState(suite?.showResultsAfterSubmission !== false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -366,6 +372,7 @@ function SuiteModal({ suite, onClose, onSave }) {
         description: description.trim(),
         status,
         passingPercentage: passMark,
+        showResultsAfterSubmission,
       };
       const res = suite
         ? await axios.put(`${API}/api/test-suites/${suite._id}`, payload, config)
@@ -414,6 +421,18 @@ function SuiteModal({ suite, onClose, onSave }) {
             value={passingPercentage}
             onChange={e => setPassingPercentage(e.target.value)}
           />
+        </label>
+
+        <label className="suite-modal-check">
+          <input
+            type="checkbox"
+            checked={showResultsAfterSubmission}
+            onChange={e => setShowResultsAfterSubmission(e.target.checked)}
+          />
+          <span>
+            Show result immediately after submission
+            <small>If off, candidates only see a submission confirmation.</small>
+          </span>
         </label>
 
         <div className="suite-modal-actions">
@@ -730,11 +749,22 @@ export default function Dashboard() {
     const matchesDesignation = !assignmentDesignation || item.designation === assignmentDesignation;
     return matchesSearch && matchesProject && matchesDesignation;
   });
-  const reportFilteredUsers = users.filter(item =>
-    userLabel(item).toLowerCase().includes(reportSearch.toLowerCase()) ||
-    (item.project || "").toLowerCase().includes(reportSearch.toLowerCase()) ||
-    (item.designation || "").toLowerCase().includes(reportSearch.toLowerCase())
-  );
+  const reportFilteredUsers = users.filter(item => {
+    const q = reportSearch.trim().toLowerCase();
+    if (!q) return true;
+    return [
+      userLabel(item),
+      userContact(item),
+      item.email,
+      item.mobile,
+      item.username,
+      item.name,
+      item.role,
+      item.project,
+      item.designation,
+    ].filter(Boolean).join(" ").toLowerCase().includes(q);
+  });
+  const reportUserOptions = keepSelectedUserVisible(reportFilteredUsers, selectedReportUser).slice(0, 80);
   const selectedUserResults = selectedReportUser
     ? reportResults.filter(result => matchesUserResult(result, selectedReportUser))
     : [];
@@ -1154,6 +1184,95 @@ export default function Dashboard() {
       },
     });
     doc.save(`descriptive_test_report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  const downloadAttemptAnalysisExcel = () => {
+    if (!canDownloadReports) return alert("Download permission is disabled for your account.");
+    if (reportSpanSummaryRows.length === 0) return alert("No attempts found in this time span.");
+    const summaryRows = [{
+      "Time Span": reportSpanLabel,
+      "Total Attempts": reportSpanResults.length,
+      "Tests Attempted": reportSpanSummaryRows.length,
+      "Unique Users": reportSpanCandidates,
+      "Passed": reportSpanPassed,
+      "Failed": reportSpanFailed,
+      "Average Score": `${reportSpanAverage}%`,
+    }];
+    const rows = reportSpanSummaryRows.map((row, index) => ({
+      "Sr. No.": index + 1,
+      "Test Name": row.testName,
+      "Attempts": row.totalAttempts,
+      "Users": row.usersAttempted,
+      "Passed": row.passed,
+      "Failed": row.failed,
+      "Pass Rate (%)": `${row.passRate.toFixed(2)}%`,
+      "Average Score (%)": `${row.averageScore.toFixed(2)}%`,
+      "First Attempted At": formatDateTime(row.firstAttempt),
+      "Latest Attempted At": formatDateTime(row.latestAttempt),
+      "Average Time Taken": formatDuration(row.averageTime),
+    }));
+    const wb = XLSX.utils.book_new();
+    const summaryWs = XLSX.utils.json_to_sheet(summaryRows);
+    const detailWs = XLSX.utils.json_to_sheet(rows);
+    summaryWs["!cols"] = Object.keys(summaryRows[0]).map(key => ({ wch: Math.max(16, key.length + 4) }));
+    detailWs["!cols"] = Object.keys(rows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }));
+    XLSX.utils.book_append_sheet(wb, summaryWs, "Time Span Summary");
+    XLSX.utils.book_append_sheet(wb, detailWs, "Attempt Analysis");
+    XLSX.writeFile(wb, `attempt_analysis_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const downloadAttemptAnalysisPDF = () => {
+    if (!canDownloadReports) return alert("Download permission is disabled for your account.");
+    if (reportSpanSummaryRows.length === 0) return alert("No attempts found in this time span.");
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    doc.setFillColor(26, 61, 40);
+    doc.rect(0, 0, 297, 25, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("Attempt Analysis by Time Span", 14, 10);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(reportSpanLabel, 14, 17);
+
+    autoTable(doc, {
+      startY: 32,
+      head: [["Total Attempts", "Tests Attempted", "Unique Users", "Passed", "Failed", "Average Score"]],
+      body: [[
+        reportSpanResults.length,
+        reportSpanSummaryRows.length,
+        reportSpanCandidates,
+        reportSpanPassed,
+        reportSpanFailed,
+        `${reportSpanAverage}%`,
+      ]],
+      styles: { fontSize: 9, cellPadding: 3, halign: "center" },
+      headStyles: { fillColor: [234, 246, 239], textColor: [26, 61, 40] },
+      bodyStyles: { textColor: [38, 51, 46] },
+    });
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 10,
+      head: [["Sr.", "Test Name", "Attempts", "Users", "Passed", "Failed", "Pass Rate", "Avg Score", "Avg Time"]],
+      body: reportSpanSummaryRows.map((row, index) => [
+        index + 1,
+        row.testName,
+        row.totalAttempts,
+        row.usersAttempted,
+        row.passed,
+        row.failed,
+        `${row.passRate.toFixed(2)}%`,
+        `${row.averageScore.toFixed(2)}%`,
+        formatDuration(row.averageTime),
+      ]),
+      styles: { fontSize: 7.4, cellPadding: 2, overflow: "linebreak" },
+      headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [248, 247, 244] },
+      columnStyles: {
+        1: { cellWidth: 70 },
+      },
+    });
+    doc.save(`attempt_analysis_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   const downloadPersonalExcel = () => {
@@ -1723,7 +1842,7 @@ export default function Dashboard() {
             />
             <select value={reportUserId} onChange={(e) => setReportUserId(e.target.value)}>
               <option value="">Select user</option>
-              {reportFilteredUsers.slice(0, 40).map(item => (
+              {reportUserOptions.map(item => (
                 <option key={item._id} value={item._id}>{userLabel(item)}</option>
               ))}
             </select>
@@ -1847,6 +1966,12 @@ export default function Dashboard() {
                   </select>
                   <input type="datetime-local" value={reportSpanFrom} onChange={(e) => { setReportSpanPreset(""); setReportSpanFrom(e.target.value); }} />
                   <input type="datetime-local" value={reportSpanTo} onChange={(e) => { setReportSpanPreset(""); setReportSpanTo(e.target.value); }} />
+                  <button type="button" onClick={downloadAttemptAnalysisPDF} disabled={!canDownloadReports || reportSpanSummaryRows.length === 0}>
+                    PDF
+                  </button>
+                  <button type="button" onClick={downloadAttemptAnalysisExcel} disabled={!canDownloadReports || reportSpanSummaryRows.length === 0}>
+                    Excel
+                  </button>
                 </div>
               </div>
               <div className="admin-report-span-stats">

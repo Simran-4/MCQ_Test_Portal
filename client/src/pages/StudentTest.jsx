@@ -446,6 +446,23 @@ export default function StudentTest() {
     );
   }
 
+  if (submitted && result && suite?.showResultsAfterSubmission === false) {
+    return (
+      <div style={{ minHeight: "100vh", background: BG, display: "grid", placeItems: "center", padding: "20px", fontFamily: "'Segoe UI', sans-serif" }}>
+        <div style={{ background: WHITE, borderRadius: "20px", padding: "32px", maxWidth: "460px", width: "100%", textAlign: "center", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" }}>
+          <div style={{ width: "58px", height: "58px", borderRadius: "50%", display: "grid", placeItems: "center", margin: "0 auto 14px", background: "#ecfdf3", color: GREEN_DARK, fontSize: "30px", fontWeight: "900" }}>✓</div>
+          <h2 style={{ color: GREEN_DARK, margin: "0 0 8px" }}>Test submitted successfully</h2>
+          <p style={{ color: "#66736a", margin: "0 0 20px", lineHeight: 1.5 }}>
+            Your answers have been saved. Result visibility is disabled for this test suite.
+          </p>
+          <button onClick={() => navigate("/candidate")} style={{ width: "100%", padding: "12px 18px", background: GREEN, color: WHITE, border: "none", borderRadius: "12px", cursor: "pointer", fontWeight: "800" }}>
+            Back to Tests
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Results Screen
   if (submitted && result) {
     const pct    = Math.round((result.score / result.totalMarks) * 100) || 0;

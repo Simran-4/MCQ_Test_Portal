@@ -27,6 +27,16 @@ table {
   min-width: max-content;
 }
 
+#lang-switcher {
+  position: fixed !important;
+  top: 20px !important;
+  right: 28px !important;
+  left: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  z-index: 3000 !important;
+}
+
 .table-wrapper,
 .suite-results-content,
 .rights-table-wrap,

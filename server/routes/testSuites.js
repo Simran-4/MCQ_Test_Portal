@@ -146,6 +146,9 @@ function sanitizeSuiteUpdatePayload(body) {
   if (payload.scoringMode !== undefined) {
     payload.scoringMode = payload.scoringMode === "sixteen_pf" ? "sixteen_pf" : "standard";
   }
+  if (payload.showResultsAfterSubmission !== undefined) {
+    payload.showResultsAfterSubmission = payload.showResultsAfterSubmission !== false;
+  }
   if (payload.questionsToServe !== undefined) {
     const numeric = Number(payload.questionsToServe);
     payload.questionsToServe = Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : null;
@@ -186,8 +189,10 @@ function suiteToObject(suite) {
   const data = typeof suite?.toObject === "function" ? suite.toObject() : { ...(suite || {}) };
   return {
     submitDelayMinutes: 0,
+    showResultsAfterSubmission: true,
     ...data,
     submitDelayMinutes: Number(data.submitDelayMinutes) > 0 ? Math.floor(Number(data.submitDelayMinutes)) : 0,
+    showResultsAfterSubmission: data.showResultsAfterSubmission !== false,
   };
 }
 
