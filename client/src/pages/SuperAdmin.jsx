@@ -1500,22 +1500,22 @@ function SuperAdmin() {
 
         {activeNav === "dashboard" && (
           <section className="stats-grid">
-            <div className="stat-card" onClick={() => setActiveNav("Candidates")} style={{ cursor: "pointer" }}>
+            <div className="stat-card stat-card-with-icon" onClick={() => setActiveNav("Candidates")} style={{ cursor: "pointer" }}>
               <h3>Total Users</h3>
               <h2>{displayStats.totalUsers}</h2>
               <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
             </div>
-            <div className="stat-card" onClick={() => setActiveNav("Candidates")} style={{ cursor: "pointer" }}>
+            <div className="stat-card stat-card-with-icon" onClick={() => setActiveNav("Candidates")} style={{ cursor: "pointer" }}>
               <h3>Active Users</h3>
               <h2>{displayStats.activeUsers}</h2>
               <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
             </div>
-            <div className="stat-card" onClick={() => setActiveNav("administrators")} style={{ cursor: "pointer" }}>
+            <div className="stat-card stat-card-with-icon" onClick={() => setActiveNav("administrators")} style={{ cursor: "pointer" }}>
               <h3>Administrators</h3>
               <h2>{displayStats.administrators}</h2>
               <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
             </div>
-            <div className="stat-card">
+            <div className="stat-card stat-card-with-icon">
               <h3>Assessments</h3>
               {/* ✅ Fixed: backend returns totalAssessments not assessments */}
               <h2>{displayStats.totalAssessments}</h2>
@@ -2187,7 +2187,7 @@ function SuperAdmin() {
         )}
 
         {(activeNav === "dashboard" || activeNav === "Candidates" || activeNav === "administrators") && (
-          <section className="card" id="users">
+          <section className={`card users-card ${activeNav === "Candidates" ? "users-card-green" : ""}`} id="users">
             <div className="section-header">
               <h2>{getSectionTitle()}</h2>
               <input
