@@ -27,6 +27,22 @@ function keepSelectedUserVisible(options, selectedUser) {
   return [selectedUser, ...options];
 }
 
+function userMatchesReportSearch(user, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+  return [
+    userLabel(user),
+    userContact(user),
+    user?.email,
+    user?.mobile,
+    user?.username,
+    user?.name,
+    user?.role,
+    user?.project,
+    user?.designation,
+  ].filter(Boolean).join(" ").toLowerCase().includes(q);
+}
+
 function uniqueSortedValues(values) {
   return [...new Set(values.map(value => String(value || "").trim()).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
@@ -710,7 +726,7 @@ export default function Dashboard() {
     try {
       const headers = getAuthHeaders();
       const [usersRes, resultsRes] = await Promise.allSettled([
-        (canViewUsers || canAssignTests)
+        (canViewUsers || canAssignTests || canViewReports || canViewTestReports)
           ? axios.get(`${API}/api/auth/users`, { headers })
           : Promise.resolve({ data: [] }),
         (canViewReports || canViewTestReports)
@@ -750,21 +766,10 @@ export default function Dashboard() {
     const matchesDesignation = !assignmentDesignation || item.designation === assignmentDesignation;
     return matchesSearch && matchesProject && matchesDesignation;
   });
-  const reportFilteredUsers = users.filter(item => {
-    const q = reportSearch.trim().toLowerCase();
-    if (!q) return true;
-    return [
-      userLabel(item),
-      userContact(item),
-      item.email,
-      item.mobile,
-      item.username,
-      item.name,
-      item.role,
-      item.project,
-      item.designation,
-    ].filter(Boolean).join(" ").toLowerCase().includes(q);
-  });
+  const reportFilteredUsers = useMemo(
+    () => users.filter(item => userMatchesReportSearch(item, reportSearch)),
+    [users, reportSearch]
+  );
   const reportUserOptions = keepSelectedUserVisible(reportFilteredUsers, selectedReportUser).slice(0, 80);
   const selectedUserResults = selectedReportUser
     ? reportResults.filter(result => matchesUserResult(result, selectedReportUser))
@@ -837,6 +842,21 @@ export default function Dashboard() {
     return true;
   });
   const suiteFiltersActive = Boolean(suiteSearch || suiteDateFrom || suiteDateTo);
+
+  useEffect(() => {
+    if (activePanel !== "reports") return;
+    if (reportUserId && !users.some(item => item._id === reportUserId)) {
+      setReportUserId("");
+      return;
+    }
+    if (reportUserId && reportSearch.trim() && selectedReportUser && !userMatchesReportSearch(selectedReportUser, reportSearch)) {
+      setReportUserId("");
+      return;
+    }
+    if (!reportUserId && reportSearch.trim() && reportFilteredUsers.length === 1) {
+      setReportUserId(reportFilteredUsers[0]._id);
+    }
+  }, [activePanel, reportFilteredUsers, reportSearch, reportUserId, selectedReportUser, users]);
 
   const suiteResultCount = (suiteId) =>
     reportResults.filter(result => resultSuiteId(result) === String(suiteId)).length;

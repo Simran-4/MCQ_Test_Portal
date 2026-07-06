@@ -712,16 +712,6 @@ function SuperAdmin() {
     setError("");
   }, []);
 
-  const fetchOverview = async () => {
-    try {
-      setOverview(await getOverview());
-    } catch (err) {
-      setError(err.response?.data?.message || "Unable to load users");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const loadActivityLogs = useCallback(async (overrides = {}) => {
     const nextSearch = overrides.search ?? activitySearch;
     const nextFrom = overrides.from ?? activityFromDate;
@@ -735,6 +725,7 @@ function SuperAdmin() {
           search: nextSearch.trim() || undefined,
           from: nextFrom || undefined,
           to: nextTo || undefined,
+          _: Date.now(),
         },
       });
       setActivityLogs(res.data);
@@ -803,14 +794,31 @@ function SuperAdmin() {
   }, [activeNav]);
 
   const updateAccess = async (userId, isActive) => {
+    const previousUsers = users;
+    const previousStats = stats;
+    const targetUser = users.find(user => user._id === userId);
+    if (targetUser) {
+      const wasActive = targetUser.isActive !== false;
+      setUsers(prev => prev.map(user => user._id === userId ? { ...user, isActive } : user));
+      if (wasActive !== isActive) {
+        setStats(prev => ({
+          ...prev,
+          activeUsers: Math.max(0, prev.activeUsers + (isActive ? 1 : -1)),
+        }));
+      }
+    }
+
     try {
-      await axios.put(
+      const res = await axios.put(
         `${API_URL}/superadmin/users/${userId}/access`,
         { isActive },
         { headers: getAuthHeaders() }
       );
-      await fetchOverview();
+      setUsers(prev => prev.map(user => user._id === res.data._id ? res.data : user));
+      getOverview().then(setOverview).catch(() => {});
     } catch (err) {
+      setUsers(previousUsers);
+      setStats(previousStats);
       alert(err.response?.data?.message || "Unable to update user access");
     }
   };
@@ -882,16 +890,25 @@ function SuperAdmin() {
         isActive: editUserForm.isActive,
       };
       const res = await axios.put(`${API_URL}/superadmin/users/${editUserId}`, payload, { headers: getAuthHeaders() });
+      let passwordResetFailed = false;
       if (editUserForm.resetPassword) {
-        await axios.put(
-          `${API_URL}/superadmin/users/${editUserId}/password`,
-          { password: editUserForm.newPassword },
-          { headers: getAuthHeaders() }
-        );
+        try {
+          await axios.put(
+            `${API_URL}/superadmin/users/${editUserId}/password`,
+            { password: editUserForm.newPassword },
+            { headers: getAuthHeaders() }
+          );
+        } catch {
+          passwordResetFailed = true;
+        }
       }
       setUsers(prev => prev.map(user => user._id === res.data._id ? res.data : user));
       setEditUserForm(userToEditForm(res.data));
-      alert("User updated successfully.");
+      getOverview().then(setOverview).catch(() => {});
+      alert(passwordResetFailed
+        ? "User details saved, but password reset failed. Try resetting the password again."
+        : "User updated successfully."
+      );
     } catch (err) {
       alert(err.response?.data?.message || "Unable to update user. CloudJiffy backend may need redeploy.");
     } finally {
@@ -1600,7 +1617,7 @@ function SuperAdmin() {
                 <h2>Activity Logs</h2>
                 <p>Successful changes made by candidates, administrators, and super admins.</p>
               </div>
-              <button type="button" onClick={() => loadActivityLogs()}>Refresh</button>
+              <button type="button" className="refresh-btn" onClick={() => loadActivityLogs()}>Refresh</button>
             </div>
             <form className="activity-filters" onSubmit={(event) => { event.preventDefault(); loadActivityLogs(); }}>
               <input
@@ -1630,7 +1647,7 @@ function SuperAdmin() {
               >
                 Clear
               </button>
-              <button type="button" onClick={loadActivityLogs}>Refresh</button>
+              <button type="button" onClick={() => loadActivityLogs()}>Refresh</button>
             </form>
             {activityLoading ? <p className="empty-message">Loading activity…</p> : (
               <div className="table-wrapper activity-table-wrapper">

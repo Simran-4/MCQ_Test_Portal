@@ -30,10 +30,10 @@ body {
 
 #lang-switcher {
   position: fixed !important;
-  top: auto !important;
-  right: auto !important;
-  left: 18px !important;
-  bottom: 18px !important;
+  top: 24px !important;
+  right: 28px !important;
+  left: auto !important;
+  bottom: auto !important;
   transform: none !important;
   z-index: 3000 !important;
   display: inline-flex !important;
@@ -2052,7 +2052,7 @@ body {
   }
 
   .admin-main {
-    padding: 24px 18px;
+    padding: 72px 18px 24px;
   }
 
   .admin-top-nav {

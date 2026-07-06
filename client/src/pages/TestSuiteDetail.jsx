@@ -211,6 +211,7 @@ export default function TestSuiteDetail() {
   const [showDuration, setShowDuration] = useState(false);
   const [durationVal, setDurationVal]   = useState(30);
   const [submitDelayVal, setSubmitDelayVal] = useState(0);
+  const [showResultsAfterSubmission, setShowResultsAfterSubmission] = useState(true);
   const [savingDur, setSavingDur]       = useState(false);
 
   // Feature 5: Questions to serve
@@ -265,6 +266,7 @@ export default function TestSuiteDetail() {
       setSuite(suiteRes.data);
       setDurationVal(suiteRes.data.duration || 30);
       setSubmitDelayVal(suiteRes.data.submitDelayMinutes || 0);
+      setShowResultsAfterSubmission(suiteRes.data.showResultsAfterSubmission !== false);
       setQuestionMode(suiteRes.data.questionSelectionMode || (suiteRes.data.selectedQuestionIds?.length ? "selected" : suiteRes.data.questionsToServe ? "random" : "all"));
       setSelectedQuestionIds((suiteRes.data.selectedQuestionIds || []).map(id => String(id?._id || id)));
       setQtsServeVal(suiteRes.data.questionsToServe || "");
@@ -422,12 +424,12 @@ export default function TestSuiteDetail() {
     setSavingDur(true);
     try {
       await axios.put(`${API}/api/test-suites/${suiteId}`,
-        { duration: Number(durationVal), submitDelayMinutes: submitDelay },
+        { duration: Number(durationVal), submitDelayMinutes: submitDelay, showResultsAfterSubmission },
         { headers: getAuthHeaders() }
       );
-      setSuite(prev => ({ ...prev, duration: Number(durationVal), submitDelayMinutes: submitDelay }));
+      setSuite(prev => ({ ...prev, duration: Number(durationVal), submitDelayMinutes: submitDelay, showResultsAfterSubmission }));
       setShowDuration(false);
-      alert("Duration and submit timing saved!");
+      alert("Duration, submit timing, and result visibility saved!");
     } catch { alert("Failed to save duration"); }
     finally { setSavingDur(false); }
   };
@@ -920,7 +922,7 @@ export default function TestSuiteDetail() {
             <>
               <button onClick={() => setShowDuration(s => !s)}
                 style={{ padding: "10px 20px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-                ⏱ Duration / submit ({suite.duration || 30} min{suite.submitDelayMinutes ? `, submit after ${suite.submitDelayMinutes} min` : ""})
+                ⏱ Duration / submit ({suite.duration || 30} min{suite.submitDelayMinutes ? `, submit after ${suite.submitDelayMinutes} min` : ""}, result {suite.showResultsAfterSubmission === false ? "hidden" : "shown"})
               </button>
               <button onClick={() => setShowPassing(s => !s)}
                 style={{ padding: "10px 20px", background: WHITE, color: "#166534", border: "1px solid #86efac", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
@@ -983,6 +985,15 @@ export default function TestSuiteDetail() {
                 <input type="number" min={0} max={durationVal || 300} value={submitDelayVal} onChange={e => setSubmitDelayVal(e.target.value)} style={{ ...inputStyle, width: "160px" }} />
               </div>
               <span style={{ fontSize: "14px", color: "#666", paddingBottom: "11px" }}>minutes</span>
+              <label style={{ display: "flex", alignItems: "center", gap: "10px", minHeight: "42px", padding: "10px 14px", border: "1px solid #d8e9df", borderRadius: "12px", background: "#f8fcf9", color: GREEN_DARK, fontSize: "13px", fontWeight: "800", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={showResultsAfterSubmission}
+                  onChange={e => setShowResultsAfterSubmission(e.target.checked)}
+                  style={{ width: "18px", height: "18px", accentColor: GREEN }}
+                />
+                Show result after submission
+              </label>
               <button onClick={handleSaveDuration} disabled={savingDur} style={{ padding: "10px 20px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: savingDur ? 0.6 : 1 }}>
                 {savingDur ? "Saving…" : "Save"}
               </button>

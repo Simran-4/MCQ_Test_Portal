@@ -505,12 +505,13 @@ router.get("/", async (req, res) => {
 // ── CREATE NEW SUITE ──────────────────────────────────────────
 router.post("/", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
   try {
-    const { name, description, status, passingPercentage, scoringMode } = req.body;
+    const { name, description, status, passingPercentage, scoringMode, showResultsAfterSubmission } = req.body;
     const newSuite = new TestSuite({
       name,
       description,
       status: status || "draft",
       passingPercentage: normalizePassingPercentage(passingPercentage),
+      showResultsAfterSubmission: showResultsAfterSubmission !== false,
       scoringMode: scoringMode === "sixteen_pf" ? "sixteen_pf" : "standard",
     });
     const savedSuite = await newSuite.save();

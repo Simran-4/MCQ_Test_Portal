@@ -506,12 +506,16 @@ router.get("/superadmin/activity-logs", authMiddleware, requireSuperAdmin, async
                 log.actorName,
                 log.actorRole,
                 log.action,
+                log.method,
                 log.path,
+                log.targetId,
+                log.details?.username,
                 log.details?.project,
                 log.details?.designation,
                 log.details?.department,
                 log.details?.name,
                 log.details?.email,
+                log.details?.mobile,
             ].join(" ").toLowerCase();
             return haystack.includes(searchTerm);
         });
@@ -620,7 +624,9 @@ router.get("/users", authMiddleware, requireAdminOrSuperAdmin, async (req, res) 
         if (requester?.role === "admin" &&
             !hasAdminPermission(requester, "canViewUsers") &&
             !hasAdminPermission(requester, "canAssignTests") &&
-            !hasAdminPermission(requester, "canBulkMail")) {
+            !hasAdminPermission(requester, "canBulkMail") &&
+            !hasAdminPermission(requester, "canViewReports") &&
+            !hasAdminPermission(requester, "canViewTestReports")) {
             return res.status(403).json({ message: "User list access denied" });
         }
         const users = await User.find().select("_id name username email mobile role customRole isActive project designation adminPermissions").sort({ name: 1 });
