@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -7,6 +8,7 @@ import * as XLSX from "xlsx";
 import "./superadmin.css";
 import { ADMIN_PERMISSION_DEFAULTS, getAuthHeaders, getCurrentUser } from "../utils/auth";
 import BulkMailPanel from "../components/BulkMailPanel";
+import LanguageSwitcher from "../components/LanguageSwitcher";
 import { apiProjectsToMap, defaultOrgOptions, mergeOrgOptions, readLocalOrgOptions, writeLocalOrgOptions } from "../utils/orgOptions";
 
 const API_BASE = `${import.meta.env.VITE_API_URL || ""}/api`;
@@ -653,6 +655,7 @@ function saveReportsPDF(results, suitesById, reportType) {
 }
 
 function SuperAdmin() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const currentUser = getCurrentUser();
   const [users, setUsers] = useState([]);
@@ -1428,12 +1431,12 @@ function SuperAdmin() {
   );
 
   const getSectionTitle = () => {
-    if (activeNav === "Candidates") return "Candidates";
-    if (activeNav === "administrators") return "Administrators";
-    if (activeNav === "reports") return "Reports";
-    if (activeNav === "activity") return "Activity Logs";
-    if (activeNav === "management") return "Controls";
-    return "User Management";
+    if (activeNav === "Candidates") return t("candidates");
+    if (activeNav === "administrators") return t("administrators");
+    if (activeNav === "reports") return t("reports");
+    if (activeNav === "activity") return t("activityLogs");
+    if (activeNav === "management") return t("controls");
+    return t("userManagement");
   };
 
   useEffect(() => {
@@ -1451,7 +1454,7 @@ function SuperAdmin() {
           <img src="/Logo.png" alt="Snehalaya logo" />
           <div>
             <p>MCQ Test Portal</p>
-            <h2>Super Admin</h2>
+            <h2>{t("superAdmin")}</h2>
           </div>
         </div>
 
@@ -1461,56 +1464,59 @@ function SuperAdmin() {
             className={activeNav === "dashboard" ? "active" : ""}
             onClick={() => { setActiveNav("dashboard"); setSearch(""); }}
           >
-            🏠 Dashboard
+            🏠 {t("dashboardNav")}
           </button>
           <button
             type="button"
             className={activeNav === "Candidates" ? "active" : ""}
             onClick={() => { setActiveNav("Candidates"); setSearch(""); }}
           >
-            🎓 Candidates
+            🎓 {t("candidates")}
           </button>
           <button
             type="button"
             className={activeNav === "administrators" ? "active" : ""}
             onClick={() => { setActiveNav("administrators"); setSearch(""); }}
           >
-            🛡️ Administrators
+            🛡️ {t("administrators")}
           </button>
           <button
             type="button"
             className={activeNav === "reports" ? "active" : ""}
             onClick={() => { setActiveNav("reports"); setSearch(""); }}
           >
-            📊 Reports
+            📊 {t("reports")}
           </button>
           <button
             type="button"
             className={activeNav === "management" ? "active" : ""}
             onClick={() => { setActiveNav("management"); setSearch(""); }}
           >
-            🧩 Controls
+            🧩 {t("controls")}
           </button>
           <button
             type="button"
             className={activeNav === "activity" ? "active" : ""}
             onClick={() => { setActiveNav("activity"); setSearch(""); }}
           >
-            Activity Logs
+            {t("activityLogs")}
           </button>
           <button type="button" onClick={logout}>
-            🚪 Logout
+            🚪 {t("logout")}
           </button>
         </nav>
       </aside>
 
       <main className="main-content">
+        <div className="superadmin-toolbar">
+          <LanguageSwitcher />
+        </div>
 
         {activeNav === "dashboard" && (
           <section className="welcome-card">
             <div>
-              <h1>Welcome Back, Super Admin</h1>
-              <p>Manage users, administrators and monitor assessment activities.</p>
+              <h1>{t("welcomeSuperAdmin")}</h1>
+              <p>{t("welcomeSuperAdminText")}</p>
             </div>
           </section>
         )}
@@ -1518,25 +1524,25 @@ function SuperAdmin() {
         {activeNav === "dashboard" && (
           <section className="stats-grid">
             <div className="stat-card stat-card-with-icon" onClick={() => setActiveNav("Candidates")} style={{ cursor: "pointer" }}>
-              <h3>Total Users</h3>
+              <h3>{t("totalUsers")}</h3>
               <h2>{displayStats.totalUsers}</h2>
-              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
+              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>{t("clickToView")}</p>
             </div>
             <div className="stat-card stat-card-with-icon" onClick={() => setActiveNav("Candidates")} style={{ cursor: "pointer" }}>
-              <h3>Active Users</h3>
+              <h3>{t("activeUsers")}</h3>
               <h2>{displayStats.activeUsers}</h2>
-              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
+              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>{t("clickToView")}</p>
             </div>
             <div className="stat-card stat-card-with-icon" onClick={() => setActiveNav("administrators")} style={{ cursor: "pointer" }}>
-              <h3>Administrators</h3>
+              <h3>{t("administrators")}</h3>
               <h2>{displayStats.administrators}</h2>
-              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Click to view →</p>
+              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>{t("clickToView")}</p>
             </div>
             <div className="stat-card stat-card-with-icon">
-              <h3>Assessments</h3>
+              <h3>{t("assessments")}</h3>
               {/* ✅ Fixed: backend returns totalAssessments not assessments */}
               <h2>{displayStats.totalAssessments}</h2>
-              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>Total submitted</p>
+              <p style={{ fontSize: "13px", color: "#888", marginTop: "8px" }}>{t("totalSubmitted")}</p>
             </div>
           </section>
         )}
@@ -2211,7 +2217,7 @@ function SuperAdmin() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search users..."
+                placeholder={t("searchUsers")}
               />
             </div>
 
@@ -2221,15 +2227,15 @@ function SuperAdmin() {
               <table className="user-management-table">
                 <thead>
                   <tr>
-                    <th>Sr. No.</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Project/Department</th>
-                    <th>Designation</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Access</th>
-                    <th>Actions</th>
+                    <th>{t("serialNumber")}</th>
+                    <th>{t("name")}</th>
+                    <th>{t("email")}</th>
+                    <th>{t("projectDepartment")}</th>
+                    <th>{t("designation")}</th>
+                    <th>{t("role")}</th>
+                    <th>{t("status")}</th>
+                    <th>{t("access")}</th>
+                    <th>{t("actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2249,7 +2255,7 @@ function SuperAdmin() {
                           {user.customRole || user.role}
                         </span>
                       </td>
-                      <td>{user.isActive ? "Active" : "Disabled"}</td>
+                      <td>{user.isActive ? t("active") : t("disabled")}</td>
                       <td>
                         <label className="switch">
                           <input
@@ -2301,15 +2307,15 @@ function SuperAdmin() {
             {filteredUsers.length > USERS_PER_PAGE && (
               <div className="table-pagination">
                 <span>
-                  Showing {userPageStart}-{userPageEnd} of {filteredUsers.length} user{filteredUsers.length !== 1 ? "s" : ""}
+                  {t("showingUsers", { from: userPageStart, to: userPageEnd, total: filteredUsers.length })}
                 </span>
                 <div>
                   <button type="button" onClick={() => setUserPage(page => Math.max(1, page - 1))} disabled={safeUserPage === 1}>
-                    Previous
+                    {t("previous")}
                   </button>
-                  <strong>Page {safeUserPage} of {totalUserPages}</strong>
+                  <strong>{t("pageOf", { page: safeUserPage, pages: totalUserPages })}</strong>
                   <button type="button" onClick={() => setUserPage(page => Math.min(totalUserPages, page + 1))} disabled={safeUserPage === totalUserPages}>
-                    Next page
+                    {t("nextPage")}
                   </button>
                 </div>
               </div>

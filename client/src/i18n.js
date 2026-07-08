@@ -1,51 +1,143 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
+const storedLanguage = localStorage.getItem("selectedLang");
+const savedLanguage = ["en", "hi", "mr"].includes(storedLanguage) ? storedLanguage : "en";
+
+const english = {
+  dashboard: "Admin Dashboard",
+  welcome: "Welcome back! Manage questions and view results.",
+  addQuestion: "Add Question",
+  viewQuestions: "View Questions",
+  viewResults: "View Results",
+  logout: "Logout",
+  superAdmin: "Super Admin",
+  dashboardNav: "Dashboard",
+  candidates: "Candidates",
+  administrators: "Administrators",
+  reports: "Reports",
+  controls: "Controls",
+  activityLogs: "Activity Logs",
+  welcomeSuperAdmin: "Welcome Back, Super Admin",
+  welcomeSuperAdminText: "Manage users, administrators and monitor assessment activities.",
+  totalUsers: "Total Users",
+  activeUsers: "Active Users",
+  assessments: "Assessments",
+  clickToView: "Click to view →",
+  totalSubmitted: "Total submitted",
+  userManagement: "User Management",
+  searchUsers: "Search users...",
+  serialNumber: "Sr. No.",
+  name: "Name",
+  email: "Email",
+  projectDepartment: "Project/Department",
+  designation: "Designation",
+  role: "Role",
+  status: "Status",
+  access: "Access",
+  actions: "Actions",
+  active: "Active",
+  disabled: "Disabled",
+  showingUsers: "Showing {{from}}–{{to}} of {{total}} users",
+  previous: "Previous",
+  nextPage: "Next page",
+  pageOf: "Page {{page}} of {{pages}}",
+  language: "Language",
+};
+
+const hindi = {
+  dashboard: "एडमिन डैशबोर्ड",
+  welcome: "वापस स्वागत है! प्रश्नों और परिणामों का प्रबंधन करें।",
+  addQuestion: "प्रश्न जोड़ें",
+  viewQuestions: "प्रश्न देखें",
+  viewResults: "परिणाम देखें",
+  logout: "लॉग आउट",
+  superAdmin: "सुपर एडमिन",
+  dashboardNav: "डैशबोर्ड",
+  candidates: "उम्मीदवार",
+  administrators: "प्रशासक",
+  reports: "रिपोर्ट",
+  controls: "नियंत्रण",
+  activityLogs: "गतिविधि लॉग",
+  welcomeSuperAdmin: "वापसी पर स्वागत है, सुपर एडमिन",
+  welcomeSuperAdminText: "उपयोगकर्ताओं, प्रशासकों और मूल्यांकन गतिविधियों का प्रबंधन करें।",
+  totalUsers: "कुल उपयोगकर्ता",
+  activeUsers: "सक्रिय उपयोगकर्ता",
+  assessments: "मूल्यांकन",
+  clickToView: "देखने के लिए क्लिक करें →",
+  totalSubmitted: "कुल जमा",
+  userManagement: "उपयोगकर्ता प्रबंधन",
+  searchUsers: "उपयोगकर्ता खोजें...",
+  serialNumber: "क्र.",
+  name: "नाम",
+  email: "ईमेल",
+  projectDepartment: "प्रोजेक्ट/विभाग",
+  designation: "पद",
+  role: "भूमिका",
+  status: "स्थिति",
+  access: "एक्सेस",
+  actions: "कार्रवाई",
+  active: "सक्रिय",
+  disabled: "निष्क्रिय",
+  showingUsers: "{{total}} में से {{from}}–{{to}} उपयोगकर्ता",
+  previous: "पिछला",
+  nextPage: "अगला पृष्ठ",
+  pageOf: "पृष्ठ {{page}} / {{pages}}",
+  language: "भाषा",
+};
+
+const marathi = {
+  dashboard: "अॅडमिन डॅशबोर्ड",
+  welcome: "पुन्हा स्वागत आहे! प्रश्न आणि निकाल व्यवस्थापित करा.",
+  addQuestion: "प्रश्न जोडा",
+  viewQuestions: "प्रश्न पहा",
+  viewResults: "निकाल पहा",
+  logout: "लॉग आउट",
+  superAdmin: "सुपर अॅडमिन",
+  dashboardNav: "डॅशबोर्ड",
+  candidates: "उमेदवार",
+  administrators: "प्रशासक",
+  reports: "अहवाल",
+  controls: "नियंत्रणे",
+  activityLogs: "क्रियाकलाप नोंदी",
+  welcomeSuperAdmin: "पुन्हा स्वागत आहे, सुपर अॅडमिन",
+  welcomeSuperAdminText: "वापरकर्ते, प्रशासक आणि मूल्यांकन क्रियाकलाप व्यवस्थापित करा.",
+  totalUsers: "एकूण वापरकर्ते",
+  activeUsers: "सक्रिय वापरकर्ते",
+  assessments: "मूल्यांकन",
+  clickToView: "पाहण्यासाठी क्लिक करा →",
+  totalSubmitted: "एकूण सबमिट",
+  userManagement: "वापरकर्ता व्यवस्थापन",
+  searchUsers: "वापरकर्ते शोधा...",
+  serialNumber: "अ. क्र.",
+  name: "नाव",
+  email: "ईमेल",
+  projectDepartment: "प्रकल्प/विभाग",
+  designation: "पद",
+  role: "भूमिका",
+  status: "स्थिती",
+  access: "प्रवेश",
+  actions: "कृती",
+  active: "सक्रिय",
+  disabled: "निष्क्रिय",
+  showingUsers: "{{total}} पैकी {{from}}–{{to}} वापरकर्ते",
+  previous: "मागील",
+  nextPage: "पुढील पृष्ठ",
+  pageOf: "पृष्ठ {{page}} / {{pages}}",
+  language: "भाषा",
+};
+
 i18n.use(initReactI18next).init({
   resources: {
-    en: {
-      translation: {
-        dashboard: "Admin Dashboard",
-        welcome:
-          "Welcome back! Manage questions and view results.",
-        addQuestion: "Add Question",
-        viewQuestions: "View Questions",
-        viewResults: "View Results",
-        logout: "Logout",
-      },
-    },
-
-    hi: {
-      translation: {
-        dashboard: "एडमिन डैशबोर्ड",
-        welcome:
-          "वापस स्वागत है! प्रश्न प्रबंधित करें और परिणाम देखें।",
-        addQuestion: "प्रश्न जोड़ें",
-        viewQuestions: "प्रश्न देखें",
-        viewResults: "परिणाम देखें",
-        logout: "लॉगआउट",
-      },
-    },
-
-    mr: {
-      translation: {
-        dashboard: "अॅडमिन डॅशबोर्ड",
-        welcome:
-          "पुन्हा स्वागत आहे! प्रश्न व्यवस्थापित करा आणि निकाल पहा.",
-        addQuestion: "प्रश्न जोडा",
-        viewQuestions: "प्रश्न पहा",
-        viewResults: "निकाल पहा",
-        logout: "लॉगआउट",
-      },
-    },
+    en: { translation: english },
+    hi: { translation: hindi },
+    mr: { translation: marathi },
   },
-
-  lng: "en",
+  lng: savedLanguage,
   fallbackLng: "en",
-
-  interpolation: {
-    escapeValue: false,
-  },
+  interpolation: { escapeValue: false },
 });
+
+document.documentElement.lang = i18n.resolvedLanguage || savedLanguage;
 
 export default i18n;

@@ -28,42 +28,6 @@ body {
   font-family: Arial, sans-serif;
 }
 
-#lang-switcher {
-  position: fixed !important;
-  top: 22px !important;
-  right: 24px !important;
-  left: auto !important;
-  bottom: auto !important;
-  transform: none !important;
-  z-index: 3000 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  width: auto !important;
-  max-width: 190px !important;
-  min-height: 36px;
-  padding: 8px 12px !important;
-  border: 1px solid #d9e8df !important;
-  border-radius: 999px !important;
-  background: rgba(255, 255, 255, 0.96) !important;
-  box-shadow: 0 8px 24px rgba(22, 63, 43, 0.1) !important;
-  backdrop-filter: blur(10px);
-  white-space: nowrap !important;
-}
-
-#lang-switcher select {
-  width: auto !important;
-  max-width: 125px !important;
-  min-height: auto !important;
-  padding: 0 18px 0 0 !important;
-  border: 0 !important;
-  outline: 0 !important;
-  background: transparent !important;
-  color: var(--admin-primary-dark) !important;
-  font-size: 13px !important;
-  font-weight: 800 !important;
-  box-shadow: none !important;
-}
-
 /* ========== SIDEBAR ========== */
 .sidebar {
   width: 260px;
@@ -171,10 +135,18 @@ body {
 .main-content {
   flex: 1;
   min-width: 0;
-  padding: 72px 32px 44px;
+  padding: 20px 32px 44px;
   background: var(--admin-background);
   max-width: 1560px;
   margin: 0 auto;
+}
+
+.superadmin-toolbar {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }
 
 /* ========== WELCOME CARD ========== */
