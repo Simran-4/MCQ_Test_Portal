@@ -1,16 +1,14 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import axios from "axios";
+import LanguageSwitcher from "../components/LanguageSwitcher";
 import { getAuthHeaders } from "../utils/auth";
 import { downloadCertificatePDF } from "../utils/certificate";
+import "./candidateDashboard.css";
 
-const API        = import.meta.env.VITE_API_URL || "";
-const GREEN      = "#2D5F3F";
-const GREEN_DARK = "#1A3D28";
-const BG         = "#EEE9E0";
-const WHITE      = "#ffffff";
+const API = import.meta.env.VITE_API_URL || "";
 
-// Feature 9: Check if test is within availability window
 const getAvailability = (suite) => {
   const now = new Date();
   if (suite.startDate && now < new Date(suite.startDate)) {
@@ -30,14 +28,17 @@ const getResultPercentage = (result) =>
 const isPassedResult = (result) =>
   typeof result?.passed === "boolean" ? result.passed : getResultPercentage(result) >= 50;
 
-const formatDateTime = (value) => value ? new Date(value).toLocaleString("en-IN", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: true,
-}) : "-";
+const formatDateTime = (value, language) => value ? new Date(value).toLocaleString(
+  language === "mr" ? "mr-IN" : language === "hi" ? "hi-IN" : "en-IN",
+  {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }
+) : "-";
 
 const getUserId = (user) => String(user?._id || user?.id || "");
 
@@ -52,20 +53,45 @@ const getAssignmentDateForUser = (suite, user) => {
 
 const latestPassedResultForSuite = (results, suiteId) =>
   results
-    .filter(res => getResultSuiteId(res) === String(suiteId) && isPassedResult(res))
+    .filter(result => getResultSuiteId(result) === String(suiteId) && isPassedResult(result))
     .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))[0] || null;
 
 const blocksRetake = (result, assignmentDate) =>
   Boolean(result && (!assignmentDate || new Date(result.submittedAt || 0) >= assignmentDate));
 
-export default function CandidateDashboard() {
-  const navigate = useNavigate();
-  const [suites, setSuites]           = useState([]);
-  const [pastResults, setPastResults] = useState([]);
-  const [activeTab, setActiveTab]     = useState("available");
-  const [loading, setLoading]         = useState(true);
+function MetricCard({ icon, label, value, detail, tone = "green", progress }) {
+  return (
+    <article className={`candidate-metric-card ${tone}`}>
+      <span className="candidate-metric-icon" aria-hidden="true">{icon}</span>
+      <div>
+        <h3>{label}</h3>
+        <strong>{value}</strong>
+        <p>{detail}</p>
+        {typeof progress === "number" && (
+          <span className="candidate-progress" aria-hidden="true">
+            <i style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
+          </span>
+        )}
+      </div>
+    </article>
+  );
+}
 
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+export default function CandidateDashboard() {
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const [suites, setSuites] = useState([]);
+  const [pastResults, setPastResults] = useState([]);
+  const [activeTab, setActiveTab] = useState("available");
+  const [loading, setLoading] = useState(true);
+
+  const user = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -77,11 +103,10 @@ export default function CandidateDashboard() {
           axios.get(`${API}/api/test-suites`, { headers }),
           axios.get(`${API}/api/results/all`, { headers, params: { search: userSearch } }),
         ]);
-        // Feature 13: Only show active suites
-        setSuites(suitesRes.data.filter(s => s.status === "active"));
+        setSuites(suitesRes.data.filter(suite => suite.status === "active"));
         setPastResults(resultsRes.data);
-      } catch (err) {
-        console.error("Dashboard Load Error:", err);
+      } catch (error) {
+        console.error("Dashboard Load Error:", error);
       } finally {
         setLoading(false);
       }
@@ -89,41 +114,60 @@ export default function CandidateDashboard() {
     fetchData();
   }, [user.email, user.mobile, user.username, user.name]);
 
-  const tabStyle = (isActive) => ({
-    padding: "10px 20px", cursor: "pointer", fontWeight: "700", fontSize: "14px",
-    color: isActive ? GREEN : "#8A8A7E",
-    borderBottom: isActive ? `3px solid ${GREEN}` : "3px solid transparent",
-    transition: "all 0.2s",
-  });
+  const historyResults = useMemo(
+    () => [...pastResults].sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0)),
+    [pastResults]
+  );
+  const passedCount = historyResults.filter(isPassedResult).length;
+  const failedCount = historyResults.length - passedCount;
+  const completionRate = historyResults.length ? Math.round((passedCount / historyResults.length) * 100) : 0;
+  const failureRate = historyResults.length ? Math.round((failedCount / historyResults.length) * 100) : 0;
+
+  const logout = () => {
+    localStorage.clear();
+    navigate("/");
+  };
 
   return (
-    <div className="candidate-dashboard-page" style={{ minHeight: "100vh", background: BG, fontFamily: "'Segoe UI', sans-serif" }}>
-
-      {/* Header */}
-      <div className="candidate-dashboard-header" style={{ padding: "20px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: "24px", color: GREEN_DARK }}>Hi, {user.name || "Candidate"}!</h1>
-          <p style={{ margin: 0, color: "#6B6B5E" }}>{user.project} • {user.designation}</p>
+    <div className="candidate-dashboard-page">
+      <header className="candidate-dashboard-header">
+        <div className="candidate-identity">
+          <h1>{t("candidateGreeting", { name: user.name || t("candidateFallback") })}</h1>
+          <p>{[user.designation, user.project].filter(Boolean).join(" • ") || t("candidateProfileFallback")}</p>
         </div>
-        <button onClick={() => { localStorage.clear(); navigate("/"); }}
-          style={{ color: "#C0392B", border: "none", background: "none", cursor: "pointer", fontWeight: "600" }}>
-          Logout
+        <div className="candidate-header-actions">
+          <LanguageSwitcher className="candidate-language-switcher" />
+          <span className="candidate-action-divider" aria-hidden="true" />
+          <button type="button" className="candidate-logout" onClick={logout}>
+            {t("logout")}
+          </button>
+        </div>
+      </header>
+
+      <nav className="candidate-dashboard-tabs" aria-label={t("candidateDashboardTabs")}>
+        <button
+          type="button"
+          className={activeTab === "available" ? "active" : ""}
+          onClick={() => setActiveTab("available")}
+        >
+          {t("availableTests")}
         </button>
-      </div>
+        <button
+          type="button"
+          className={activeTab === "history" ? "active" : ""}
+          onClick={() => setActiveTab("history")}
+        >
+          {t("historyCertificates")}
+        </button>
+      </nav>
 
-      {/* Tabs */}
-      <div className="candidate-dashboard-tabs" style={{ display: "flex", gap: "20px", padding: "0 28px", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
-        <div style={tabStyle(activeTab === "available")} onClick={() => setActiveTab("available")}>Available Tests</div>
-        <div style={tabStyle(activeTab === "history")} onClick={() => setActiveTab("history")}>My History & Certificates</div>
-      </div>
-
-      <div className="candidate-dashboard-content" style={{ padding: "28px" }}>
+      <main className="candidate-dashboard-content">
         {loading ? (
-          <div style={{ textAlign: "center", padding: "40px", color: "#888" }}>Loading...</div>
+          <p className="candidate-empty-state">{t("loading")}</p>
         ) : activeTab === "available" ? (
-          <div className="candidate-test-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px" }}>
+          <section className="candidate-test-grid">
             {suites.length === 0 ? (
-              <p style={{ color: "#888" }}>No active tests available right now.</p>
+              <p className="candidate-empty-state">{t("noActiveTests")}</p>
             ) : suites.map(suite => {
               const { available, reason } = getAvailability(suite);
               const latestPassedAttempt = latestPassedResultForSuite(pastResults, suite._id);
@@ -131,109 +175,134 @@ export default function CandidateDashboard() {
               const passedAttempt = blocksRetake(latestPassedAttempt, assignmentDate)
                 ? latestPassedAttempt
                 : null;
-              const failedAttempt = pastResults.find(res =>
-                getResultSuiteId(res) === String(suite._id) && !isPassedResult(res)
+              const failedAttempt = pastResults.find(result =>
+                getResultSuiteId(result) === String(suite._id) && !isPassedResult(result)
               );
               const reassignedAfterPass = latestPassedAttempt && assignmentDate && !passedAttempt;
+
               return (
-                <div className="candidate-test-card" key={suite._id} style={{ background: WHITE, padding: "24px", borderRadius: "16px", boxShadow: "0 4px 12px rgba(0,0,0,0.03)", opacity: available && !passedAttempt ? 1 : 0.75 }}>
-                  <h3 style={{ margin: "0 0 8px", color: GREEN_DARK }}>{suite.name}</h3>
-                  {suite.description && (
-                    <p style={{ fontSize: "14px", color: "#666", marginBottom: "12px" }}>{suite.description}</p>
-                  )}
-                  <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "12px", color: "#888" }}>⏱ {suite.duration || 30} min</span>
-                    <span style={{ fontSize: "12px", color: "#888" }}>• {suite.effectiveQuestionCount || suite.questionCount || 0} questions</span>
-                    {suite.questionSelectionMode === "selected" && (
-                      <span style={{ fontSize: "12px", color: "#f59e0b" }}>• 📌 selected set</span>
-                    )}
+                <article
+                  className={`candidate-test-card ${available && !passedAttempt ? "" : "unavailable"}`}
+                  key={suite._id}
+                >
+                  <h3>{suite.name}</h3>
+                  {suite.description && <p>{suite.description}</p>}
+                  <div className="candidate-test-meta">
+                    <span>◷ {suite.duration || 30} {t("minutesShort")}</span>
+                    <span>• {suite.effectiveQuestionCount || suite.questionCount || 0} {t("questions")}</span>
+                    {suite.questionSelectionMode === "selected" && <span>• {t("selectedSet")}</span>}
                     {(suite.questionSelectionMode === "random" || (!suite.questionSelectionMode && suite.questionsToServe)) && suite.questionsToServe && (
-                      <span style={{ fontSize: "12px", color: "#f59e0b" }}>• 🎲 {suite.questionsToServe} random</span>
+                      <span>• {suite.questionsToServe} {t("randomQuestions")}</span>
                     )}
                   </div>
 
-                  {/* Feature 9: Show date window info */}
                   {suite.startDate && (
-                    <p style={{ fontSize: "11px", color: "#6366f1", marginBottom: "12px" }}>
-                      📅 {new Date(suite.startDate).toLocaleString()} — {suite.endDate ? new Date(suite.endDate).toLocaleString() : "No end"}
+                    <p className="candidate-test-window">
+                      {new Date(suite.startDate).toLocaleString()} — {suite.endDate ? new Date(suite.endDate).toLocaleString() : t("noEndDate")}
                     </p>
                   )}
 
-                  {/* Feature 9: Block start if outside window */}
                   {!available ? (
-                    <div style={{ width: "100%", padding: "12px", background: "#f3f4f6", color: "#888", borderRadius: "8px", fontWeight: "600", fontSize: "13px", textAlign: "center" }}>
-                      🔒 {reason}
-                    </div>
+                    <div className="candidate-test-notice neutral">🔒 {reason}</div>
                   ) : passedAttempt ? (
-                    <div style={{ width: "100%", padding: "12px", background: "#eef8f1", color: GREEN_DARK, border: "1px solid #c6e2d0", borderRadius: "8px", fontWeight: "700", fontSize: "13px", textAlign: "center" }}>
-                      You already attempted this test.
-                    </div>
+                    <div className="candidate-test-notice success">{t("alreadyAttempted")}</div>
                   ) : (
                     <button
+                      type="button"
+                      className="candidate-start-button"
                       onClick={() => navigate(`/test/${suite._id}`)}
-                      style={{ width: "100%", padding: "12px", background: GREEN, color: WHITE, border: "none", borderRadius: "8px", fontWeight: "600", cursor: "pointer" }}
                     >
-                      {reassignedAfterPass || failedAttempt ? "Retest Assessment →" : "Start Assessment →"}
+                      {reassignedAfterPass || failedAttempt ? t("retestAssessment") : t("startAssessment")}
                     </button>
                   )}
-                </div>
+                </article>
               );
             })}
-          </div>
+          </section>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {pastResults.length === 0 ? (
-              <p style={{ color: "#888" }}>No results yet. Complete a test to see it here!</p>
-            ) : pastResults.map(res => {
-              const pct = getResultPercentage(res);
-              const historySuiteId = typeof res.suiteId === "string" ? res.suiteId : res.suiteId?._id;
-              const passed = isPassedResult(res);
-              return (
-                <div className="candidate-history-card" key={res._id} style={{ background: WHITE, padding: "16px 24px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
-                  <div>
-                    <h4 style={{ margin: 0, color: GREEN_DARK }}>{res.suiteId?.name || "Assessment"}</h4>
-                    <span style={{ fontSize: "12px", color: "#888" }}>{formatDateTime(res.submittedAt)}</span>
-                  </div>
-                  <div className="candidate-history-actions" style={{ textAlign: "right", display: "grid", gap: "8px", justifyItems: "end" }}>
-                    <div style={{ fontWeight: "700", color: passed ? GREEN : "#C0392B" }}>
-                      {res.score} / {res.totalMarks} ({pct}%)
+          <>
+            <section className="candidate-metrics" aria-label={t("historySummary")}>
+              <MetricCard
+                icon="▤"
+                label={t("totalTests")}
+                value={historyResults.length}
+                detail={t("testsAttempted")}
+              />
+              <MetricCard
+                icon="✓"
+                label={t("completedTests")}
+                value={passedCount}
+                detail={t("completionRate", { rate: completionRate })}
+                progress={completionRate}
+              />
+              <MetricCard
+                icon="×"
+                label={t("failedTests")}
+                value={failedCount}
+                detail={t("failureRate", { rate: failureRate })}
+                progress={failureRate}
+                tone="red"
+              />
+              <MetricCard
+                icon="▣"
+                label={t("certificatesEarned")}
+                value={passedCount}
+                detail={t("certificatesGenerated")}
+              />
+            </section>
+
+            <section className="candidate-history-list">
+              {historyResults.length === 0 ? (
+                <p className="candidate-empty-state">{t("noResults")}</p>
+              ) : historyResults.map(result => {
+                const percentage = getResultPercentage(result);
+                const historySuiteId = typeof result.suiteId === "string" ? result.suiteId : result.suiteId?._id;
+                const passed = isPassedResult(result);
+
+                return (
+                  <article className="candidate-history-card" key={result._id}>
+                    <div className="candidate-history-info">
+                      <h4>{result.suiteId?.name || t("assessment")}</h4>
+                      <time>{formatDateTime(result.submittedAt, i18n.resolvedLanguage || i18n.language)}</time>
                     </div>
-                    <div style={{ fontSize: "11px", fontWeight: "800", color: passed ? GREEN : "#C0392B" }}>
-                      {passed ? "✓ PASSED" : "✗ FAILED"}
+                    <div className={`candidate-history-score ${passed ? "passed" : "failed"}`}>
+                      <strong>{result.score} / {result.totalMarks} ({percentage}%)</strong>
+                      <span>{passed ? t("passedStatus") : t("failedStatus")}</span>
                     </div>
-                    {passed ? (
-                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <div className="candidate-history-actions">
+                      {passed ? (
+                        <>
+                          <button
+                            type="button"
+                            className="primary"
+                            onClick={() => downloadCertificatePDF(result, {}, "english")}
+                          >
+                            {t("englishCertificate")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => downloadCertificatePDF(result, {}, "marathi")}
+                          >
+                            {t("marathiCertificate")}
+                          </button>
+                        </>
+                      ) : historySuiteId ? (
                         <button
                           type="button"
-                          onClick={() => downloadCertificatePDF(res, {}, "english")}
-                          style={{ padding: "8px 12px", border: "none", borderRadius: "9px", background: GREEN, color: WHITE, fontSize: "12px", fontWeight: "800", cursor: "pointer" }}
+                          className="danger"
+                          onClick={() => navigate(`/test/${historySuiteId}`)}
                         >
-                          English Certificate
+                          {t("retest")}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => downloadCertificatePDF(res, {}, "marathi")}
-                          style={{ padding: "8px 12px", border: `1px solid ${GREEN}`, borderRadius: "9px", background: WHITE, color: GREEN_DARK, fontSize: "12px", fontWeight: "800", cursor: "pointer" }}
-                        >
-                          Marathi Certificate
-                        </button>
-                      </div>
-                    ) : historySuiteId ? (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/test/${historySuiteId}`)}
-                        style={{ padding: "8px 12px", border: "1px solid #C0392B", borderRadius: "9px", background: WHITE, color: "#C0392B", fontSize: "12px", fontWeight: "800", cursor: "pointer" }}
-                      >
-                        Retest
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
+          </>
         )}
-      </div>
+      </main>
     </div>
   );
 }

@@ -631,7 +631,6 @@ export default function Dashboard() {
   const [showModal, setShowModal] = useState(false);
   const [editingSuite, setEditingSuite] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
-  const [resultVisibilitySavingId, setResultVisibilitySavingId] = useState(null);
   const [deletedSuites, setDeletedSuites] = useState([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [trashActionId, setTrashActionId] = useState(null);
@@ -985,27 +984,6 @@ export default function Dashboard() {
       alert("Failed to update status.");
     } finally {
       setTogglingId(null);
-    }
-  };
-
-  const handleToggleResultVisibility = async (suite, e) => {
-    e.stopPropagation();
-    if (!canManageSuites) return;
-    const nextValue = suite.showResultsAfterSubmission === false;
-    setResultVisibilitySavingId(suite._id);
-    try {
-      const res = await axios.put(
-        `${API}/api/test-suites/${suite._id}`,
-        { showResultsAfterSubmission: nextValue },
-        { headers: getAuthHeaders() }
-      );
-      setSuites(prev => prev.map(item =>
-        item._id === suite._id ? { ...item, ...res.data, showResultsAfterSubmission: nextValue } : item
-      ));
-    } catch (err) {
-      alert(err.response?.data?.message || "Failed to update result visibility.");
-    } finally {
-      setResultVisibilitySavingId(null);
     }
   };
 
@@ -2334,22 +2312,6 @@ export default function Dashboard() {
                         {togglingId === suite._id
                           ? "..."
                           : suite.status === "active" ? "■ Deactivate" : "▶ Activate"}
-                      </button>
-                    )}
-
-                    {canManageSuites && (
-                      <button
-                        type="button"
-                        className={`admin-result-toggle ${suite.showResultsAfterSubmission === false ? "hidden" : "visible"}`}
-                        disabled={resultVisibilitySavingId === suite._id}
-                        onClick={(e) => handleToggleResultVisibility(suite, e)}
-                        title="Choose whether candidates can see their result immediately after submitting this suite"
-                      >
-                        {resultVisibilitySavingId === suite._id
-                          ? "Saving..."
-                          : suite.showResultsAfterSubmission === false
-                            ? "Show result: Off"
-                            : "Show result: On"}
                       </button>
                     )}
 

@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
+import LanguageSwitcher from "../components/LanguageSwitcher";
+import "./testSuiteDetail.css";
 
 const API        = import.meta.env.VITE_API_URL || "";
 const GREEN      = "#2D5F3F";
@@ -207,6 +209,7 @@ export default function TestSuiteDetail() {
   const [error, setError]         = useState("");
   const [editingQ, setEditingQ]   = useState(null);
   const [questionSearch, setQuestionSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   const [showDuration, setShowDuration] = useState(false);
   const [durationVal, setDurationVal]   = useState(30);
@@ -825,10 +828,12 @@ export default function TestSuiteDetail() {
   const orderedQuestions = sortQuestionsBySuiteOrder(questions);
   const questionNumberById = new Map(orderedQuestions.map((q, index) => [String(q._id), index + 1]));
   const questionSearchTerm = questionSearch.trim().toLowerCase();
-  const filteredQuestions = questionSearchTerm
-    ? orderedQuestions.filter(q => {
-        const questionNumber = questionNumberById.get(String(q._id)) || "";
+  const filteredQuestions = orderedQuestions.filter(q => {
         const cats = Array.isArray(q.category) ? q.category : (q.category ? [q.category] : []);
+        const matchesCategory = categoryFilter === "all" || cats.includes(categoryFilter);
+        if (!matchesCategory) return false;
+        if (!questionSearchTerm) return true;
+        const questionNumber = questionNumberById.get(String(q._id)) || "";
         const haystack = [
           `q${questionNumber}`,
           questionNumber,
@@ -839,8 +844,7 @@ export default function TestSuiteDetail() {
           ...cats,
         ].join(" ").toLowerCase();
         return haystack.includes(questionSearchTerm);
-      })
-    : orderedQuestions;
+      });
   const grouped = filteredQuestions.reduce((acc, q) => {
     const cats = Array.isArray(q.category) && q.category.length > 0 ? q.category : ["Uncategorized"];
     const key  = cats[0];
@@ -864,12 +868,12 @@ export default function TestSuiteDetail() {
           <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: WHITE, border: "0.5px solid rgba(0,0,0,0.1)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <img src={`${import.meta.env.BASE_URL}Logo.png`} alt="Logo" style={{ width: "48px", height: "48px", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; }} />
           </div>
-          <div>
-            <div style={{ fontSize: "20px", fontWeight: "700", color: GREEN_DARK }}>{suite.name}</div>
-            {suite.description && <div style={{ fontSize: "13px", color: "#6B6B5E", marginTop: "2px" }}>{suite.description}</div>}
+          <div className="suite-detail-heading-copy">
+            <h1>{suite.name}</h1>
+            {suite.description && <p>{suite.description}</p>}
           </div>
         </div>
-        <span style={{ fontSize: "12px", padding: "4px 12px", borderRadius: "999px", fontWeight: "600", background: "#dcfce7", color: "#166534" }}>{suite.status}</span>
+        <span className={`suite-status-pill ${suite.status === "active" ? "active" : ""}`} style={{ fontSize: "12px", padding: "4px 12px", borderRadius: "999px", fontWeight: "600", background: "#dcfce7", color: "#166534" }}>{suite.status}</span>
       </div>
 
       {/* ── Nav ── */}
@@ -892,6 +896,7 @@ export default function TestSuiteDetail() {
           </span>
         )}
         <span onClick={() => { localStorage.removeItem("token"); navigate("/"); }} style={{ fontSize: "14px", color: "#C0392B", fontWeight: "500", cursor: "pointer", marginLeft: "auto" }}>Logout</span>
+        <LanguageSwitcher className="suite-language-switcher" />
       </div>
 
       <div className="suite-detail-content" style={{ padding: "24px 28px" }}>
@@ -924,6 +929,11 @@ export default function TestSuiteDetail() {
                 style={{ padding: "10px 20px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
                 ⏱ Duration / submit ({suite.duration || 30} min{suite.submitDelayMinutes ? `, submit after ${suite.submitDelayMinutes} min` : ""}, result {suite.showResultsAfterSubmission === false ? "hidden" : "shown"})
               </button>
+              <button onClick={() => { setShowDuration(true); }}
+                className={`suite-result-visibility-action ${suite.showResultsAfterSubmission === false ? "hidden" : "visible"}`}
+                style={{ padding: "10px 20px", background: WHITE, color: suite.showResultsAfterSubmission === false ? "#b91c1c" : "#166534", border: "1px solid #bbf7d0", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                Result visibility ({suite.showResultsAfterSubmission === false ? "hidden" : "shown"})
+              </button>
               <button onClick={() => setShowPassing(s => !s)}
                 style={{ padding: "10px 20px", background: WHITE, color: "#166534", border: "1px solid #86efac", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
                 ✅ Passing criteria ({suite.passingPercentage ?? 50}%)
@@ -951,13 +961,24 @@ export default function TestSuiteDetail() {
           </button>
         </div>
 
-        <div style={{ background: WHITE, border: "1px solid #d8e9df", borderRadius: "16px", padding: "14px 16px", marginBottom: "20px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="suite-question-search-panel" style={{ background: WHITE, border: "1px solid #d8e9df", borderRadius: "16px", padding: "14px 16px", marginBottom: "20px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
           <input
             value={questionSearch}
             onChange={e => setQuestionSearch(e.target.value)}
             placeholder="Search questions by number, text, category, option..."
             style={{ ...inputStyle, flex: "1 1 320px", minWidth: 0 }}
           />
+          <select
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            style={{ ...inputStyle, flex: "0 0 230px" }}
+            aria-label="Filter questions by category"
+          >
+            <option value="all">All Categories</option>
+            {categories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
           <span style={{ color: "#6B6B5E", fontSize: "13px", fontWeight: "700" }}>
             {filteredQuestions.length} of {questions.length} question{questions.length !== 1 ? "s" : ""}
           </span>
@@ -1462,10 +1483,10 @@ export default function TestSuiteDetail() {
             <p style={{ color: "#8A8A7E", fontSize: "14px", margin: 0 }}>No questions match "{questionSearch}".</p>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          <div className="suite-question-list" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             {Object.entries(grouped).map(([cat, qs]) => (
               <div key={cat}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                <div className="suite-question-group-heading" style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
                   <span style={{ fontSize: "11px", fontWeight: "700", color: "#8A8A7E", letterSpacing: "0.08em", textTransform: "uppercase" }}>{cat}</span>
                   <span style={{ fontSize: "11px", background: "#E8F2EC", color: GREEN, padding: "2px 8px", borderRadius: "999px", fontWeight: "600" }}>{qs.length}</span>
                   <div style={{ flex: 1, height: "1px", background: "#e5e7eb" }} />
@@ -1482,12 +1503,13 @@ export default function TestSuiteDetail() {
                     const questionNumber = questionNumberById.get(String(q._id)) || 1;
                     return (
                       <div key={q._id}
+                        className="suite-question-card"
                         style={{ background: WHITE, border: "1px solid #e5e7eb", borderRadius: "14px", padding: "16px 18px", transition: "border-color 0.2s" }}
                         onMouseEnter={e => e.currentTarget.style.borderColor = GREEN}
                         onMouseLeave={e => e.currentTarget.style.borderColor = "#e5e7eb"}
                       >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
-                          <div style={{ flex: 1 }}>
+                        <div className="suite-question-card-inner" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
+                          <div className="suite-question-main" style={{ flex: 1 }}>
                             {catArr.length > 0 && (
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "8px" }}>
                                 {catArr.map(c => (
@@ -1495,7 +1517,7 @@ export default function TestSuiteDetail() {
                                 ))}
                               </div>
                             )}
-                            <p style={{ fontSize: "14px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 10px" }}>
+                            <p className="suite-question-text" style={{ fontSize: "14px", fontWeight: "600", color: "#1a1a1a", margin: "0 0 10px" }}>
                               <span style={{ color: "#aaa", marginRight: "6px" }}>Q{questionNumber}.</span>{q.questionText}
                             </p>
                             {isQuestionImage(q.imageUrl) && (
@@ -1509,12 +1531,12 @@ export default function TestSuiteDetail() {
                                 Theory question - written answer
                               </div>
                             ) : (
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                            <div className="suite-option-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                               {q.options.map((opt, i) => {
                                 const isCorrect = hasScores ? optionScores[i] === maxOptionScore && maxOptionScore > 0 : correctArr.includes(i);
                                 const optionScore = optionScores[i] ?? 0;
                                 return (
-                                  <p key={i} style={{ fontSize: "13px", margin: 0, padding: "6px 10px", borderRadius: "8px", background: isCorrect ? "#dcfce7" : optionScore > 0 ? "#fff7ed" : "#f9fafb", color: isCorrect ? "#166534" : optionScore > 0 ? "#9a3412" : "#555", fontWeight: isCorrect || optionScore > 0 ? "600" : "400" }}>
+                                  <p key={i} className="suite-option-pill" style={{ fontSize: "13px", margin: 0, padding: "6px 10px", borderRadius: "8px", background: isCorrect ? "#dcfce7" : optionScore > 0 ? "#fff7ed" : "#f9fafb", color: isCorrect ? "#166534" : optionScore > 0 ? "#9a3412" : "#555", fontWeight: isCorrect || optionScore > 0 ? "600" : "400" }}>
                                     {String.fromCharCode(65 + i)}. {opt}{isCorrect && !hasScores ? " ✓" : ""}{hasScores ? ` · ${optionScore} pts` : ""}
                                   </p>
                                 );
@@ -1522,7 +1544,7 @@ export default function TestSuiteDetail() {
                             </div>
                             )}
                             {q.explanation && <p style={{ fontSize: "12px", color: "#888", marginTop: "8px", marginBottom: 0, fontStyle: "italic" }}>💡 {q.explanation}</p>}
-                            <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
+                            <div className="suite-question-badges" style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
                               <span style={{ fontSize: "11px", background: "#f3f4f6", color: "#555", padding: "2px 8px", borderRadius: "999px" }}>{hasScores ? "Weighted option scores" : `${q.marks ?? 1} mark${(q.marks ?? 1) !== 1 ? "s" : ""}`}</span>
                               <span style={{ fontSize: "11px", background: theory ? "#dbeafe" : "#dcfce7", color: theory ? "#1d4ed8" : "#166534", padding: "2px 8px", borderRadius: "999px", fontWeight: "600" }}>{theory ? "Theory" : "MCQ"}</span>
                               {!theory && !hasScores && correctArr.length > 1 && <span style={{ fontSize: "11px", background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: "999px" }}>Multiple correct</span>}
@@ -1551,7 +1573,7 @@ export default function TestSuiteDetail() {
                             )}
                           </div>
                           {canManageQuestions && (
-                            <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                            <div className="suite-question-actions" style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
                               <button onClick={() => handleEdit(q)} style={{ padding: "6px 12px", fontSize: "12px", fontWeight: "600", background: WHITE, color: GREEN, border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>Edit</button>
                               <button onClick={() => handleDeleteQuestion(q._id)} style={{ padding: "6px 12px", fontSize: "12px", fontWeight: "600", background: WHITE, color: "#dc2626", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>Delete</button>
                             </div>
