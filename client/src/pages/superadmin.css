@@ -913,6 +913,8 @@ body {
   padding: 12px 16px 12px 42px;
   border: 1px solid #dfe8e2;
   border-radius: 8px;
+  color: var(--admin-text);
+  caret-color: var(--admin-primary);
   font-size: 14px;
   outline: none;
   transition: 0.2s;
@@ -923,9 +925,15 @@ body {
   background-repeat: no-repeat;
 }
 
+.section-header input::placeholder {
+  color: #737d77;
+  opacity: 1;
+}
+
 .section-header input:focus {
   border-color: var(--admin-primary);
-  background: white;
+  background-color: white;
+  color: var(--admin-text);
   box-shadow: 0 0 0 4px rgba(31, 93, 66, 0.1);
 }
 
@@ -947,10 +955,19 @@ body {
 
 .users-card-green .section-header input {
   background: #fff;
+  color: var(--admin-text);
+  -webkit-text-fill-color: var(--admin-text);
+  caret-color: var(--admin-primary);
   background-image: radial-gradient(circle at 16px 50%, transparent 4px, #7b837f 4.5px, #7b837f 5.5px, transparent 6px), linear-gradient(45deg, transparent 45%, #7b837f 45%, #7b837f 55%, transparent 55%);
   background-size: 22px 22px, 8px 8px;
   background-position: 8px center, 25px 25px;
   background-repeat: no-repeat;
+}
+
+.users-card-green .section-header input::placeholder {
+  color: #737d77;
+  -webkit-text-fill-color: #737d77;
+  opacity: 1;
 }
 
 /* ========== TABLE ========== */

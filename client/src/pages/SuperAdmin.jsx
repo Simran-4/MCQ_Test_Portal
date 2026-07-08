@@ -1382,9 +1382,19 @@ function SuperAdmin() {
     let base = displayUsers;
     if (activeNav === "Candidates") base = displayUsers.filter(u => u.role === "candidate");
     if (activeNav === "administrators") base = displayUsers.filter(u => u.role === "admin" || u.role === "superadmin");
-    return base.filter(u =>
-      `${u.name} ${u.email} ${u.mobile} ${u.username} ${u.role} ${u.customRole || ""} ${u.project || ""} ${u.designation || ""}`.toLowerCase().includes(search.toLowerCase())
-    );
+    const query = search.trim().toLocaleLowerCase();
+    if (!query) return base;
+
+    return base.filter(user => [
+      user.name,
+      user.email,
+      user.mobile,
+      user.username,
+      user.role,
+      user.customRole,
+      user.project,
+      user.designation,
+    ].filter(Boolean).join(" ").toLocaleLowerCase().includes(query));
   };
 
   const filteredUsers = getFilteredUsers();
@@ -2218,6 +2228,8 @@ function SuperAdmin() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("searchUsers")}
+                aria-label={t("searchUsers")}
+                autoComplete="off"
               />
             </div>
 
