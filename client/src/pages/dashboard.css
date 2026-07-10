@@ -30,8 +30,8 @@ body {
 
 #lang-switcher {
   position: fixed !important;
-  top: 24px !important;
-  right: 28px !important;
+  top: 18px !important;
+  right: 18px !important;
   left: auto !important;
   bottom: auto !important;
   transform: none !important;
@@ -49,6 +49,17 @@ body {
   box-shadow: 0 8px 24px rgba(22, 63, 43, 0.1) !important;
   backdrop-filter: blur(10px);
   white-space: nowrap !important;
+}
+
+body.admin-dashboard-page #lang-switcher {
+  top: 92px !important;
+  right: auto !important;
+  left: 54% !important;
+  bottom: auto !important;
+  transform: translateX(-50%) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 12px 28px rgba(22, 63, 43, 0.12) !important;
 }
 
 #lang-switcher select {
@@ -1564,34 +1575,6 @@ body {
 .admin-toggle-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
-}
-
-.admin-result-toggle {
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  font: inherit;
-  font-weight: 900;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.admin-result-toggle.visible {
-  background: #e7f4e5;
-  color: var(--admin-green-dark);
-  border-color: #cae8d2;
-}
-
-.admin-result-toggle.hidden {
-  background: #fff7ed;
-  color: #b45309;
-  border-color: #fed7aa;
-}
-
-.admin-result-toggle:disabled {
-  opacity: 0.65;
-  cursor: wait;
 }
 
 .admin-row-btn,

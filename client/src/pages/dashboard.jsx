@@ -675,6 +675,11 @@ export default function Dashboard() {
   const canBulkMail = canAdmin("canBulkMail", user);
   const canViewUsers = canAdmin("canViewUsers", user);
 
+  useEffect(() => {
+    document.body.classList.add("admin-dashboard-page");
+    return () => document.body.classList.remove("admin-dashboard-page");
+  }, []);
+
   const fetchTrashedSuites = useCallback(async () => {
     if (!canManageSuites) return;
     setTrashLoading(true);

@@ -709,6 +709,11 @@ function SuperAdmin() {
   const [customRights, setCustomRights] = useState(() => readLocalRights());
   const [customRightForm, setCustomRightForm] = useState({ label: "", detail: "" });
 
+  useEffect(() => {
+    document.body.classList.add("superadmin-dashboard-page");
+    return () => document.body.classList.remove("superadmin-dashboard-page");
+  }, []);
+
   const setOverview = useCallback((overview) => {
     setUsers(overview.users);
     setStats(overview.stats);
