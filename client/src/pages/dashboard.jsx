@@ -58,12 +58,25 @@ function assignedUserIdsForSuite(suite) {
   return (suite.assignedUsers || []).map(item => String(item?._id || item));
 }
 
-function resultCandidateName(result) {
-  return result.CandidateName || result.userName || "Unknown";
+function firstPresent(...values) {
+  const found = values.find(value => value !== undefined && value !== null && String(value).trim() !== "");
+  return found === undefined ? "" : String(found).trim();
 }
 
-function resultCandidateContact(result) {
-  return result.CandidateEmail || result.userEmail || "-";
+function resultCandidateName(result, fallbackUser = null) {
+  return firstPresent(result?.CandidateName, result?.userName, fallbackUser?.name, fallbackUser?.username, "Unknown");
+}
+
+function resultCandidateContact(result, fallbackUser = null) {
+  return firstPresent(result?.CandidateEmail, result?.userEmail, fallbackUser?.email, fallbackUser?.mobile, fallbackUser?.username, "-");
+}
+
+function resultProject(result, fallbackUser = null) {
+  return firstPresent(result?.project, fallbackUser?.project, "-");
+}
+
+function resultDesignation(result, fallbackUser = null) {
+  return firstPresent(result?.designation, fallbackUser?.designation, "-");
 }
 
 function resultPct(result) {
@@ -71,7 +84,7 @@ function resultPct(result) {
 }
 
 function resultTestName(result) {
-  return result.testName || result.suiteId?.name || "Assessment";
+  return firstPresent(result?.testName, result?.suiteId?.name, "Assessment");
 }
 
 function resultStatus(result) {
@@ -101,6 +114,10 @@ function categoryScoreLabel(category) {
 
 function categoryRowsForResult(result) {
   return Array.isArray(result.categoryResults) ? result.categoryResults : [];
+}
+
+function categoryName(category, index = 0) {
+  return firstPresent(category?.category, category?.name, `Category ${index + 1}`);
 }
 
 function uniqueIndexes(indexes) {
@@ -1307,10 +1324,10 @@ export default function Dashboard() {
 
     const rows = selectedUserResults.map(result => ({
       "Test Name": resultTestName(result),
-      "Candidate": resultCandidateName(result),
-      "Contact": resultCandidateContact(result),
-      "Project/Department": result.project || "-",
-      "Designation": result.designation || "-",
+      "Candidate": resultCandidateName(result, selectedReportUser),
+      "Contact": resultCandidateContact(result, selectedReportUser),
+      "Project/Department": resultProject(result, selectedReportUser),
+      "Designation": resultDesignation(result, selectedReportUser),
       "Score": `${result.score || 0}/${result.totalMarks || 0}`,
       "Correct Answers": result.correctAnswers ?? "-",
       "Total Questions": result.totalQuestions ?? "-",
@@ -1321,10 +1338,10 @@ export default function Dashboard() {
       "Submitted At": formatDateTime(result.submittedAt),
     }));
     const categoryRows = selectedUserResults.flatMap(result =>
-      categoryRowsForResult(result).map(category => ({
+      categoryRowsForResult(result).map((category, categoryIndex) => ({
         "Test Name": resultTestName(result),
         "Submitted At": formatDateTime(result.submittedAt),
-        "Category": category.category || "-",
+        "Category": categoryName(category, categoryIndex),
         "Score": `${category.score ?? category.earnedMarks ?? 0}/${category.total ?? 0}`,
         "Percentage": `${category.percentage || 0}%`,
         "Scale Score": category.scaleScore ? `${category.scaleScore}/10` : "-",
@@ -1372,6 +1389,12 @@ export default function Dashboard() {
 
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const reportFont = await addDevanagariFont(doc);
+    const pdfFontFor = (value) => /[\u0900-\u097F]/.test(String(value || "")) ? reportFont : "helvetica";
+    const applyPersonalPdfFont = (data) => {
+      if (data.section !== "body") return;
+      const raw = data.cell?.raw;
+      data.cell.styles.font = pdfFontFor(raw);
+    };
     doc.setFillColor(26, 61, 40);
     doc.rect(0, 0, 297, 24, "F");
     doc.setTextColor(255, 255, 255);
@@ -1379,8 +1402,9 @@ export default function Dashboard() {
     doc.setFontSize(14);
     doc.text("Snehalaya Personal Test Report", 14, 10);
     doc.setFontSize(9);
-    doc.setFont(reportFont, "normal");
-    doc.text(`${selectedReportUser.name}  |  ${userContact(selectedReportUser) || "-"}`, 14, 17);
+    const headerCandidateLine = `${selectedReportUser.name || "Selected user"}  |  ${userContact(selectedReportUser) || "-"}`;
+    doc.setFont(pdfFontFor(headerCandidateLine), "normal");
+    doc.text(headerCandidateLine, 14, 17);
     doc.setFont("helvetica", "normal");
     doc.text(new Date().toLocaleDateString("en-IN"), 283, 15, { align: "right" });
 
@@ -1391,8 +1415,10 @@ export default function Dashboard() {
 
     autoTable(doc, {
       startY: 38,
-      head: [["Project/Department", "Designation", "Reports", "Passed", "Failed", "Average", "Latest Test"]],
+      head: [["Candidate", "Contact", "Project/Department", "Designation", "Reports", "Passed", "Failed", "Average", "Latest Test", "Latest Submitted"]],
       body: [[
+        selectedReportUser.name || "-",
+        userContact(selectedReportUser) || "-",
         selectedReportUser.project || "-",
         selectedReportUser.designation || "-",
         selectedUserResults.length,
@@ -1400,19 +1426,34 @@ export default function Dashboard() {
         selectedUserFailed,
         `${selectedUserAverage}%`,
         selectedUserLatest ? resultTestName(selectedUserLatest) : "-",
+        formatDateTime(selectedUserLatest?.submittedAt),
       ]],
-      styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak", font: reportFont, fontStyle: "normal" },
+      styles: { fontSize: 7.2, cellPadding: 2, overflow: "linebreak", font: reportFont, fontStyle: "normal" },
       headStyles: { fillColor: [231, 244, 235], textColor: [26, 61, 40] },
       bodyStyles: { textColor: [36, 48, 40], font: reportFont, fontStyle: "normal" },
+      didParseCell: applyPersonalPdfFont,
+      columnStyles: {
+        0: { cellWidth: 36 },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 38 },
+        3: { cellWidth: 30 },
+        8: { cellWidth: 42 },
+        9: { cellWidth: 30 },
+      },
     });
 
     autoTable(doc, {
       startY: doc.lastAutoTable.finalY + 8,
-      head: [["#", "Test Name", "Score", "%", "Grade", "Result", "Time Taken", "Attempted At", "Category Breakdown"]],
+      head: [["#", "Test Name", "Candidate", "Contact", "Project/Department", "Designation", "Score", "Correct/Total", "%", "Grade", "Result", "Time Taken", "Attempted At", "Category Breakdown"]],
       body: selectedUserResults.map((result, index) => [
         index + 1,
         resultTestName(result),
+        resultCandidateName(result, selectedReportUser),
+        resultCandidateContact(result, selectedReportUser),
+        resultProject(result, selectedReportUser),
+        resultDesignation(result, selectedReportUser),
         `${result.score || 0}/${result.totalMarks || 0}`,
+        `${result.correctAnswers ?? "-"}/${result.totalQuestions ?? "-"}`,
         `${resultPct(result)}%`,
         resultGrade(result),
         resultStatus(result),
@@ -1420,17 +1461,30 @@ export default function Dashboard() {
         formatDateTime(result.submittedAt),
         categoryRowsForResult(result).length > 0
           ? categoryRowsForResult(result)
-            .map(category => `${category.category || "-"}: ${category.score ?? category.earnedMarks ?? 0}/${category.total ?? 0}, ${category.percentage || 0}% (${categoryLabel(category)}${category.scaleScore ? `, ${category.scaleScore}/10` : ""})`)
+            .map((category, categoryIndex) => `${categoryName(category, categoryIndex)}: ${category.score ?? category.earnedMarks ?? 0}/${category.total ?? 0}, ${category.percentage || 0}% (${categoryLabel(category)}${category.scaleScore ? `, ${category.scaleScore}/10` : ""})`)
             .join("\n")
           : "-",
       ]),
-      styles: { fontSize: 7.6, cellPadding: 2, overflow: "linebreak", font: reportFont, fontStyle: "normal" },
+      styles: { fontSize: 5.8, cellPadding: 1.2, overflow: "linebreak", font: reportFont, fontStyle: "normal" },
       headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255], font: "helvetica", fontStyle: "bold" },
       bodyStyles: { font: reportFont, fontStyle: "normal" },
       alternateRowStyles: { fillColor: [248, 247, 244] },
+      didParseCell: applyPersonalPdfFont,
       columnStyles: {
-        1: { cellWidth: 54 },
-        8: { cellWidth: 72 },
+        0: { cellWidth: 7, halign: "center" },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 28 },
+        4: { cellWidth: 24 },
+        5: { cellWidth: 20 },
+        6: { cellWidth: 16 },
+        7: { cellWidth: 16 },
+        8: { cellWidth: 12 },
+        9: { cellWidth: 14 },
+        10: { cellWidth: 14 },
+        11: { cellWidth: 18 },
+        12: { cellWidth: 22 },
+        13: { cellWidth: 26 },
       },
     });
 
@@ -1444,28 +1498,29 @@ export default function Dashboard() {
       }
 
       doc.setTextColor(26, 61, 40);
-      doc.setFont(reportFont, "normal");
+      const reviewTitle = `Question Review ${resultIndex + 1}: ${resultTestName(result)}`;
+      doc.setFont(pdfFontFor(reviewTitle), "normal");
       doc.setFontSize(10);
-      doc.text(
-        `Question Review ${resultIndex + 1}: ${resultTestName(result)}`,
-        14,
-        reviewY
-      );
-      doc.setFont(reportFont, "normal");
+      doc.text(reviewTitle, 14, reviewY);
+      const reviewMeta = `Candidate: ${resultCandidateName(result, selectedReportUser)} | Contact: ${resultCandidateContact(result, selectedReportUser)} | Project: ${resultProject(result, selectedReportUser)} | Designation: ${resultDesignation(result, selectedReportUser)}`;
+      doc.setFont(pdfFontFor(reviewMeta), "normal");
       doc.setFontSize(8);
       doc.setTextColor(90, 95, 92);
+      doc.text(reviewMeta, 14, reviewY + 5, { maxWidth: 269 });
+      const attemptMeta = `Attempted: ${formatDateTime(result.submittedAt)} | Time: ${formatDuration(resultTimeTakenSeconds(result))} | Score: ${result.score || 0}/${result.totalMarks || 0} | Result: ${resultStatus(result)}`;
+      doc.setFont(pdfFontFor(attemptMeta), "normal");
       doc.text(
-        `Attempted: ${formatDateTime(result.submittedAt)} | Time: ${formatDuration(resultTimeTakenSeconds(result))} | Score: ${result.score || 0}/${result.totalMarks || 0} | Result: ${resultStatus(result)}`,
+        attemptMeta,
         14,
-        reviewY + 5
+        reviewY + 10
       );
 
       if (categories.length > 0) {
         autoTable(doc, {
-          startY: reviewY + 10,
+          startY: reviewY + 15,
           head: [["Category", "Score", "%", "Level", "Scale", "Description"]],
-          body: categories.map(category => [
-            category.category || "-",
+          body: categories.map((category, categoryIndex) => [
+            categoryName(category, categoryIndex),
             `${category.score ?? category.earnedMarks ?? 0}/${category.total ?? 0}`,
             `${category.percentage || 0}%`,
             categoryLabel(category),
@@ -1478,6 +1533,7 @@ export default function Dashboard() {
           styles: { fontSize: 7, cellPadding: 1.7, overflow: "linebreak", valign: "top", font: reportFont, fontStyle: "normal" },
           headStyles: { fillColor: [231, 244, 235], textColor: [26, 61, 40], font: "helvetica", fontStyle: "bold" },
           bodyStyles: { font: reportFont, fontStyle: "normal", textColor: [36, 48, 40] },
+          didParseCell: applyPersonalPdfFont,
           columnStyles: {
             0: { cellWidth: 42 },
             1: { cellWidth: 24 },
@@ -1497,7 +1553,7 @@ export default function Dashboard() {
         return;
       }
 
-      reviewY += categories.length > 0 ? 0 : 9;
+      reviewY += categories.length > 0 ? 0 : 15;
       rows.forEach(row => {
         if (reviewY > 184) {
           doc.addPage();
@@ -1529,6 +1585,7 @@ export default function Dashboard() {
             2: { cellWidth: 221 },
           },
           didParseCell: (data) => {
+            applyPersonalPdfFont(data);
             if (
               data.section === "body" &&
               data.column.index === 2 &&
@@ -1908,10 +1965,10 @@ export default function Dashboard() {
                       </div>
                       {categoryRowsForResult(result).length > 0 && (
                         <div className="admin-personal-categories">
-                          {categoryRowsForResult(result).map(category => (
-                            <div key={`${result._id}-${category.category}`} className="admin-personal-category">
+                          {categoryRowsForResult(result).map((category, categoryIndex) => (
+                            <div key={`${result._id}-${categoryName(category, categoryIndex)}`} className="admin-personal-category">
                               <div>
-                                <span>{category.category || "Uncategorized"}</span>
+                                <span>{categoryName(category, categoryIndex)}</span>
                                 <strong>{categoryLabel(category)} · {categoryScoreLabel(category)}</strong>
                               </div>
                               <div className="admin-personal-bar">
