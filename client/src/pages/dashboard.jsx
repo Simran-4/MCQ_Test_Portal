@@ -1,6 +1,7 @@
 // src/pages/Dashboard.jsx
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -13,6 +14,128 @@ import LanguageSwitcher from "../components/LanguageSwitcher";
 const API = import.meta.env.VITE_API_URL || "";
 const DEVANAGARI_FONT_NAME = "NotoSansDevanagari";
 const DEVANAGARI_FONT_FILE = "NotoSansDevanagari-Regular.ttf";
+
+const ADMIN_DASHBOARD_COPY = {
+  en: {
+    platform: "Test Taking Platform",
+    welcomeBack: "Welcome back, Admin",
+    welcomeText: "Manage test suites and questions with ease.",
+    today: "Today",
+    administrator: "Administrator",
+    logout: "Logout",
+    dashboard: "Dashboard",
+    testManagement: "Test Management",
+    allTestSuites: "All Test Suites",
+    addTestSuite: "Add Test Suite",
+    assignTestSuites: "Assign Test Suites",
+    results: "Results",
+    allTestResults: "All Test Results",
+    userPersonalReports: "User Personal Reports",
+    bulkMail: "Bulk Mail",
+    testReport: "Test Report",
+    trash: "Trash",
+    testSuites: "Test Suites",
+    activeSuites: "Active Suites",
+    totalCandidates: "Total Candidates",
+    totalResponses: "Total Responses",
+    totalSuites: "Total suites",
+    liveRightNow: "Live right now",
+    registeredCandidates: "Registered candidates",
+    submittedTests: "Submitted tests",
+    suiteIntro: "Create, manage and monitor your test suites.",
+    searchSuites: "Search test suites...",
+    period: "Period",
+    allTime: "All time",
+    from: "From",
+    to: "To",
+    clear: "Clear",
+    newTestSuite: "New test suite",
+    loadingSuites: "Loading your suites...",
+    noSuites: "No suites available. Create your first one above.",
+    noMatchingSuites: "No test suites match the selected search or date/time period.",
+  },
+  hi: {
+    platform: "टेस्ट टेकिंग प्लेटफॉर्म",
+    welcomeBack: "वापसी पर स्वागत है, एडमिन",
+    welcomeText: "टेस्ट सूट और प्रश्न आसानी से प्रबंधित करें.",
+    today: "आज",
+    administrator: "प्रशासक",
+    logout: "लॉग आउट",
+    dashboard: "डैशबोर्ड",
+    testManagement: "टेस्ट प्रबंधन",
+    allTestSuites: "सभी टेस्ट सूट",
+    addTestSuite: "टेस्ट सूट जोड़ें",
+    assignTestSuites: "टेस्ट सूट असाइन करें",
+    results: "परिणाम",
+    allTestResults: "सभी टेस्ट परिणाम",
+    userPersonalReports: "यूजर व्यक्तिगत रिपोर्ट",
+    bulkMail: "बल्क मेल",
+    testReport: "टेस्ट रिपोर्ट",
+    trash: "ट्रैश",
+    testSuites: "टेस्ट सूट",
+    activeSuites: "सक्रिय सूट",
+    totalCandidates: "कुल उम्मीदवार",
+    totalResponses: "कुल प्रतिक्रियाएं",
+    totalSuites: "कुल सूट",
+    liveRightNow: "अभी लाइव",
+    registeredCandidates: "पंजीकृत उम्मीदवार",
+    submittedTests: "जमा किए गए टेस्ट",
+    suiteIntro: "अपने टेस्ट सूट बनाएं, प्रबंधित करें और मॉनिटर करें.",
+    searchSuites: "टेस्ट सूट खोजें...",
+    period: "अवधि",
+    allTime: "सभी समय",
+    from: "से",
+    to: "तक",
+    clear: "साफ करें",
+    newTestSuite: "नया टेस्ट सूट",
+    loadingSuites: "आपके सूट लोड हो रहे हैं...",
+    noSuites: "कोई सूट उपलब्ध नहीं है. ऊपर अपना पहला बनाएं.",
+    noMatchingSuites: "चयनित खोज या तारीख/समय अवधि से कोई टेस्ट सूट मेल नहीं खाता.",
+  },
+  mr: {
+    platform: "टेस्ट टेकिंग प्लॅटफॉर्म",
+    welcomeBack: "पुन्हा स्वागत आहे, अॅडमिन",
+    welcomeText: "टेस्ट सूट आणि प्रश्न सहज व्यवस्थापित करा.",
+    today: "आज",
+    administrator: "प्रशासक",
+    logout: "लॉग आउट",
+    dashboard: "डॅशबोर्ड",
+    testManagement: "टेस्ट व्यवस्थापन",
+    allTestSuites: "सर्व टेस्ट सूट",
+    addTestSuite: "टेस्ट सूट जोडा",
+    assignTestSuites: "टेस्ट सूट असाइन करा",
+    results: "निकाल",
+    allTestResults: "सर्व टेस्ट निकाल",
+    userPersonalReports: "वापरकर्ता वैयक्तिक अहवाल",
+    bulkMail: "बल्क मेल",
+    testReport: "टेस्ट अहवाल",
+    trash: "ट्रॅश",
+    testSuites: "टेस्ट सूट",
+    activeSuites: "सक्रिय सूट",
+    totalCandidates: "एकूण उमेदवार",
+    totalResponses: "एकूण प्रतिसाद",
+    totalSuites: "एकूण सूट",
+    liveRightNow: "सध्या लाईव्ह",
+    registeredCandidates: "नोंदणीकृत उमेदवार",
+    submittedTests: "सबमिट केलेले टेस्ट",
+    suiteIntro: "तुमचे टेस्ट सूट तयार करा, व्यवस्थापित करा आणि मॉनिटर करा.",
+    searchSuites: "टेस्ट सूट शोधा...",
+    period: "कालावधी",
+    allTime: "सर्व वेळ",
+    from: "पासून",
+    to: "पर्यंत",
+    clear: "साफ करा",
+    newTestSuite: "नवीन टेस्ट सूट",
+    loadingSuites: "तुमचे सूट लोड होत आहेत...",
+    noSuites: "कोणतेही सूट उपलब्ध नाहीत. वर तुमचा पहिला तयार करा.",
+    noMatchingSuites: "निवडलेल्या शोध किंवा तारीख/वेळ कालावधीशी कोणतेही टेस्ट सूट जुळत नाहीत.",
+  },
+};
+
+function adminDashboardCopy(language) {
+  const key = String(language || "en").split("-")[0];
+  return ADMIN_DASHBOARD_COPY[key] || ADMIN_DASHBOARD_COPY.en;
+}
 
 function userContact(user) {
   return user.email || user.mobile || user.username || "";
@@ -630,6 +753,8 @@ function DeleteSuiteModal({ suite, attemptedPeople, loading, onClose, onDelete }
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const copy = adminDashboardCopy(i18n.resolvedLanguage || i18n.language);
   const [suites, setSuites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -1635,13 +1760,13 @@ export default function Dashboard() {
             <img src="/Logo.png" alt="Snehalaya logo" />
             <div>
               <h1>Snehalaya</h1>
-              <span>Test Taking Platform</span>
+              <span>{copy.platform}</span>
             </div>
           </div>
 
           <div className="admin-welcome">
-            <h2>Welcome back, Admin <span>🌱</span></h2>
-            <p>Manage test suites and questions with ease.</p>
+            <h2>{copy.welcomeBack} <span>🌱</span></h2>
+            <p>{copy.welcomeText}</p>
           </div>
 
           <div className="admin-top-actions">
@@ -1649,7 +1774,7 @@ export default function Dashboard() {
             <div className="admin-date-card">
               <div className="admin-date-icon">◷</div>
               <div className="admin-date-copy">
-                <span>Today</span>
+                <span>{copy.today}</span>
                 <strong>{now.toLocaleDateString("en-IN", {
                   day: "2-digit",
                   month: "long",
@@ -1667,28 +1792,28 @@ export default function Dashboard() {
               <div>{(user.name || "Admin").charAt(0).toUpperCase()}</div>
               <p>
                 <strong>{user.name || "Admin"}</strong>
-                <span>Administrator</span>
+                <span>{copy.administrator}</span>
               </p>
             </div>
             <button type="button" className="admin-logout-btn" onClick={logout}>
-              ⇥ Logout
+              ⇥ {copy.logout}
             </button>
           </div>
         </header>
 
         <nav className="admin-top-nav">
           <button type="button" className={activePanel === "dashboard" ? "active" : ""} onClick={showAllSuites}>
-            ⌂ Dashboard
+            ⌂ {copy.dashboard}
           </button>
 
           <div className="admin-nav-menu">
-            <button type="button">▤ Test Management⌄</button>
+            <button type="button">▤ {copy.testManagement}⌄</button>
             <div className="admin-nav-dropdown">
-              <button type="button" onClick={showAllSuites} disabled={!canOpenSuites}>▤ All Test Suites</button>
-              <button type="button" onClick={openNewSuite} disabled={!canManageSuites}>＋ Add Test Suite</button>
+              <button type="button" onClick={showAllSuites} disabled={!canOpenSuites}>▤ {copy.allTestSuites}</button>
+              <button type="button" onClick={openNewSuite} disabled={!canManageSuites}>＋ {copy.addTestSuite}</button>
               {canAssignTests && (
                 <button type="button" onClick={() => setActivePanel("assignments")}>
-                  ♙ Assign Test Suites
+                  ♙ {copy.assignTestSuites}
                 </button>
               )}
             </div>
@@ -1696,11 +1821,11 @@ export default function Dashboard() {
 
           {canViewReports && (
             <div className="admin-nav-menu">
-              <button type="button">▥ Results⌄</button>
+              <button type="button">▥ {copy.results}⌄</button>
               <div className="admin-nav-dropdown">
-                <button type="button" onClick={() => navigate("/view-results")}>☰ All Test Results</button>
+                <button type="button" onClick={() => navigate("/view-results")}>☰ {copy.allTestResults}</button>
                 <button type="button" onClick={() => setActivePanel("reports")}>
-                  ▧ User Personal Reports
+                  ▧ {copy.userPersonalReports}
                 </button>
               </div>
             </div>
@@ -1708,19 +1833,19 @@ export default function Dashboard() {
 
           {canBulkMail && (
             <button type="button" className={activePanel === "bulk-mail" ? "active" : ""} onClick={openBulkMail}>
-              ✉ Bulk Mail
+              ✉ {copy.bulkMail}
             </button>
           )}
 
           {canViewTestReports && (
             <button type="button" className={activePanel === "test-report" ? "active" : ""} onClick={() => setActivePanel("test-report")}>
-              ▥ Test Report
+              ▥ {copy.testReport}
             </button>
           )}
 
           {canManageSuites && (
             <button type="button" className={activePanel === "trash" ? "active" : ""} onClick={() => { setActivePanel("trash"); fetchTrashedSuites(); }}>
-              ⌫ Trash
+              ⌫ {copy.trash}
               {deletedSuites.length > 0 && <span className="admin-nav-count">{deletedSuites.length}</span>}
             </button>
           )}
@@ -1730,9 +1855,9 @@ export default function Dashboard() {
           <div className="admin-stat-card">
             <div className="admin-stat-icon">▣</div>
             <div>
-              <p>Test Suites</p>
+              <p>{copy.testSuites}</p>
               <strong>{suites.length}</strong>
-              <span>Total suites</span>
+              <span>{copy.totalSuites}</span>
             </div>
             <div className="admin-progress"><span style={{ width: `${Math.min(100, Math.max(22, suites.length * 16))}%` }} /></div>
           </div>
@@ -1740,9 +1865,9 @@ export default function Dashboard() {
           <div className="admin-stat-card">
             <div className="admin-stat-icon">⌁</div>
             <div>
-              <p>Active Suites</p>
+              <p>{copy.activeSuites}</p>
               <strong>{activeSuites}</strong>
-              <span>Live right now</span>
+              <span>{copy.liveRightNow}</span>
             </div>
             <div className="admin-progress"><span style={{ width: `${suites.length ? Math.max(22, (activeSuites / suites.length) * 100) : 0}%` }} /></div>
           </div>
@@ -1750,9 +1875,9 @@ export default function Dashboard() {
           <div className="admin-stat-card">
             <div className="admin-stat-icon">♙</div>
             <div>
-              <p>Total Candidates</p>
+              <p>{copy.totalCandidates}</p>
               <strong>{candidateUsers.length}</strong>
-              <span>Registered candidates</span>
+              <span>{copy.registeredCandidates}</span>
             </div>
             <div className="admin-progress"><span style={{ width: `${Math.min(100, Math.max(18, candidateUsers.length * 3))}%` }} /></div>
           </div>
@@ -1760,9 +1885,9 @@ export default function Dashboard() {
           <div className="admin-stat-card">
             <div className="admin-stat-icon">▧</div>
             <div>
-              <p>Total Responses</p>
+              <p>{copy.totalResponses}</p>
               <strong>{reportResults.length}</strong>
-              <span>Submitted tests</span>
+              <span>{copy.submittedTests}</span>
             </div>
             <div className="admin-progress"><span style={{ width: `${Math.min(100, Math.max(18, reportResults.length * 4))}%` }} /></div>
           </div>
@@ -2255,25 +2380,25 @@ export default function Dashboard() {
         <section className="suite-section" id="admin-test-suites">
           <div className="suite-section-header">
             <div>
-              <h3>Test Suites</h3>
-              <p>Create, manage and monitor your test suites.</p>
+              <h3>{copy.testSuites}</h3>
+              <p>{copy.suiteIntro}</p>
             </div>
             <div className="admin-suite-tools">
               <input
                 type="search"
                 value={suiteSearch}
                 onChange={(e) => setSuiteSearch(e.target.value)}
-                placeholder="Search test suites..."
+                placeholder={copy.searchSuites}
                 className="admin-suite-search"
               />
               <div className="admin-suite-date-filters">
                 <label>
-                  <span>Period</span>
+                  <span>{copy.period}</span>
                   <select
                     value={suiteDatePreset}
                     onChange={(e) => handleSuiteDatePresetChange(e.target.value)}
                   >
-                    <option value="">All time</option>
+                    <option value="">{copy.allTime}</option>
                     <option value="last-day">Last day</option>
                     <option value="last-week">Last week</option>
                     <option value="last-month">Last month</option>
@@ -2283,7 +2408,7 @@ export default function Dashboard() {
                   </select>
                 </label>
                 <label>
-                  <span>From</span>
+                  <span>{copy.from}</span>
                   <input
                     type="datetime-local"
                     value={suiteDateFrom}
@@ -2294,7 +2419,7 @@ export default function Dashboard() {
                   />
                 </label>
                 <label>
-                  <span>To</span>
+                  <span>{copy.to}</span>
                   <input
                     type="datetime-local"
                     value={suiteDateTo}
@@ -2315,22 +2440,22 @@ export default function Dashboard() {
                       setSuiteDateTo("");
                     }}
                   >
-                    Clear
+                    {copy.clear}
                   </button>
                 )}
               </div>
               <button type="button" className="admin-primary-btn" onClick={openNewSuite} disabled={!canManageSuites}>
-                ＋ New test suite
+                ＋ {copy.newTestSuite}
               </button>
             </div>
           </div>
 
           {loading ? (
-            <div className="admin-empty-state">Loading your suites...</div>
+            <div className="admin-empty-state">{copy.loadingSuites}</div>
           ) : suites.length === 0 ? (
-            <div className="admin-empty-state">No suites available. Create your first one above.</div>
+            <div className="admin-empty-state">{copy.noSuites}</div>
           ) : filteredSuites.length === 0 ? (
-            <div className="admin-empty-state">No test suites match the selected search or date/time period.</div>
+            <div className="admin-empty-state">{copy.noMatchingSuites}</div>
           ) : (
             <div className="admin-suite-list">
               {filteredSuites.map(suite => (
