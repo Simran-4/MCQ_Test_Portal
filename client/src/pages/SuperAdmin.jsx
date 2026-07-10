@@ -675,6 +675,7 @@ function SuperAdmin() {
   const [activityFromDate, setActivityFromDate] = useState("");
   const [activityToDate, setActivityToDate] = useState("");
   const [controlMode, setControlMode] = useState("rights");
+  const [openActionUserId, setOpenActionUserId] = useState("");
   const [roles, setRoles] = useState([
     { name: "candidate", baseRole: "candidate", system: true },
     { name: "admin", baseRole: "admin", system: true },
@@ -2282,11 +2283,20 @@ function SuperAdmin() {
                         </label>
                       </td>
                       <td>
-                        <div className="user-actions">
+                        <div className={`user-actions ${openActionUserId === user._id ? "open" : ""}`}>
                           <button
                             type="button"
-                            className="icon-action-btn"
-                            onClick={() => openEditUser(user)}
+                            className="icon-action-btn action-menu-trigger"
+                            onClick={() => setOpenActionUserId(current => current === user._id ? "" : user._id)}
+                            aria-label={`Open actions for ${user.name}`}
+                            title="User actions"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-action-btn action-option action-edit"
+                            onClick={() => { setOpenActionUserId(""); openEditUser(user); }}
                             aria-label={`Edit ${user.name}`}
                             title="Edit user"
                           >
@@ -2294,8 +2304,8 @@ function SuperAdmin() {
                           </button>
                           <button
                             type="button"
-                            className="icon-action-btn"
-                            onClick={() => openResetPassword(user)}
+                            className="icon-action-btn action-option action-reset"
+                            onClick={() => { setOpenActionUserId(""); openResetPassword(user); }}
                             aria-label={`Reset password for ${user.name}`}
                             title="Reset password"
                           >
@@ -2303,8 +2313,8 @@ function SuperAdmin() {
                           </button>
                           <button
                             type="button"
-                            className="icon-action-btn danger"
-                            onClick={() => deleteUserAccount(user)}
+                            className="icon-action-btn action-option action-delete danger"
+                            onClick={() => { setOpenActionUserId(""); deleteUserAccount(user); }}
                             disabled={user._id === currentUser?._id}
                             aria-label={`Delete ${user.name}`}
                             title={user._id === currentUser?._id ? "You cannot delete your own account" : "Delete user"}

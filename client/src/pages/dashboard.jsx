@@ -348,6 +348,17 @@ async function addDevanagariFont(doc) {
   }
 }
 
+function pdfFontForValue(value, devanagariFont) {
+  return /[\u0900-\u097F]/.test(String(value || "")) ? devanagariFont : "helvetica";
+}
+
+function applyPdfTableFont(devanagariFont) {
+  return (data) => {
+    if (data.section !== "body") return;
+    data.cell.styles.font = pdfFontForValue(data.cell?.raw, devanagariFont);
+  };
+}
+
 function matchesUserResult(result, user) {
   const tokens = [
     user.email,
@@ -1239,10 +1250,11 @@ export default function Dashboard() {
     XLSX.writeFile(wb, `summary_test_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  const downloadTestSummaryPDF = () => {
+  const downloadTestSummaryPDF = async () => {
     if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     if (testSummaryRows.length === 0) return alert("No submitted test reports found.");
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const reportFont = await addDevanagariFont(doc);
     doc.setFillColor(26, 61, 40);
     doc.rect(0, 0, 297, 24, "F");
     doc.setTextColor(255, 255, 255);
@@ -1268,7 +1280,9 @@ export default function Dashboard() {
       ]),
       styles: { fontSize: 7.3, cellPadding: 2, overflow: "linebreak" },
       headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
+      bodyStyles: { font: "helvetica", fontStyle: "normal" },
       alternateRowStyles: { fillColor: [248, 247, 244] },
+      didParseCell: applyPdfTableFont(reportFont),
       columnStyles: {
         1: { cellWidth: 58 },
         6: { cellWidth: 32 },
@@ -1299,10 +1313,11 @@ export default function Dashboard() {
     XLSX.writeFile(wb, `descriptive_test_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  const downloadDescriptiveTestPDF = () => {
+  const downloadDescriptiveTestPDF = async () => {
     if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     if (descriptiveTestRows.length === 0) return alert("No submitted test reports found.");
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const reportFont = await addDevanagariFont(doc);
     doc.setFillColor(26, 61, 40);
     doc.rect(0, 0, 297, 24, "F");
     doc.setTextColor(255, 255, 255);
@@ -1329,7 +1344,9 @@ export default function Dashboard() {
       ]),
       styles: { fontSize: 7.2, cellPadding: 2, overflow: "linebreak" },
       headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
+      bodyStyles: { font: "helvetica", fontStyle: "normal" },
       alternateRowStyles: { fillColor: [248, 247, 244] },
+      didParseCell: applyPdfTableFont(reportFont),
       columnStyles: {
         1: { cellWidth: 46 },
         2: { cellWidth: 36 },

@@ -21,6 +21,7 @@ body {
 
 /* ========== LAYOUT ========== */
 .container {
+  width: 100%;
   display: flex;
   min-height: 100vh;
   background: var(--admin-background);
@@ -155,12 +156,13 @@ body {
 
 /* ========== MAIN CONTENT ========== */
 .main-content {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
   padding: 20px 32px 44px;
   background: var(--admin-background);
-  max-width: 1560px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
 }
 
 /* ========== WELCOME CARD ========== */
@@ -1411,6 +1413,43 @@ tbody tr:last-child td {
   color: #111827;
   font-size: 26px;
   line-height: 1;
+}
+
+.user-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  min-width: 38px;
+}
+
+.user-actions.open {
+  min-width: 150px;
+}
+
+.user-actions .action-option {
+  display: none !important;
+}
+
+.user-actions.open .action-option {
+  display: inline-flex !important;
+}
+
+.action-menu-trigger::before {
+  content: "⋮" !important;
+  color: #111827;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.action-edit::before {
+  content: "✎" !important;
+}
+
+.action-reset::before {
+  content: "↻" !important;
+}
+
+.action-delete::before {
+  content: "×" !important;
 }
 
 .icon-action-btn.danger {
