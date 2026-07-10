@@ -3,8 +3,8 @@ import "./LanguageSwitcher.css";
 
 const LANGUAGES = [
   { value: "en", label: "English" },
-  { value: "hi", label: "हिन्दी" },
-  { value: "mr", label: "मराठी" },
+  { value: "hi", label: "Hindi" },
+  { value: "mr", label: "Marathi" },
 ];
 
 export default function LanguageSwitcher({ className = "" }) {
@@ -20,7 +20,7 @@ export default function LanguageSwitcher({ className = "" }) {
 
   return (
     <label className={`language-switcher ${className}`.trim()}>
-      <span className="language-switcher-icon" aria-hidden="true">◎</span>
+      <span className="language-switcher-icon" aria-hidden="true">Lang</span>
       <span className="sr-only">{t("language")}</span>
       <select value={currentLanguage} onChange={changeLanguage} aria-label={t("language")}>
         {LANGUAGES.map((language) => (

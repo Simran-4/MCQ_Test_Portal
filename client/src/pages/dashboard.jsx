@@ -8,6 +8,7 @@ import * as XLSX from "xlsx";
 import "./dashboard.css";
 import { canAdmin, getAuthHeaders } from "../utils/auth";
 import BulkMailPanel from "../components/BulkMailPanel";
+import LanguageSwitcher from "../components/LanguageSwitcher";
 
 const API = import.meta.env.VITE_API_URL || "";
 const DEVANAGARI_FONT_NAME = "NotoSansDevanagari";
@@ -363,7 +364,6 @@ function SuiteModal({ suite, onClose, onSave }) {
   const [description, setDescription] = useState(suite?.description || "");
   const [status, setStatus] = useState(suite?.status || "draft");
   const [passingPercentage, setPassingPercentage] = useState(suite?.passingPercentage ?? 50);
-  const [showResultsAfterSubmission, setShowResultsAfterSubmission] = useState(suite?.showResultsAfterSubmission !== false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -388,7 +388,6 @@ function SuiteModal({ suite, onClose, onSave }) {
         description: description.trim(),
         status,
         passingPercentage: passMark,
-        showResultsAfterSubmission,
       };
       const res = suite
         ? await axios.put(`${API}/api/test-suites/${suite._id}`, payload, config)
@@ -437,18 +436,6 @@ function SuiteModal({ suite, onClose, onSave }) {
             value={passingPercentage}
             onChange={e => setPassingPercentage(e.target.value)}
           />
-        </label>
-
-        <label className="suite-modal-check">
-          <input
-            type="checkbox"
-            checked={showResultsAfterSubmission}
-            onChange={e => setShowResultsAfterSubmission(e.target.checked)}
-          />
-          <span>
-            Show result immediately after submission
-            <small>If off, candidates only see a submission confirmation.</small>
-          </span>
         </label>
 
         <div className="suite-modal-actions">
@@ -1601,6 +1588,7 @@ export default function Dashboard() {
           </div>
 
           <div className="admin-top-actions">
+            <LanguageSwitcher className="admin-language-switcher" />
             <div className="admin-date-card">
               <div className="admin-date-icon">◷</div>
               <div className="admin-date-copy">

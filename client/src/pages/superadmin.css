@@ -28,55 +28,11 @@ body {
   font-family: Arial, sans-serif;
 }
 
-#lang-switcher {
-  position: fixed !important;
-  top: 22px !important;
-  right: 24px !important;
-  left: auto !important;
-  bottom: auto !important;
-  transform: none !important;
-  z-index: 3000 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  width: auto !important;
-  max-width: 190px !important;
-  min-height: 36px;
-  padding: 8px 12px !important;
-  border: 1px solid #d9e8df !important;
-  border-radius: 999px !important;
-  background: rgba(255, 255, 255, 0.96) !important;
-  box-shadow: 0 8px 24px rgba(22, 63, 43, 0.1) !important;
-  backdrop-filter: blur(10px);
-  white-space: nowrap !important;
-}
-
-#lang-switcher select {
-  width: auto !important;
-  max-width: 125px !important;
-  min-height: auto !important;
-  padding: 0 18px 0 0 !important;
-  border: 0 !important;
-  outline: 0 !important;
-  background: transparent !important;
-  color: var(--admin-primary-dark) !important;
-  font-size: 13px !important;
-  font-weight: 800 !important;
-  box-shadow: none !important;
-}
-
-body.superadmin-dashboard-page #lang-switcher {
-  top: 22px !important;
-  right: 24px !important;
-  left: auto !important;
-  bottom: auto !important;
-  transform: none !important;
-}
-
 /* ========== SIDEBAR ========== */
 .sidebar {
   width: 260px;
   min-height: 100vh;
-  padding: 38px 18px 28px;
+  padding: 24px 18px 28px;
   background:
     radial-gradient(circle at 20% 12%, rgba(255, 255, 255, 0.08), transparent 22%),
     linear-gradient(165deg, #064625 0%, #0d5c35 48%, #167342 100%);
@@ -87,6 +43,28 @@ body.superadmin-dashboard-page #lang-switcher {
   display: flex;
   flex-direction: column;
   box-shadow: 18px 0 50px rgba(12, 58, 34, 0.12);
+}
+
+.superadmin-language-switcher {
+  width: 100%;
+  margin-bottom: 18px;
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  box-shadow: none;
+}
+
+.superadmin-language-switcher .language-switcher-icon {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.superadmin-language-switcher select {
+  color: #fff;
+}
+
+.superadmin-language-switcher select option {
+  color: #26332e;
 }
 
 .superadmin-brand {
@@ -183,14 +161,6 @@ body.superadmin-dashboard-page #lang-switcher {
   background: var(--admin-background);
   max-width: 1560px;
   margin: 0 auto;
-}
-
-.superadmin-toolbar {
-  min-height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  margin-bottom: 12px;
 }
 
 /* ========== WELCOME CARD ========== */
@@ -1667,13 +1637,6 @@ input:checked + .slider::before {
 @media (max-width: 900px) {
   .container {
     flex-direction: column;
-  }
-
-  #lang-switcher {
-    top: 12px !important;
-    right: 12px !important;
-    left: auto !important;
-    bottom: auto !important;
   }
 
   .sidebar {

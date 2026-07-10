@@ -1,12 +1,12 @@
 .language-switcher {
-  min-width: 112px;
-  height: 38px;
+  min-width: 128px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 10px;
+  gap: 8px;
+  padding: 0 11px;
   border: 1px solid #d8e2dc;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff;
   color: #155d3a;
   box-shadow: 0 4px 14px rgba(19, 55, 37, 0.06);
@@ -14,7 +14,15 @@
 
 .language-switcher-icon {
   flex: 0 0 auto;
-  font-size: 18px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 31px;
+  height: 24px;
+  border-radius: 999px;
+  background: #eef7f1;
+  color: #155d3a;
+  font-size: 10px;
+  font-weight: 900;
   line-height: 1;
 }
 

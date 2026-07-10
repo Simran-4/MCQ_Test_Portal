@@ -927,12 +927,12 @@ export default function TestSuiteDetail() {
             <>
               <button onClick={() => setShowDuration(s => !s)}
                 style={{ padding: "10px 20px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-                ⏱ Duration / submit ({suite.duration || 30} min{suite.submitDelayMinutes ? `, submit after ${suite.submitDelayMinutes} min` : ""}, result {suite.showResultsAfterSubmission === false ? "hidden" : "shown"})
+                ⏱ Suite settings ({suite.duration || 30} min{suite.submitDelayMinutes ? `, submit after ${suite.submitDelayMinutes} min` : ""}, result {suite.showResultsAfterSubmission === false ? "hidden" : "shown"})
               </button>
               <button onClick={() => { setShowDuration(true); }}
                 className={`suite-result-visibility-action ${suite.showResultsAfterSubmission === false ? "hidden" : "visible"}`}
                 style={{ padding: "10px 20px", background: WHITE, color: suite.showResultsAfterSubmission === false ? "#b91c1c" : "#166534", border: "1px solid #bbf7d0", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-                Result visibility ({suite.showResultsAfterSubmission === false ? "hidden" : "shown"})
+                Show result option ({suite.showResultsAfterSubmission === false ? "off" : "on"})
               </button>
               <button onClick={() => setShowPassing(s => !s)}
                 style={{ padding: "10px 20px", background: WHITE, color: "#166534", border: "1px solid #86efac", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
@@ -992,9 +992,9 @@ export default function TestSuiteDetail() {
         {/* ── Duration Panel ── */}
         {showDuration && (
           <div style={{ background: WHITE, border: "1px solid #e5e7eb", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
-            <h2 style={{ fontSize: "15px", fontWeight: "700", color: GREEN_DARK, marginTop: 0, marginBottom: "6px" }}>⏱ Test Duration & Submit Button Timing</h2>
+            <h2 style={{ fontSize: "15px", fontWeight: "700", color: GREEN_DARK, marginTop: 0, marginBottom: "6px" }}>⏱ Test Suite Settings</h2>
             <p style={{ fontSize: "13px", color: "#888", marginBottom: "14px" }}>
-              Set the total test duration and optionally delay when candidates can manually submit. Use 0 to allow immediate submission.
+              Set duration, submit timing, and whether candidates see results immediately after submitting this test suite.
             </p>
             <div style={{ display: "flex", gap: "14px", alignItems: "flex-end", flexWrap: "wrap" }}>
               <div>
@@ -1013,7 +1013,7 @@ export default function TestSuiteDetail() {
                   onChange={e => setShowResultsAfterSubmission(e.target.checked)}
                   style={{ width: "18px", height: "18px", accentColor: GREEN }}
                 />
-                Show result after submission
+                Show result immediately after submission
               </label>
               <button onClick={handleSaveDuration} disabled={savingDur} style={{ padding: "10px 20px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer", opacity: savingDur ? 0.6 : 1 }}>
                 {savingDur ? "Saving…" : "Save"}

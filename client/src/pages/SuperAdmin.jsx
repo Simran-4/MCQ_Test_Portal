@@ -1465,6 +1465,8 @@ function SuperAdmin() {
   return (
     <div className="container">
       <aside className="sidebar">
+        <LanguageSwitcher className="superadmin-language-switcher" />
+
         <div className="superadmin-brand">
           <img src="/Logo.png" alt="Snehalaya logo" />
           <div>
@@ -1523,10 +1525,6 @@ function SuperAdmin() {
       </aside>
 
       <main className="main-content">
-        <div className="superadmin-toolbar">
-          <LanguageSwitcher />
-        </div>
-
         {activeNav === "dashboard" && (
           <section className="welcome-card">
             <div>
