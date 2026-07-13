@@ -63,7 +63,7 @@ function findClientBundle(callback) {
   fs.readdir(clientAssets, (dirErr, files) => {
     if (dirErr) return callback(dirErr);
 
-    const bundleFile = files.find(file => /^index-.*\.js$/.test(file));
+    const bundleFile = files.find(file => /^(index|app)-.*\.js$/.test(file));
     if (!bundleFile) return callback(new Error("Client bundle not found"));
 
     callback(null, bundleFile);
@@ -92,7 +92,7 @@ app.get("/{*splat}", (req, res, next) => {
       if (err) return next(err);
       const legacyScript = `<script src="/legacy-app.js?v=${encodeURIComponent(bundleFile)}"></script>`;
       const compatibleHtml = html
-        .replace(/<script type="module"[^>]+src="\/assets\/index-[^"]+\.js"[^>]*><\/script>/, legacyScript)
+        .replace(/<script type="module"[^>]+src="\/assets\/(index|app)-[^"]+\.js"[^>]*><\/script>/, legacyScript)
         .replace(/\s+crossorigin/g, "");
       res.type("html").set("Cache-Control", "no-store").send(compatibleHtml);
     });
