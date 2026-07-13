@@ -16,6 +16,9 @@ const LANGUAGE_ALIASES = {
   marathi: "mr",
   mar: "mr",
 };
+const TRANSLATION_CACHE = new Map();
+const TRANSLATABLE_LANGUAGES = new Set(["hi", "mr"]);
+const DEVANAGARI_RE = /[\u0900-\u097F]/;
 
 function normalizeLanguage(value) {
   const raw = String(value || "").trim().toLowerCase();
@@ -26,6 +29,93 @@ function normalizeLanguage(value) {
 
 function questionLanguage(question) {
   return normalizeLanguage(question?.language || "en");
+}
+
+function hasDevanagariText(question) {
+  return DEVANAGARI_RE.test([
+    question?.questionText,
+    ...(Array.isArray(question?.options) ? question.options : []),
+    question?.explanation,
+  ].filter(Boolean).join(" "));
+}
+
+function shouldTranslateQuestionSet(questions, requestedLanguage) {
+  const language = normalizeLanguage(requestedLanguage);
+  if (!TRANSLATABLE_LANGUAGES.has(language) || !questions.length) return false;
+  return !questions.some(hasDevanagariText);
+}
+
+async function translateText(text, targetLanguage) {
+  const source = String(text || "");
+  if (!source.trim()) return source;
+  const language = normalizeLanguage(targetLanguage);
+  if (!TRANSLATABLE_LANGUAGES.has(language) || DEVANAGARI_RE.test(source)) return source;
+
+  const cacheKey = `${language}:${source}`;
+  if (TRANSLATION_CACHE.has(cacheKey)) return TRANSLATION_CACHE.get(cacheKey);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${language}&dt=t&q=${encodeURIComponent(source)}`;
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`Translation failed with ${response.status}`);
+    const data = await response.json();
+    const translated = Array.isArray(data?.[0])
+      ? data[0].map(part => Array.isArray(part) ? part[0] : "").join("")
+      : "";
+    const value = translated.trim() ? translated : source;
+    TRANSLATION_CACHE.set(cacheKey, value);
+    return value;
+  } catch (err) {
+    console.warn("Question translation fallback used:", err.message);
+    TRANSLATION_CACHE.set(cacheKey, source);
+    return source;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function mapWithConcurrency(items, limit, mapper) {
+  const output = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      output[index] = await mapper(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return output;
+}
+
+async function translateQuestionsIfNeeded(questions, requestedLanguage) {
+  const language = normalizeLanguage(requestedLanguage);
+  if (!shouldTranslateQuestionSet(questions, language)) return questions;
+
+  const textValues = [...new Set(questions.flatMap(question => [
+    question.questionText,
+    ...(Array.isArray(question.options) ? question.options : []),
+    question.explanation,
+  ].map(value => String(value || "").trim()).filter(Boolean)))];
+  const translatedValues = await mapWithConcurrency(textValues, 16, async value => [
+    value,
+    await translateText(value, language),
+  ]);
+  const translations = new Map(translatedValues);
+
+  return questions.map(question => ({
+    ...(question.toJSON?.() || question),
+    language,
+    questionText: translations.get(String(question.questionText || "").trim()) || question.questionText,
+    options: Array.isArray(question.options)
+      ? question.options.map(option => translations.get(String(option || "").trim()) || option)
+      : question.options,
+    explanation: question.explanation
+      ? translations.get(String(question.explanation || "").trim()) || question.explanation
+      : question.explanation,
+  }));
 }
 
 function questionsForLanguage(questions, requestedLanguage) {
@@ -276,8 +366,10 @@ router.get("/:suiteId/random", async (req, res) => {
     if (!questions.length)
       return res.status(404).json({ message: "No questions found for this suite" });
 
-    const selectedQuestions = selectQuestionsForLanguage(suite, questions, req.query.language || req.query.lang);
-    res.json(selectedQuestions.length > 0 ? selectedQuestions : selectQuestionsForSuite(suite, questions));
+    const requestedLanguage = req.query.language || req.query.lang;
+    const selectedQuestions = selectQuestionsForLanguage(suite, questions, requestedLanguage);
+    const responseQuestions = selectedQuestions.length > 0 ? selectedQuestions : selectQuestionsForSuite(suite, questions);
+    res.json(await translateQuestionsIfNeeded(responseQuestions, requestedLanguage));
   } catch (err) {
     console.error("Random questions error:", err);
     res.status(500).json({ message: "Error fetching questions" });
