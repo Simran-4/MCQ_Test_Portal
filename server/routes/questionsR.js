@@ -6,7 +6,7 @@ const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
 const jwt = require("jsonwebtoken");
 const { hasAdminPermission } = require("../utils/adminPermissions");
-const { selectQuestionsForSuite } = require("../utils/questionSelection");
+const { resolveQuestionSelectionMode, selectQuestionsForSuite } = require("../utils/questionSelection");
 
 const LANGUAGE_ALIASES = {
   english: "en",
@@ -35,6 +35,35 @@ function questionsForLanguage(questions, requestedLanguage) {
 
   const englishFallback = questions.filter(question => questionLanguage(question) === "en");
   return englishFallback.length > 0 ? englishFallback : questions;
+}
+
+function selectQuestionsForLanguage(suite, questions, requestedLanguage) {
+  const languageQuestions = questionsForLanguage(questions, requestedLanguage);
+  const mode = resolveQuestionSelectionMode(suite);
+
+  if (mode !== "selected") {
+    return selectQuestionsForSuite(suite, languageQuestions);
+  }
+
+  const selectedIds = new Set((suite?.selectedQuestionIds || []).map(id => String(id?._id || id)));
+  if (selectedIds.size === 0) return [];
+
+  const firstSelectedQuestion = questions.find(question => selectedIds.has(String(question._id)));
+  const sourceQuestions = firstSelectedQuestion
+    ? questions.filter(question => questionLanguage(question) === questionLanguage(firstSelectedQuestion))
+    : questions;
+
+  const selectedPositions = sourceQuestions
+    .map((question, index) => selectedIds.has(String(question._id)) ? index : -1)
+    .filter(index => index >= 0);
+
+  if (selectedPositions.length === 0) {
+    return selectQuestionsForSuite(suite, languageQuestions);
+  }
+
+  return selectedPositions
+    .map(index => languageQuestions[index])
+    .filter(Boolean);
 }
 
 const requireAdminOrSuperAdmin = (req, res, next) => {
@@ -247,8 +276,7 @@ router.get("/:suiteId/random", async (req, res) => {
     if (!questions.length)
       return res.status(404).json({ message: "No questions found for this suite" });
 
-    const languageQuestions = questionsForLanguage(questions, req.query.language || req.query.lang);
-    const selectedQuestions = selectQuestionsForSuite(suite, languageQuestions);
+    const selectedQuestions = selectQuestionsForLanguage(suite, questions, req.query.language || req.query.lang);
     res.json(selectedQuestions.length > 0 ? selectedQuestions : selectQuestionsForSuite(suite, questions));
   } catch (err) {
     console.error("Random questions error:", err);
