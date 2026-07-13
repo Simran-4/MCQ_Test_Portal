@@ -1,5 +1,6 @@
 // src/pages/StudentTest.jsx
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import LanguageSwitcher from "../components/LanguageSwitcher";
@@ -182,9 +183,28 @@ function formatTime(secs) {
   return `${m}:${s}`;
 }
 
+function normalizeLanguage(value) {
+  const base = String(value || "en").trim().toLowerCase().split(/[-_]/)[0];
+  return ["en", "hi", "mr"].includes(base) ? base : "en";
+}
+
+function remapAnswersByQuestionPosition(prevAnswers, previousQuestions, nextQuestions) {
+  const nextAnswers = {};
+  nextQuestions.forEach((question, index) => {
+    const previousQuestion = previousQuestions[index];
+    const answer = previousQuestion && prevAnswers[previousQuestion._id] !== undefined
+      ? prevAnswers[previousQuestion._id]
+      : prevAnswers[question._id];
+    if (answer !== undefined) nextAnswers[question._id] = answer;
+  });
+  return nextAnswers;
+}
+
 export default function StudentTest() {
   const { suiteId } = useParams();
   const navigate    = useNavigate();
+  const { i18n } = useTranslation();
+  const selectedLanguage = normalizeLanguage(i18n.resolvedLanguage || i18n.language);
 
   const [suite, setSuite]           = useState(null);
   const [questions, setQuestions]   = useState([]);
@@ -207,9 +227,25 @@ export default function StudentTest() {
   const timerRef                      = useRef(null);
   const autoSubmitRef                 = useRef(() => {});
   const answersRef                    = useRef(answers);
+  const questionsRef                  = useRef(questions);
+  const loadedLanguageRef             = useRef(selectedLanguage);
   const testStartedAtRef              = useRef(null);
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
+  useEffect(() => { questionsRef.current = questions; }, [questions]);
+
+  const loadQuestionsForLanguage = useCallback(async (language) => {
+    const qRes = await axios.get(`${API}/api/questions/${suiteId}/random`, {
+      headers: getAuthHeaders(),
+      params: { language: normalizeLanguage(language) },
+    });
+    const nextQuestions = qRes.data;
+    const previousQuestions = questionsRef.current;
+    setQuestions(nextQuestions);
+    setAnswers(prevAnswers => remapAnswersByQuestionPosition(prevAnswers, previousQuestions, nextQuestions));
+    loadedLanguageRef.current = normalizeLanguage(language);
+    return nextQuestions;
+  }, [suiteId]);
 
   useEffect(() => {
     setAnswers(prev => {
@@ -273,8 +309,12 @@ export default function StudentTest() {
           return;
         }
 
-        const qRes = await axios.get(`${API}/api/questions/${suiteId}/random`, { headers });
+        const qRes = await axios.get(`${API}/api/questions/${suiteId}/random`, {
+          headers,
+          params: { language: loadedLanguageRef.current },
+        });
         setQuestions(qRes.data);
+        loadedLanguageRef.current = normalizeLanguage(loadedLanguageRef.current);
         testStartedAtRef.current = new Date();
         setTimeLeft(durationMins * 60);
       } catch (err) {
@@ -286,6 +326,15 @@ export default function StudentTest() {
     };
     fetchData();
   }, [suiteId, shouldCheckPreviousAttempt, userId, userSearch]);
+
+  useEffect(() => {
+    if (loading || submitted || blockedResult || !suite || selectedLanguage === loadedLanguageRef.current) return;
+    let cancelled = false;
+    loadQuestionsForLanguage(selectedLanguage).catch(err => {
+      if (!cancelled) console.error("Failed to switch question language:", err);
+    });
+    return () => { cancelled = true; };
+  }, [blockedResult, loadQuestionsForLanguage, loading, selectedLanguage, submitted, suite]);
 
   useEffect(() => {
     if (timeLeft === null || submitted) return;

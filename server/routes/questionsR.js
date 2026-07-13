@@ -8,6 +8,35 @@ const jwt = require("jsonwebtoken");
 const { hasAdminPermission } = require("../utils/adminPermissions");
 const { selectQuestionsForSuite } = require("../utils/questionSelection");
 
+const LANGUAGE_ALIASES = {
+  english: "en",
+  eng: "en",
+  hindi: "hi",
+  hin: "hi",
+  marathi: "mr",
+  mar: "mr",
+};
+
+function normalizeLanguage(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "en";
+  const base = raw.split(/[-_]/)[0];
+  return LANGUAGE_ALIASES[raw] || LANGUAGE_ALIASES[base] || (["en", "hi", "mr"].includes(base) ? base : "en");
+}
+
+function questionLanguage(question) {
+  return normalizeLanguage(question?.language || "en");
+}
+
+function questionsForLanguage(questions, requestedLanguage) {
+  const language = normalizeLanguage(requestedLanguage);
+  const exactMatches = questions.filter(question => questionLanguage(question) === language);
+  if (exactMatches.length > 0) return exactMatches;
+
+  const englishFallback = questions.filter(question => questionLanguage(question) === "en");
+  return englishFallback.length > 0 ? englishFallback : questions;
+}
+
 const requireAdminOrSuperAdmin = (req, res, next) => {
   if (!["admin", "superadmin"].includes(req.user.role)) {
     return res.status(403).json({ message: "Admin access required" });
@@ -218,7 +247,9 @@ router.get("/:suiteId/random", async (req, res) => {
     if (!questions.length)
       return res.status(404).json({ message: "No questions found for this suite" });
 
-    res.json(selectQuestionsForSuite(suite, questions));
+    const languageQuestions = questionsForLanguage(questions, req.query.language || req.query.lang);
+    const selectedQuestions = selectQuestionsForSuite(suite, languageQuestions);
+    res.json(selectedQuestions.length > 0 ? selectedQuestions : selectQuestionsForSuite(suite, questions));
   } catch (err) {
     console.error("Random questions error:", err);
     res.status(500).json({ message: "Error fetching questions" });
