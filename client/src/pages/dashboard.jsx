@@ -348,15 +348,172 @@ async function addDevanagariFont(doc) {
   }
 }
 
-function pdfFontForValue(value, devanagariFont) {
-  return /[\u0900-\u097F]/.test(String(value || "")) ? devanagariFont : "helvetica";
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
-function applyPdfTableFont(devanagariFont) {
-  return (data) => {
-    if (data.section !== "body") return;
-    data.cell.styles.font = pdfFontForValue(data.cell?.raw, devanagariFont);
-  };
+function buildAdminReportHtml({ title, generatedAt, columns, rows }) {
+  const head = columns.map(column => `<th>${escapeHtml(column)}</th>`).join("");
+  const body = rows.map(row => `
+    <tr>
+      ${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join("")}
+    </tr>
+  `).join("");
+
+  return `
+    <style>
+      @font-face {
+        font-family: "Noto Sans Devanagari Local";
+        src: url("/fonts/${DEVANAGARI_FONT_FILE}") format("truetype");
+        font-weight: 400;
+        font-style: normal;
+      }
+      .admin-pdf-report {
+        width: 1320px;
+        min-height: 760px;
+        padding: 34px;
+        background: #f8f7f4;
+        color: #243028;
+        font-family: "Noto Sans Devanagari Local", "Noto Sans Devanagari", "Mangal", "Arial Unicode MS", Arial, sans-serif;
+      }
+      .admin-pdf-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 24px;
+        padding: 22px 26px;
+        border-radius: 18px;
+        color: #fff;
+        background: linear-gradient(135deg, #1a3d28, #1f6b3a);
+        box-shadow: 0 18px 42px rgba(26, 61, 40, 0.18);
+      }
+      .admin-pdf-header h1 {
+        margin: 0;
+        font-size: 28px;
+        line-height: 1.2;
+      }
+      .admin-pdf-header p {
+        margin: 7px 0 0;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 15px;
+      }
+      .admin-pdf-table {
+        width: 100%;
+        margin-top: 24px;
+        border-collapse: separate;
+        border-spacing: 0;
+        overflow: hidden;
+        border: 1px solid #dce8df;
+        border-radius: 16px;
+        background: #fff;
+      }
+      .admin-pdf-table th,
+      .admin-pdf-table td {
+        padding: 13px 14px;
+        border-bottom: 1px solid #e8eee9;
+        text-align: left;
+        vertical-align: top;
+        font-size: 15px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+      .admin-pdf-table th {
+        background: #eaf6ef;
+        color: #145236;
+        font-size: 13px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      .admin-pdf-table tr:last-child td {
+        border-bottom: 0;
+      }
+    </style>
+    <div class="admin-pdf-report">
+      <header class="admin-pdf-header">
+        <div>
+          <h1>${escapeHtml(title)}</h1>
+          <p>Generated ${escapeHtml(generatedAt)}</p>
+        </div>
+        <strong>${rows.length} row${rows.length === 1 ? "" : "s"}</strong>
+      </header>
+      <table class="admin-pdf-table">
+        <thead><tr>${head}</tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function renderAdminReportHtmlToCanvas(html) {
+  const { default: html2canvas } = await import("html2canvas");
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "absolute";
+  wrapper.style.left = "0";
+  wrapper.style.top = `${window.scrollY || 0}px`;
+  wrapper.style.width = "1320px";
+  wrapper.style.background = "#f8f7f4";
+  wrapper.style.pointerEvents = "none";
+  wrapper.style.zIndex = "2147483647";
+  wrapper.innerHTML = html;
+  document.body.appendChild(wrapper);
+
+  try {
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return await html2canvas(wrapper.firstElementChild, {
+      backgroundColor: "#f8f7f4",
+      scale: 1.2,
+      useCORS: true,
+      logging: false,
+      windowWidth: 1320,
+      windowHeight: Math.ceil(wrapper.firstElementChild?.scrollHeight || wrapper.scrollHeight || 900),
+      scrollX: 0,
+      scrollY: 0,
+    });
+  } finally {
+    wrapper.remove();
+  }
+}
+
+function addCanvasPages(doc, canvas) {
+  if (!canvas?.width || !canvas?.height) throw new Error("Unable to render report content.");
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const sliceHeight = Math.floor(canvas.width * (pageHeight / pageWidth));
+  const pageCanvas = document.createElement("canvas");
+  const ctx = pageCanvas.getContext("2d");
+  if (!ctx) throw new Error("Unable to prepare report page.");
+  pageCanvas.width = canvas.width;
+
+  let page = 0;
+  for (let sourceY = 0; sourceY < canvas.height; sourceY += sliceHeight) {
+    const currentSliceHeight = Math.min(sliceHeight, canvas.height - sourceY);
+    pageCanvas.height = currentSliceHeight;
+    ctx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+    ctx.drawImage(canvas, 0, sourceY, canvas.width, currentSliceHeight, 0, 0, pageCanvas.width, currentSliceHeight);
+    if (page > 0) doc.addPage();
+    const imageHeight = (currentSliceHeight / canvas.width) * pageWidth;
+    doc.addImage(pageCanvas.toDataURL("image/png"), "PNG", 0, 0, pageWidth, imageHeight);
+    page += 1;
+  }
+}
+
+async function saveAdminReportPdf({ title, fileName, columns, rows }) {
+  const html = buildAdminReportHtml({
+    title,
+    generatedAt: formatDateTime(new Date()),
+    columns,
+    rows,
+  });
+  const canvas = await renderAdminReportHtmlToCanvas(html);
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  addCanvasPages(doc, canvas);
+  doc.save(fileName);
 }
 
 function matchesUserResult(result, user) {
@@ -1253,22 +1410,11 @@ export default function Dashboard() {
   const downloadTestSummaryPDF = async () => {
     if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     if (testSummaryRows.length === 0) return alert("No submitted test reports found.");
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const reportFont = await addDevanagariFont(doc);
-    doc.setFillColor(26, 61, 40);
-    doc.rect(0, 0, 297, 24, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("Statistical Test Report", 14, 10);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(`Generated ${formatDateTime(new Date())}`, 14, 17);
-
-    autoTable(doc, {
-      startY: 32,
-      head: [["Test No.", "Test Name", "Users Attempted", "Passed", "Failed", "Pass Rate", "Avg Score", "Avg Time Taken"]],
-      body: testSummaryRows.map((row, index) => [
+    await saveAdminReportPdf({
+      title: "Statistical Test Report",
+      fileName: `summary_test_report_${new Date().toISOString().slice(0, 10)}.pdf`,
+      columns: ["Test No.", "Test Name", "Users Attempted", "Passed", "Failed", "Pass Rate", "Avg Score", "Avg Time Taken"],
+      rows: testSummaryRows.map((row, index) => [
         index + 1,
         row.testName,
         row.usersAttempted,
@@ -1278,18 +1424,7 @@ export default function Dashboard() {
         `${row.averageScore.toFixed(2)}%`,
         formatDuration(row.averageTime),
       ]),
-      styles: { fontSize: 7.3, cellPadding: 2, overflow: "linebreak" },
-      headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
-      bodyStyles: { font: "helvetica", fontStyle: "normal" },
-      alternateRowStyles: { fillColor: [248, 247, 244] },
-      didParseCell: applyPdfTableFont(reportFont),
-      columnStyles: {
-        1: { cellWidth: 58 },
-        6: { cellWidth: 32 },
-        7: { cellWidth: 32 },
-      },
     });
-    doc.save(`summary_test_report_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   const downloadDescriptiveTestExcel = () => {
@@ -1316,22 +1451,11 @@ export default function Dashboard() {
   const downloadDescriptiveTestPDF = async () => {
     if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     if (descriptiveTestRows.length === 0) return alert("No submitted test reports found.");
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const reportFont = await addDevanagariFont(doc);
-    doc.setFillColor(26, 61, 40);
-    doc.rect(0, 0, 297, 24, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("Descriptive Test Report", 14, 10);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(`Generated ${formatDateTime(new Date())}`, 14, 17);
-
-    autoTable(doc, {
-      startY: 32,
-      head: [["Test No.", "Test Name", "Candidate", "Contact", "Attempted Date & Time", "Time Taken", "Score", "%", "Result"]],
-      body: descriptiveTestRows.map(row => [
+    await saveAdminReportPdf({
+      title: "Descriptive Test Report",
+      fileName: `descriptive_test_report_${new Date().toISOString().slice(0, 10)}.pdf`,
+      columns: ["Test No.", "Test Name", "Candidate", "Contact", "Attempted Date & Time", "Time Taken", "Score", "%", "Result"],
+      rows: descriptiveTestRows.map(row => [
         row.index,
         row.testName,
         row.candidate,
@@ -1342,19 +1466,7 @@ export default function Dashboard() {
         row.percentage,
         row.result,
       ]),
-      styles: { fontSize: 7.2, cellPadding: 2, overflow: "linebreak" },
-      headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
-      bodyStyles: { font: "helvetica", fontStyle: "normal" },
-      alternateRowStyles: { fillColor: [248, 247, 244] },
-      didParseCell: applyPdfTableFont(reportFont),
-      columnStyles: {
-        1: { cellWidth: 46 },
-        2: { cellWidth: 36 },
-        3: { cellWidth: 38 },
-        4: { cellWidth: 34 },
-      },
     });
-    doc.save(`descriptive_test_report_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   const downloadAttemptAnalysisExcel = () => {

@@ -1010,7 +1010,7 @@ body {
 
 /* ========== TABLE ========== */
 .table-wrapper {
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: visible;
   border-radius: 10px;
   border: 1px solid #e6eee8;
@@ -1039,7 +1039,7 @@ table {
 }
 
 .user-management-table {
-  min-width: 0;
+  min-width: 1220px;
   width: 100%;
   table-layout: fixed;
 }
@@ -1077,8 +1077,9 @@ td {
 
 .user-management-table th:nth-child(1),
 .user-management-table td:nth-child(1) {
-  width: 5%;
+  width: 64px;
   text-align: center;
+  white-space: nowrap;
 }
 
 .serial-cell {
@@ -1088,19 +1089,19 @@ td {
 
 .user-management-table th:nth-child(2),
 .user-management-table td:nth-child(2) {
-  width: 13%;
+  width: 180px;
 }
 
 .user-management-table th:nth-child(3),
 .user-management-table td:nth-child(3) {
-  width: 18%;
+  width: 230px;
 }
 
 .user-management-table th:nth-child(4),
 .user-management-table th:nth-child(5),
 .user-management-table td:nth-child(4),
 .user-management-table td:nth-child(5) {
-  width: 17%;
+  width: 190px;
 }
 
 .user-management-table th:nth-child(4),
@@ -1111,18 +1112,21 @@ td {
 
 .user-management-table th:nth-child(9),
 .user-management-table td:nth-child(9) {
-  width: 7%;
+  width: 94px;
   text-align: center;
   overflow: visible;
 }
 
 .user-management-table th:nth-child(6),
-.user-management-table td:nth-child(6),
+.user-management-table td:nth-child(6) {
+  width: 122px;
+}
+
 .user-management-table th:nth-child(7),
 .user-management-table td:nth-child(7),
 .user-management-table th:nth-child(8),
 .user-management-table td:nth-child(8) {
-  width: 8%;
+  width: 96px;
 }
 
 .user-org-text {
@@ -1659,6 +1663,7 @@ tbody tr:last-child td {
   font-weight: 700;
   text-transform: capitalize;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .Candidate {
