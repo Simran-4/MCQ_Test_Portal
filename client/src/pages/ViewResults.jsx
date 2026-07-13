@@ -1,5 +1,5 @@
 // src/pages/ViewResults.jsx
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import "../styles/quiz.css";
 import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
@@ -25,14 +25,13 @@ export default function ViewResults() {
   const [searchQuery, setSearchQuery]   = useState("");
   const [loading, setLoading]           = useState(true);
   const [suiteMap, setSuiteMap]         = useState({});
+  const searchQueryRef = useRef(searchQuery);
   const currentUser = getCurrentUser();
   const canSendCertificates = canAdmin("canBulkMail", currentUser);
 
   useEffect(() => {
-    fetchProjects();
-    fetchSuites();
-    fetchResults();
-  }, [filterProject]);
+    searchQueryRef.current = searchQuery;
+  }, [searchQuery]);
 
   const getResultTestName = (res) => {
     if (res.testName) return res.testName;
@@ -41,7 +40,7 @@ export default function ViewResults() {
     return suiteMap[suiteId] || "Assessment";
   };
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       const res = await axios.get(`${API}/api/results/projects`, {
         headers: getAuthHeaders(),
@@ -50,9 +49,9 @@ export default function ViewResults() {
     } catch (err) {
       console.error("Error fetching projects", err);
     }
-  };
+  }, []);
 
-  const fetchSuites = async () => {
+  const fetchSuites = useCallback(async () => {
     try {
       const res = await axios.get(`${API}/api/test-suites`, {
         headers: getAuthHeaders(),
@@ -63,14 +62,14 @@ export default function ViewResults() {
     } catch (err) {
       console.error("Error fetching test suites", err);
     }
-  };
+  }, []);
 
-  const fetchResults = async () => {
+  const fetchResults = useCallback(async (searchValue = searchQueryRef.current) => {
     setLoading(true);
     try {
       const res = await axios.get(`${API}/api/results/all`, {
         headers: getAuthHeaders(),
-        params: { project: filterProject, search: searchQuery }
+        params: { project: filterProject, search: searchValue }
       });
       setResults(res.data);
     } catch (err) {
@@ -78,11 +77,17 @@ export default function ViewResults() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterProject]);
+
+  useEffect(() => {
+    fetchProjects();
+    fetchSuites();
+    fetchResults();
+  }, [fetchProjects, fetchResults, fetchSuites]);
 
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchResults();
+    fetchResults(searchQuery);
   };
 
   const hasPassed = (res) => {

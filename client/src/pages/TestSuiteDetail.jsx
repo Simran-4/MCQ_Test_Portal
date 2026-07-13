@@ -1,5 +1,5 @@
 // src/pages/TestSuiteDetail.jsx
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
@@ -252,9 +252,7 @@ export default function TestSuiteDetail() {
     localStorage.setItem(`cats_${suiteId}`, JSON.stringify(categories));
   }, [categories, suiteId]);
 
-  useEffect(() => { fetchData(); }, [suiteId]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!canViewQuestions) {
       setError("Question viewing permission is disabled for your account.");
       setLoading(false);
@@ -290,7 +288,9 @@ export default function TestSuiteDetail() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canViewQuestions, suiteId]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleImportClick = () => fileInputRef.current?.click();
 

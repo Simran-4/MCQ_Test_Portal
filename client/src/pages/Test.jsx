@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import "../styles/quiz.css";
@@ -25,6 +25,7 @@ function Test() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [timeLeft, setTimeLeft]               = useState(null);
   const timerStarted                          = useRef(false);
+  const submitRef                             = useRef(() => {});
 
   // Feature 7: Mark for Review
   const [markedForReview, setMarkedForReview] = useState([]);
@@ -32,7 +33,7 @@ function Test() {
   // Feature 6: Confirmation dialog
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       const res = await axios.get(`${API}/api/settings`);
       if (res.data && res.data.examDuration) {
@@ -41,9 +42,9 @@ function Test() {
     } catch (err) {
       console.log(err);
     }
-  };
+  }, []);
 
-  const fetchQuestions = async () => {
+  const fetchQuestions = useCallback(async () => {
     try {
       // Use suiteId-specific random endpoint if available, else fallback to /all
       const url = suiteId
@@ -57,12 +58,12 @@ function Test() {
     } catch (err) {
       console.log(err);
     }
-  };
+  }, [suiteId]);
 
   useEffect(() => {
     fetchQuestions();
     fetchSettings();
-  }, []);
+  }, [fetchQuestions, fetchSettings]);
 
   // Timer
   useEffect(() => {
@@ -74,7 +75,7 @@ function Test() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleSubmit();
+          submitRef.current();
           return 0;
         }
         return prev - 1;
@@ -203,6 +204,10 @@ function Test() {
       alert("Error Submitting Test");
     }
   };
+
+  useEffect(() => {
+    submitRef.current = handleSubmit;
+  });
 
   // Loading state
   if (timeLeft === null) {

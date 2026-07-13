@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
+import LanguageSwitcher from "../components/LanguageSwitcher";
 import { getAuthHeaders } from "../utils/auth";
 import { downloadCertificatePDF } from "../utils/certificate";
 
@@ -204,6 +205,7 @@ export default function StudentTest() {
   const [timeLeft, setTimeLeft]       = useState(null);
   const [showWarning, setShowWarning] = useState(false);
   const timerRef                      = useRef(null);
+  const autoSubmitRef                 = useRef(() => {});
   const answersRef                    = useRef(answers);
   const testStartedAtRef              = useRef(null);
 
@@ -289,15 +291,13 @@ export default function StudentTest() {
     if (timeLeft === null || submitted) return;
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
-        if (prev <= 1) { clearInterval(timerRef.current); autoSubmit(); return 0; }
+        if (prev <= 1) { clearInterval(timerRef.current); autoSubmitRef.current(); return 0; }
         if (prev === 61) setShowWarning(true);
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
   }, [timeLeft, submitted]);
-
-  const autoSubmit = () => { setShowWarning(false); handleSubmitInternal(true); };
 
   const handleSelect = (questionId, optionIndex) => {
     if (submitted || blockedResult) return;
@@ -402,6 +402,13 @@ export default function StudentTest() {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    autoSubmitRef.current = () => {
+      setShowWarning(false);
+      handleSubmitInternal(true);
+    };
+  });
 
   if (loading) {
     return (
@@ -725,13 +732,16 @@ export default function StudentTest() {
       )}
 
       {/* Header */}
-      <div className="student-test-header" style={{ background: WHITE, padding:"16px 28px", display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, zIndex:100, boxShadow:"0 2px 10px rgba(0,0,0,0.05)" }}>
+      <div className="student-test-header" style={{ background: WHITE, padding:"16px 28px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:"14px", flexWrap:"wrap", position:"sticky", top:0, zIndex:100, boxShadow:"0 2px 10px rgba(0,0,0,0.05)" }}>
         <div>
           <h2 style={{ margin:0, fontSize:"18px", color: GREEN_DARK }}>{suite?.name}</h2>
           <span style={{ fontSize:"12px", color:"#888" }}>{answeredCount} / {questions.length} Answered</span>
         </div>
-        <div style={{ background: isLowTime ? "#fee2e2" : "#f0faf5", padding:"8px 16px", borderRadius:"999px", color: isLowTime ? "#dc2626" : GREEN, fontWeight:"bold" }}>
-          {formatTime(timeLeft)}
+        <div style={{ display:"flex", alignItems:"center", gap:"12px", flexWrap:"wrap", justifyContent:"flex-end" }}>
+          <LanguageSwitcher className="student-test-language-switcher" />
+          <div style={{ background: isLowTime ? "#fee2e2" : "#f0faf5", padding:"8px 16px", borderRadius:"999px", color: isLowTime ? "#dc2626" : GREEN, fontWeight:"bold" }}>
+            {formatTime(timeLeft)}
+          </div>
         </div>
       </div>
 

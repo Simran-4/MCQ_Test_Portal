@@ -273,6 +273,12 @@
   background: #1A3D28;
 }
 
+.student-test-language-switcher {
+  min-width: 136px;
+  height: 38px;
+  box-shadow: none;
+}
+
 /* ── Responsive ──────────────────────────────── */
 @media (max-width: 768px) {
   .quiz-container {
@@ -300,5 +306,13 @@
     margin-left: 0;
     width: 100%;
     text-align: center;
+  }
+
+  .student-test-header {
+    padding: 14px 16px !important;
+  }
+
+  .student-test-language-switcher {
+    min-width: 128px;
   }
 }

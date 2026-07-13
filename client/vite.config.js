@@ -7,5 +7,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  base: "/",   // ← change this from "/MCQ_TEST_PORTAL/" to "/"
+  base: "/",
+  build: {
+    rollupOptions: {
+      input: {
+        app: "index.html",
+      },
+    },
+  },
 });
