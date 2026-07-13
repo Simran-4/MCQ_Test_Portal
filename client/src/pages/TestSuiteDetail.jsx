@@ -1,5 +1,6 @@
 // src/pages/TestSuiteDetail.jsx
 import { useCallback, useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
@@ -152,6 +153,11 @@ function isQuestionVideo(value) {
   return source.startsWith("data:video/") || /^https?:\/\/.+\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(source);
 }
 
+function normalizeLanguage(value) {
+  const base = String(value || "en").trim().toLowerCase().split(/[-_]/)[0];
+  return ["en", "hi", "mr"].includes(base) ? base : "en";
+}
+
 function normalizeImportRow(row, rowNum) {
   const questionText = String(rowValue(row, ["questionText", "Question", "question"])).trim();
   const questionType = String(rowValue(row, ["questionType", "QuestionType", "type", "Type"]) || "mcq")
@@ -196,6 +202,8 @@ function normalizeImportRow(row, rowNum) {
 export default function TestSuiteDetail() {
   const { suiteId }               = useParams();
   const navigate                  = useNavigate();
+  const { i18n }                  = useTranslation();
+  const selectedLanguage          = normalizeLanguage(i18n.resolvedLanguage || i18n.language);
   const currentUser               = getCurrentUser();
   const canViewQuestions          = canAdmin("canViewQuestions", currentUser);
   const canManageSuiteSettings    = canAdmin("canViewSuites", currentUser) && canAdmin("canManageSuites", currentUser);
@@ -262,7 +270,10 @@ export default function TestSuiteDetail() {
       const config = { headers: getAuthHeaders() };
       const [suiteRes, qRes] = await Promise.all([
         axios.get(`${API}/api/test-suites/${suiteId}`, config),
-        axios.get(`${API}/api/test-suites/${suiteId}/questions`, config),
+        axios.get(`${API}/api/test-suites/${suiteId}/questions`, {
+          ...config,
+          params: { language: selectedLanguage },
+        }),
       ]);
       setSuite(suiteRes.data);
       setDurationVal(suiteRes.data.duration || 30);
@@ -288,7 +299,7 @@ export default function TestSuiteDetail() {
     } finally {
       setLoading(false);
     }
-  }, [canViewQuestions, suiteId]);
+  }, [canViewQuestions, selectedLanguage, suiteId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

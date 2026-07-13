@@ -15,6 +15,7 @@ const {
   resolveQuestionSelectionMode,
   selectQuestionsForSuite,
 } = require("../utils/questionSelection");
+const { questionsForLanguage, translateQuestionsIfNeeded } = require("../utils/questionLanguage");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -307,12 +308,14 @@ router.get("/:id/questions", async (req, res) => {
     if (!canAccessSuite(suite, user)) {
       return res.status(403).json({ message: "This test is not available" });
     }
+    const requestedLanguage = req.query.language || req.query.lang;
     const questions = await Question.find({ testSuite: req.params.id }).sort({ createdAt: 1, _id: 1 });
     const visibleQuestions = user?.role === "candidate"
       ? selectQuestionsForSuite(suite, questions)
-      : questions;
-    res.json(visibleQuestions);
+      : questionsForLanguage(questions, requestedLanguage);
+    res.json(await translateQuestionsIfNeeded(visibleQuestions, requestedLanguage));
   } catch (err) {
+    console.error("Suite questions error:", err);
     res.status(500).json({ message: "Error fetching questions" });
   }
 });
