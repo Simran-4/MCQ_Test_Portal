@@ -190,13 +190,16 @@ function scoreSixteenPfQuestion(q, selectedArr, correctArr, category) {
   const selectedIndex = Array.isArray(selectedArr) && selectedArr.length === 1 ? Number(selectedArr[0]) : null;
   if (scores.length > 0) {
     const maxScore = Math.max(...scores, 0);
-    const earned = Number.isInteger(selectedIndex) ? Number(scores[selectedIndex] || 0) : 0;
-    return {
-      earned,
-      maxScore,
-      earnedFrac: maxScore > 0 ? earned / maxScore : 0,
-      isRight: maxScore > 0 && earned === maxScore,
-    };
+    if (maxScore > 0) {
+      const earned = Number.isInteger(selectedIndex) ? Math.max(0, Number(scores[selectedIndex] || 0)) : 0;
+      const boundedEarned = Math.min(earned, maxScore);
+      return {
+        earned: boundedEarned,
+        maxScore,
+        earnedFrac: boundedEarned / maxScore,
+        isRight: boundedEarned === maxScore,
+      };
+    }
   }
 
   const maxScore = isFactorB(category) ? 1 : 2;
@@ -207,6 +210,19 @@ function scoreSixteenPfQuestion(q, selectedArr, correctArr, category) {
     maxScore,
     earnedFrac: maxScore > 0 ? earned / maxScore : 0,
     isRight: maxScore > 0 && earned === maxScore,
+  };
+}
+
+function summarizeSixteenPfScores(categoryScores) {
+  const totals = categoryScores.reduce((acc, item) => {
+    acc.earned += Number(item.earned || 0);
+    acc.maxScore += Number(item.maxScore || 0);
+    return acc;
+  }, { earned: 0, maxScore: 0 });
+  return {
+    ...totals,
+    earnedFrac: totals.maxScore > 0 ? totals.earned / totals.maxScore : 0,
+    isRight: totals.maxScore > 0 && categoryScores.every(item => item.isRight),
   };
 }
 
@@ -407,12 +423,13 @@ router.post("/", authMiddleware, async (req, res) => {
         current.earnedFrac > winner.earnedFrac ? current : winner,
         { earnedFrac: 0, earned: 0, maxScore: isSixteenPf ? 0 : marks }
       );
-      const questionMax = isSixteenPf ? bestScore.maxScore : marks;
+      const questionScore = isSixteenPf ? summarizeSixteenPfScores(categoryScores) : bestScore;
+      const questionMax = isSixteenPf ? questionScore.maxScore : marks;
       totalMarks += questionMax;
 
-      const isRight = bestScore.earnedFrac === 1;
+      const isRight = isSixteenPf ? questionScore.isRight : bestScore.earnedFrac === 1;
 
-      const earnedMarks = isSixteenPf ? bestScore.earned : bestScore.earnedFrac * marks;
+      const earnedMarks = isSixteenPf ? questionScore.earned : bestScore.earnedFrac * marks;
       score += earnedMarks;
       if (isRight) correctCount++;
 

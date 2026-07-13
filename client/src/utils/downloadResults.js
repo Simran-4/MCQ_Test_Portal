@@ -55,6 +55,39 @@ function scoreSelected(selectedArr, correctArr) {
   return { earnedFrac, isRight: earnedFrac === 1 };
 }
 
+function hasOptionScores(q) {
+  return Array.isArray(q?.optionScores) && q.optionScores.some(score => Number.isFinite(Number(score)));
+}
+
+function optionScoreLabels(q) {
+  const options = Array.isArray(q?.options) ? q.options : [];
+  return (Array.isArray(q?.optionScores) ? q.optionScores : [])
+    .map((score, index) => {
+      const value = Number(score);
+      if (!Number.isFinite(value)) return null;
+      const label = options[index] || `Option ${index + 1}`;
+      return `${label}: ${formatNumber(value)}`;
+    })
+    .filter(Boolean)
+    .join("; ");
+}
+
+function scoreWeightedOption(q, selectedArr) {
+  const scores = Array.isArray(q?.optionScores) ? q.optionScores.map(score => Number(score)) : [];
+  const validScores = scores.map(score => Number.isFinite(score) ? score : 0);
+  const maxScore = Math.max(...validScores, 0);
+  if (maxScore <= 0) return null;
+  const selectedIndex = Array.isArray(selectedArr) && selectedArr.length === 1 ? Number(selectedArr[0]) : null;
+  const earned = Number.isInteger(selectedIndex) ? Math.max(0, Number(validScores[selectedIndex] || 0)) : 0;
+  const boundedEarned = Math.min(earned, maxScore);
+  return {
+    earned: boundedEarned,
+    maxScore,
+    earnedFrac: boundedEarned / maxScore,
+    isRight: boundedEarned === maxScore,
+  };
+}
+
 function formatNumber(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
@@ -139,17 +172,26 @@ async function loadImageAsDataUrl(src) {
 
 function buildStats(suite, questions, results) {
   const scoredQuestions = questions.filter(q => !isTheoryQuestion(q));
-  const allCats = [...new Set(scoredQuestions.flatMap(q => getQuestionCats(q)))];
+  const savedCats = (results || []).flatMap(r =>
+    Array.isArray(r.categoryResults) ? r.categoryResults.map(row => row.category).filter(Boolean) : []
+  );
+  const allCats = [...new Set([...scoredQuestions.flatMap(q => getQuestionCats(q)), ...savedCats])];
   const byId = questionsById(questions);
+  const isSixteenPf = suite?.scoringMode === "sixteen_pf";
   const statsPerResult = results.map(r => {
     const catMap = {};
+    if (isSixteenPf && Array.isArray(r.categoryResults) && r.categoryResults.length > 0) {
+      const pct = r.totalMarks > 0 ? Math.round(((r.score ?? 0) / r.totalMarks) * 100) : 0;
+      return { ...r, catMap, pct, useSavedCategoryRows: true };
+    }
 
     scoredQuestions.forEach(q => {
       const marks = q.marks ?? 1;
       getQuestionCats(q).forEach(cat => {
         if (!catMap[cat]) catMap[cat] = { total: 0, correct: 0, marks: 0, earned: 0 };
+        const weighted = isSixteenPf ? scoreWeightedOption(q, []) : null;
         catMap[cat].total += 1;
-        catMap[cat].marks += marks;
+        catMap[cat].marks += weighted ? weighted.maxScore : marks;
       });
     });
 
@@ -161,24 +203,42 @@ function buildStats(suite, questions, results) {
       const marks = q.marks ?? 1;
       getQuestionCats(q).forEach(cat => {
         if (!catMap[cat]) catMap[cat] = { total: 0, correct: 0, marks: 0, earned: 0 };
-        const { earnedFrac, isRight } = scoreSelected(
-          selectedArr,
-          getCorrectAnswersForCategory(q, cat)
-        );
+        const weighted = isSixteenPf ? scoreWeightedOption(q, selectedArr) : null;
+        const { earnedFrac, isRight } = weighted || scoreSelected(selectedArr, getCorrectAnswersForCategory(q, cat));
         if (isRight) catMap[cat].correct += 1;
-        catMap[cat].earned += earnedFrac * marks;
+        catMap[cat].earned += weighted ? weighted.earned : earnedFrac * marks;
       });
     });
 
     const pct = r.totalMarks > 0 ? Math.round(((r.score ?? 0) / r.totalMarks) * 100) : 0;
-    return { ...r, catMap, pct };
+    return { ...r, catMap, pct, useSavedCategoryRows: false };
   });
 
-  const totalMarksAll = scoredQuestions.reduce((sum, q) => sum + (q.marks ?? 1), 0);
+  const totalMarksAll = scoredQuestions.reduce((sum, q) => {
+    const weighted = isSixteenPf ? scoreWeightedOption(q, []) : null;
+    return sum + (weighted ? weighted.maxScore : q.marks ?? 1);
+  }, 0);
   return { suite, questions, results: statsPerResult, allCats, totalMarksAll };
 }
 
 function categoryRowsForResult(r, allCats) {
+  if (r.useSavedCategoryRows && Array.isArray(r.categoryResults) && r.categoryResults.length > 0) {
+    return r.categoryResults.map(row => {
+      const pct = Number(row.percentage || 0);
+      return {
+        category: row.category || "Uncategorized",
+        correct: formatNumber(row.score ?? row.earnedMarks ?? 0),
+        total: formatNumber(row.total ?? 0),
+        earned: formatNumber(row.score ?? row.earnedMarks ?? 0),
+        marks: formatNumber(row.total ?? 0),
+        pct,
+        grade: row.scaleLabel || (pct >= 70 ? "High" : pct >= 40 ? "Moderate" : "Low"),
+        scaleScore: row.scaleScore,
+        description: row.description || "",
+      };
+    });
+  }
+
   return allCats.map(cat => {
     const s = r.catMap[cat] || { correct: 0, total: 0, marks: 0, earned: 0 };
     const pct = s.marks > 0 ? Math.round((s.earned / s.marks) * 100) : 0;
@@ -195,19 +255,23 @@ function categoryRowsForResult(r, allCats) {
   });
 }
 
-function questionRowsForResult(r, questions) {
+function questionRowsForResult(r, questions, suite) {
   const byId = questionsById(questions);
+  const isSixteenPf = suite?.scoringMode === "sixteen_pf";
   return questions.map((q, idx) => {
     const questionId = itemId(q);
     const ans = (r.answers || []).find(a => answerQuestionId(a) === questionId);
     const selectedArr = Array.isArray(ans?.selectedOptions) ? ans.selectedOptions : [];
     const question = ans ? findAnswerQuestion(ans, byId) || q : q;
     const cats = getQuestionCats(question);
+    const weighted = isSixteenPf && !isTheoryQuestion(question)
+      ? scoreWeightedOption(question, selectedArr)
+      : null;
     const review = isTheoryQuestion(question)
       ? "Manual review"
-      : !ans ? "Not answered" : ans.isCorrect ? "Correct" : "Incorrect";
+      : !ans ? "Not answered" : weighted ? "Weighted score" : ans.isCorrect ? "Correct" : "Incorrect";
     const marks = ans?.earnedMarks !== undefined
-      ? `${formatNumber(ans.earnedMarks)}/${question.marks ?? 1}`
+      ? `${formatNumber(ans.earnedMarks)}/${weighted ? formatNumber(weighted.maxScore) : question.marks ?? 1}`
       : "-";
 
     if (isTheoryQuestion(question)) {
@@ -224,10 +288,17 @@ function questionRowsForResult(r, questions) {
     }
 
     const catAnswerText = cats.map(cat => {
+      if (weighted || hasOptionScores(question)) {
+        return `${cat}: ${optionScoreLabels(question) || "Weighted option scoring"}`;
+      }
       const labels = optionLabels(question, getCorrectAnswersForCategory(question, cat)) || "-";
       return `${cat}: ${labels}`;
     }).join("; ");
     const catScoreText = cats.map(cat => {
+      const weightedScore = isSixteenPf ? scoreWeightedOption(question, selectedArr) : null;
+      if (weightedScore) {
+        return `${cat}: ${formatNumber(weightedScore.earned)}/${formatNumber(weightedScore.maxScore)}`;
+      }
       const { earnedFrac, isRight } = scoreSelected(selectedArr, getCorrectAnswersForCategory(question, cat));
       const earned = formatNumber(earnedFrac * (question.marks ?? 1));
       return `${cat}: ${isRight ? "Correct" : "Incorrect"} (${earned}/${question.marks ?? 1})`;
@@ -408,7 +479,7 @@ function buildDescriptiveReportHtml(stats, logoDataUrl) {
       </tr>
     `).join("");
 
-    const questionRows = questionRowsForResult(r, stats.questions).map(row => `
+    const questionRows = questionRowsForResult(r, stats.questions, stats.suite).map(row => `
       <tr>
         <td class="q-no">${row.number}</td>
         <td class="q-text">${escapeHtml(row.question)}</td>
@@ -956,7 +1027,7 @@ function buildWorkbookDescriptive(wb, stats) {
   ];
   const questionRows = [];
   stats.results.forEach(r => {
-    questionRowsForResult(r, stats.questions).forEach(row => {
+    questionRowsForResult(r, stats.questions, stats.suite).forEach(row => {
       questionRows.push([
         candidateName(r),
         candidateEmail(r),
@@ -1153,7 +1224,7 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
       doc.text("Question-wise Detail", 14, detailY);
       detailY += 5;
 
-      questionRowsForResult(r, stats.questions).forEach(row => {
+      questionRowsForResult(r, stats.questions, stats.suite).forEach(row => {
         const body = [
           ["Question", `Q${row.number}. ${row.question}`],
           ["Category", row.categories || "-"],
