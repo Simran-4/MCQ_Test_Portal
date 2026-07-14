@@ -19,10 +19,23 @@ body {
   background: var(--admin-background);
 }
 
+/* The super-admin workspace must use the full viewport. This also overrides
+   any shared/root sizing rules left by other screens in the single-page app. */
+body.superadmin-dashboard-page,
+body.superadmin-dashboard-page #root {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
 /* ========== LAYOUT ========== */
 .container {
   width: 100%;
+  max-width: none;
   display: flex;
+  flex: 1 1 100%;
   min-height: 100vh;
   background: var(--admin-background);
   color: var(--admin-text);
@@ -173,7 +186,7 @@ body {
 .main-content {
   flex: 1 1 auto;
   min-width: 0;
-  width: auto;
+  width: calc(100vw - 240px);
   padding: 20px 26px 18px;
   background: var(--admin-background);
   max-width: none;
@@ -1801,6 +1814,7 @@ input:checked + .slider::before {
   }
 
   .main-content {
+    width: 100%;
     padding: 70px 20px 20px;
   }
 

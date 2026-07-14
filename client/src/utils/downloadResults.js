@@ -221,6 +221,11 @@ function buildStats(suite, questions, results) {
   return { suite, questions, results: statsPerResult, allCats, totalMarksAll };
 }
 
+function publicAssetUrl(path) {
+  const base = import.meta.env.BASE_URL || "/";
+  return new URL(`${base}${String(path || "").replace(/^\/+/, "")}`, window.location.origin).href;
+}
+
 function categoryRowsForResult(r, allCats) {
   if (r.useSavedCategoryRows && Array.isArray(r.categoryResults) && r.categoryResults.length > 0) {
     return r.categoryResults.map(row => {
@@ -425,7 +430,7 @@ function arrayBufferToBase64(buffer) {
 
 async function addDevanagariFont(doc) {
   try {
-    const res = await fetch(`${window.location.origin}/fonts/${DEVANAGARI_FONT_FILE}`);
+    const res = await fetch(publicAssetUrl(`fonts/${DEVANAGARI_FONT_FILE}`));
     if (!res.ok) throw new Error("Font file unavailable");
     const fontBase64 = arrayBufferToBase64(await res.arrayBuffer());
     doc.addFileToVFS(DEVANAGARI_FONT_FILE, fontBase64);
@@ -1113,7 +1118,7 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
   const reportType = options.reportType === "descriptive" ? "descriptive" : "summary";
   const reportTitle = reportType === "descriptive" ? "Descriptive Results Report" : "Summary Results Report";
   const stats = buildStats(suite, questions, results);
-  const logoDataUrl = await loadImageAsDataUrl(`${window.location.origin}/Logo.png`);
+  const logoDataUrl = await loadImageAsDataUrl(publicAssetUrl("Logo.png"));
 
   if (reportType === "descriptive") {
     try {

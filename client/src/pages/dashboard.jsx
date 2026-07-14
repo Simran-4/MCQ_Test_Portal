@@ -15,6 +15,11 @@ const API = import.meta.env.VITE_API_URL || "";
 const DEVANAGARI_FONT_NAME = "NotoSansDevanagari";
 const DEVANAGARI_FONT_FILE = "NotoSansDevanagari-Regular.ttf";
 
+function publicAssetUrl(path) {
+  const base = import.meta.env.BASE_URL || "/";
+  return new URL(`${base}${String(path || "").replace(/^\/+/, "")}`, window.location.origin).href;
+}
+
 const ADMIN_DASHBOARD_COPY = {
   en: {
     platform: "Test Taking Platform",
@@ -336,7 +341,7 @@ function arrayBufferToBase64(buffer) {
 
 async function addDevanagariFont(doc) {
   try {
-    const res = await fetch(`${window.location.origin}/fonts/${DEVANAGARI_FONT_FILE}`);
+    const res = await fetch(publicAssetUrl(`fonts/${DEVANAGARI_FONT_FILE}`));
     if (!res.ok) throw new Error("Font file unavailable");
     const fontBase64 = arrayBufferToBase64(await res.arrayBuffer());
     doc.addFileToVFS(DEVANAGARI_FONT_FILE, fontBase64);
@@ -369,7 +374,7 @@ function buildAdminReportHtml({ title, generatedAt, columns, rows }) {
     <style>
       @font-face {
         font-family: "Noto Sans Devanagari Local";
-        src: url("/fonts/${DEVANAGARI_FONT_FILE}") format("truetype");
+        src: url("${publicAssetUrl(`fonts/${DEVANAGARI_FONT_FILE}`)}") format("truetype");
         font-weight: 400;
         font-style: normal;
       }

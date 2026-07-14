@@ -501,6 +501,51 @@ function certificateStyles() {
     }
   `;
 }
+void certificateMarkup;
+
+// Keep all fallback certificate copy in genuine UTF-8. The older decorative
+// markup above is retained only for compatibility with existing templates.
+function certificateMarkupUtf8(data, language) {
+  const isMarathi = language === "marathi";
+  const testName = escapeHtml(data.testName);
+  const candidateName = escapeHtml(isMarathi ? data.candidateName : data.candidateName.toUpperCase());
+  const testFont = fitFontSize(data.testName, 72, 42, [
+    { length: 42, size: 42 }, { length: 30, size: 50 }, { length: 22, size: 60 },
+  ]);
+  const nameFont = fitFontSize(data.candidateName, isMarathi ? 72 : 64, 40, [
+    { length: 45, size: 40 }, { length: 34, size: 48 }, { length: 24, size: 56 },
+  ]);
+  const body = isMarathi
+    ? `यांनी स्नेहालय, अहिल्यानगर यांच्या वतीने आयोजित करण्यात आलेली "${testName}" ही ऑनलाइन चाचणी यशस्वीरित्या पूर्ण केली आहे. सदर चाचणीमध्ये सहभागी होऊन त्यांनी सर्व आवश्यक प्रक्रिया पूर्ण केल्या असून त्यांची कामगिरी समाधानकारक आहे. त्यांच्या सक्रिय सहभाग व सहकार्याबद्दल स्नेहालय त्यांचे अभिनंदन करते.`
+    : `This is to certify that the participant has successfully completed the "${testName}" online assessment organized by Snehalaya, Ahilyanagar. The participant has fulfilled all the required procedures and demonstrated satisfactory performance. Snehalaya appreciates their active participation and cooperation.`;
+  const people = isMarathi
+    ? [
+        ["Girish", "डॉ. गिरीश कुलकर्णी", ["संस्थापक,", "स्नेहालय, अहिल्यानगर."]],
+        ["Anil", "श्री. अनिल गावडे", ["कार्याध्यक्ष,", "स्नेहालय, अहिल्यानगर."]],
+        ["Sathbhai", "श्री. शशिकांत सातभाई", ["विश्वस्त,", "स्नेहालय, अहिल्यानगर."]],
+      ]
+    : [
+        ["Girish", "Dr. Girish Kulkarni", ["Founder", "Snehalaya, Ahilyanagar."]],
+        ["Anil", "Mr. Anil Gavade", ["Executive President", "Snehalaya, Ahilyanagar."]],
+        ["Sathbhai", "Mr. Shashikant Satbhai", ["Trustee", "Snehalaya, Ahilyanagar."]],
+      ];
+  return `
+    <div class="certificate ${isMarathi ? "marathi" : "english"}">
+      <div class="outer-glow"></div><div class="top-line"></div>
+      <div class="ornament top-ornament">⌁ ❦ ⌁</div>
+      <div class="logo-box logo-left"><img src="${logoSrc()}" alt="Snehalaya" /></div>
+      <div class="logo-box logo-right"><div class="logo-20-mark">☘</div><strong>Snehalaya 2.0</strong><span>तमसो मा ज्योतिर्गमय</span></div>
+      <div class="brand-title">${isMarathi ? "स्नेहालय" : "SNEHALAYA"}</div>
+      <div class="test-title" style="font-size:${testFont}px">[${testName}]</div>
+      <div class="certificate-title-row"><span></span><strong>${isMarathi ? "प्रमाणपत्र" : "CERTIFICATE"}</strong><span></span></div>
+      <div class="candidate-name" style="font-size:${nameFont}px">${candidateName}</div>
+      <div class="body-copy">${body}</div>
+      <div class="signatures">${people.map(person => signatureBlock(language, ...person)).join("")}</div>
+      <div class="footer-rule"><span></span><b></b><span></span></div>
+      <div class="address">${isMarathi ? "पत्ता: स्नेहालय, एफ-ब्लॉक, एम. आय. डी. सी., अहिल्यानगर, महाराष्ट्र ४१४१११." : "Address: Snehalaya, F-Block, M.I.D.C., Ahilyanagar, Maharashtra – 414111, India."}</div>
+      <div class="contact-line">Email: info@snehalaya.org &nbsp; Web: www.snehalaya.org</div>
+    </div>`;
+}
 
 async function renderCertificateCanvas(data, language) {
   const { default: html2canvas } = await import("html2canvas");
@@ -514,7 +559,7 @@ async function renderCertificateCanvas(data, language) {
   wrapper.style.pointerEvents = "none";
   wrapper.style.zIndex = "-1";
   wrapper.style.transform = "translateZ(0)";
-  wrapper.innerHTML = `<style>${certificateStyles()}</style>${certificateMarkup(data, language)}`;
+  wrapper.innerHTML = `<style>${certificateStyles()}</style>${certificateMarkupUtf8(data, language)}`;
   document.body.appendChild(wrapper);
 
   try {
@@ -707,6 +752,33 @@ export async function downloadCertificatePDF(result, fallbackSuite = {}, languag
   doc.save(certificateFileName(data, normalizedLanguage));
 }
 
+function certificateEmailBody(data, fileName, language) {
+  if (language === "marathi") {
+    return [
+      `प्रिय ${data.candidateName},`,
+      "",
+      `${data.testName} ही चाचणी यशस्वीरित्या पूर्ण केल्याबद्दल अभिनंदन.`,
+      `गुण: ${data.score}/${data.totalMarks} (${data.percentage}%)`,
+      "",
+      `आपले प्रमाणपत्र PDF जोडले आहे. ते आपोआप जोडले नसल्यास डाउनलोड केलेली फाइल जोडा: ${fileName}`,
+      "",
+      "सस्नेह,",
+      "स्नेहालय",
+    ].join("\n");
+  }
+  return [
+    `Dear ${data.candidateName},`,
+    "",
+    `Congratulations on successfully completing ${data.testName}.`,
+    `Score: ${data.score}/${data.totalMarks} (${data.percentage}%)`,
+    "",
+    `Your certificate PDF is attached. If it is not attached automatically, please attach the downloaded file: ${fileName}`,
+    "",
+    "Regards,",
+    "Snehalaya",
+  ].join("\n");
+}
+
 export async function openCertificateEmail(result, fallbackSuite = {}, language = "english") {
   const normalizedLanguage = language === "marathi" ? "marathi" : "english";
   const { data, file, fileName } = await buildCertificatePDFFile(result, fallbackSuite, normalizedLanguage);
@@ -715,7 +787,7 @@ export async function openCertificateEmail(result, fallbackSuite = {}, language 
   }
 
   const subject = `Certificate - ${data.testName} (${LANGUAGE_LABELS[normalizedLanguage]})`;
-  const body = normalizedLanguage === "marathi"
+  const legacyBody = normalizedLanguage === "marathi"
     ? [
         `प्रिय ${data.candidateName},`,
         "",
@@ -738,6 +810,8 @@ export async function openCertificateEmail(result, fallbackSuite = {}, language 
         "Regards,",
         "Snehalaya",
       ].join("\n");
+  const body = certificateEmailBody(data, fileName, normalizedLanguage);
+  void legacyBody;
 
   if (navigator.canShare?.({ files: [file] })) {
     try {
