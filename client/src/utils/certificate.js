@@ -661,10 +661,35 @@ async function tryTemplateCertificatePDF(data, language) {
     const serifFamily = isMarathi ? `${devanagariFamily}, serif` : `Georgia, "Times New Roman", serif`;
     const testName = `[${data.testName}]`;
     const displayName = data.candidateName;
+    const bodyText = isMarathi
+      ? `यांनी स्नेहालय, अहिल्यानगर यांच्या वतीने आयोजित करण्यात आलेली "${data.testName}" ही ऑनलाइन चाचणी यशस्वीरित्या पूर्ण केली आहे. सदर चाचणीमध्ये सहभागी होऊन त्यांनी सर्व आवश्यक प्रक्रिया पूर्ण केल्या असून त्यांची कामगिरी समाधानकारक आहे. त्यांच्या सक्रिय सहभाग व सहकार्याबद्दल स्नेहालय त्यांचे अभिनंदन करते.`
+      : `This is to certify that the participant has successfully completed the "${data.testName}" online assessment organized by Snehalaya, Ahilyanagar. The participant has fulfilled all the required procedures and demonstrated satisfactory performance. Snehalaya appreciates their active participation and cooperation.`;
+
+    const drawCenteredText = (text, centerX, y) => {
+      ctx.textAlign = "left";
+      ctx.fillText(text, centerX - ctx.measureText(text).width / 2, y);
+    };
+    const wrappedLines = (text, maxWidth) => {
+      const words = String(text).split(/\s+/).filter(Boolean);
+      const lines = [];
+      let line = "";
+      words.forEach(word => {
+        const candidate = line ? `${line} ${word}` : word;
+        if (line && ctx.measureText(candidate).width > maxWidth) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = candidate;
+        }
+      });
+      if (line) lines.push(line);
+      return lines;
+    };
 
     ctx.fillStyle = bg;
     ctx.fillRect(mmX(82), mmY(27), mmX(133), mmY(23));
-    ctx.fillRect(mmX(48), mmY(65), mmX(202), mmY(25));
+    ctx.fillRect(mmX(45), mmY(63), mmX(207), mmY(32));
+    ctx.fillRect(mmX(24), mmY(95), mmX(249), mmY(35));
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -674,10 +699,10 @@ async function tryTemplateCertificatePDF(data, language) {
       size: 62 * scale,
       minSize: 30 * scale,
       family: headingFamily,
-      maxWidth: mmX(128),
+      maxWidth: mmX(112),
     });
     ctx.font = `900 ${topTitleSize}px ${headingFamily}`;
-    ctx.fillText(testName, mmX(148.5), mmY(39.5));
+    drawCenteredText(testName, mmX(148.5), mmY(39.5));
 
     ctx.fillStyle = "#0d416c";
     const candidateSize = fittedCanvasFont(ctx, displayName, {
@@ -688,38 +713,28 @@ async function tryTemplateCertificatePDF(data, language) {
       maxWidth: mmX(194),
     });
     ctx.font = `${isMarathi ? "900" : "italic 500"} ${candidateSize}px ${candidateFamily}`;
-    ctx.fillText(displayName, mmX(148.5), mmY(isMarathi ? 80 : 81));
+    drawCenteredText(displayName, mmX(148.5), mmY(isMarathi ? 80 : 81));
 
-    ctx.fillStyle = "#230c08";
-    const bodyTestName = `"${data.testName}"`;
-    ctx.textAlign = "left";
-    if (isMarathi) {
-      ctx.fillStyle = bg;
-      ctx.fillRect(mmX(176), mmY(94), mmX(65), mmY(12));
-      ctx.fillStyle = "#321410";
-      const bodySize = fittedCanvasFont(ctx, bodyTestName, {
-        weight: 400,
-        size: 24 * scale,
-        minSize: 13 * scale,
-        family: serifFamily,
-        maxWidth: mmX(62),
-      });
+    ctx.strokeStyle = "#d4a13c";
+    ctx.lineWidth = Math.max(2, 2.5 * scale);
+    ctx.beginPath();
+    ctx.moveTo(mmX(53), mmY(92));
+    ctx.lineTo(mmX(227), mmY(92));
+    ctx.stroke();
+
+    ctx.fillStyle = isMarathi ? "#321410" : "#0d416c";
+    let bodySize = (isMarathi ? 26 : 24) * scale;
+    let lines = [];
+    do {
       ctx.font = `400 ${bodySize}px ${serifFamily}`;
-      ctx.fillText(bodyTestName, mmX(178), mmY(100));
-    } else {
-      ctx.fillStyle = bg;
-      ctx.fillRect(mmX(210), mmY(94), mmX(58), mmY(12));
-      ctx.fillStyle = "#0d416c";
-      const bodySize = fittedCanvasFont(ctx, bodyTestName, {
-        weight: 400,
-        size: 22 * scale,
-        minSize: 12 * scale,
-        family: serifFamily,
-        maxWidth: mmX(54),
-      });
-      ctx.font = `400 ${bodySize}px ${serifFamily}`;
-      ctx.fillText(bodyTestName, mmX(212), mmY(100));
-    }
+      lines = wrappedLines(bodyText, mmX(246));
+      if (lines.length > 3) bodySize -= 1.5 * scale;
+    } while (lines.length > 3 && bodySize > 18 * scale);
+    const lineHeight = mmY(isMarathi ? 10.5 : 9.5);
+    const firstLineY = mmY(isMarathi ? 102 : 101.5);
+    lines.slice(0, 3).forEach((line, index) => {
+      drawCenteredText(line, mmX(148.5), firstLineY + index * lineHeight);
+    });
 
     doc.addImage(canvas.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, 297, 210);
     return doc;
