@@ -32,16 +32,27 @@ function questionCategories(question) {
 function selectBalancedRandomQuestions(questions, limit) {
   const categorizedGroups = new Map();
   const uncategorized = [];
+  const shuffledQuestions = shuffleQuestions(questions);
 
-  shuffleQuestions(questions).forEach(question => {
+  shuffledQuestions.forEach(question => {
     const categories = questionCategories(question);
-    const primaryCategory = categories[0];
-    if (!primaryCategory) {
+    categories.forEach(category => {
+      if (!categorizedGroups.has(category)) categorizedGroups.set(category, []);
+    });
+  });
+
+  shuffledQuestions.forEach(question => {
+    const categories = questionCategories(question);
+    if (categories.length === 0) {
       uncategorized.push(question);
       return;
     }
-    if (!categorizedGroups.has(primaryCategory)) categorizedGroups.set(primaryCategory, []);
-    categorizedGroups.get(primaryCategory).push(question);
+    // A multi-category question is assigned to the currently smallest one of
+    // its categories, preventing every such question from biasing category[0].
+    const smallestSize = Math.min(...categories.map(category => categorizedGroups.get(category).length));
+    const leastFilled = categories.filter(category => categorizedGroups.get(category).length === smallestSize);
+    const assignedCategory = leastFilled[Math.floor(Math.random() * leastFilled.length)];
+    categorizedGroups.get(assignedCategory).push(question);
   });
 
   const groups = Array.from(categorizedGroups.entries())
@@ -50,24 +61,14 @@ function selectBalancedRandomQuestions(questions, limit) {
 
   if (groups.length < 2) return shuffleQuestions(questions).slice(0, limit);
 
+  const shuffledGroups = shuffleQuestions(groups);
   const selected = [];
   const selectedIds = new Set();
-  const shuffledGroups = shuffleQuestions(groups);
-  const base = Math.floor(limit / shuffledGroups.length);
-  let remainder = limit % shuffledGroups.length;
 
-  shuffledGroups.forEach(group => {
-    const target = Math.min(group.items.length, base + (remainder > 0 ? 1 : 0));
-    if (remainder > 0) remainder -= 1;
-    for (let i = 0; i < target; i += 1) {
-      const question = group.items[group.cursor++];
-      if (question && !selectedIds.has(String(question._id))) {
-        selected.push(question);
-        selectedIds.add(String(question._id));
-      }
-    }
-  });
-
+  // Take one question per category per pass. This guarantees that category
+  // counts differ by at most one whenever every category has enough questions.
+  // Categories that run out are skipped and their unused share is naturally
+  // redistributed across the remaining category pools.
   while (selected.length < limit) {
     let added = false;
     for (const group of shuffledGroups) {
