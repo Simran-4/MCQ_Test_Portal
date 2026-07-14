@@ -455,7 +455,7 @@ function buildAdminReportHtml({ title, generatedAt, columns, rows }) {
   `;
 }
 
-async function renderAdminReportHtmlToCanvas(html) {
+async function renderAdminReportHtmlToCanvas(html, scale = 1.2) {
   const { default: html2canvas } = await import("html2canvas");
   const wrapper = document.createElement("div");
   wrapper.style.position = "absolute";
@@ -473,7 +473,7 @@ async function renderAdminReportHtmlToCanvas(html) {
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     return await html2canvas(wrapper.firstElementChild, {
       backgroundColor: "#f8f7f4",
-      scale: 1.2,
+      scale,
       useCORS: true,
       logging: false,
       windowWidth: 1320,
@@ -510,14 +510,26 @@ function addCanvasPages(doc, canvas) {
 }
 
 async function saveAdminReportPdf({ title, fileName, columns, rows }) {
+  const html = buildAdminReportHtml({ title, generatedAt: formatDateTime(new Date()), columns, rows });
   try {
-    const html = buildAdminReportHtml({ title, generatedAt: formatDateTime(new Date()), columns, rows });
     const canvas = await renderAdminReportHtmlToCanvas(html);
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     addCanvasPages(doc, canvas);
     downloadPdfDocument(doc, fileName);
   } catch (renderError) {
-    console.warn("Canvas PDF rendering failed; using table fallback.", renderError);
+    console.warn("High-resolution PDF rendering failed; retrying at a safer scale.", renderError);
+    try {
+      const canvas = await renderAdminReportHtmlToCanvas(html, 0.8);
+      const retryDoc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      addCanvasPages(retryDoc, canvas);
+      downloadPdfDocument(retryDoc, fileName);
+      return;
+    } catch (retryError) {
+      console.warn("Canvas PDF retry failed; checking native fallback.", retryError);
+      if (/[\u0900-\u097F]/.test(JSON.stringify(rows))) {
+        throw new Error("Marathi text could not be rendered. Please refresh the page and try the download again.", { cause: retryError });
+      }
+    }
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const reportFont = await addDevanagariFont(doc);
     doc.setFillColor(26, 61, 40);

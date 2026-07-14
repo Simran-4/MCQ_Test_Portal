@@ -548,13 +548,19 @@ function buildDescriptiveReportHtml(stats, logoDataUrl) {
 
   return `
     <style>
+      @font-face {
+        font-family: "Sarala PDF";
+        src: url("${publicAssetUrl(`fonts/${DEVANAGARI_FONT_FILE}`)}") format("truetype");
+        font-weight: 400;
+        font-style: normal;
+      }
       .descriptive-report {
         width: 1120px;
         box-sizing: border-box;
         padding: 28px;
         background: #f8f7f4;
         color: #1b1f1d;
-        font-family: "Segoe UI", "Noto Sans Devanagari", "Kohinoor Devanagari", "Mangal", "Arial Unicode MS", Arial, sans-serif;
+        font-family: "Sarala PDF", "Noto Sans Devanagari", "Kohinoor Devanagari", "Mangal", "Arial Unicode MS", Arial, sans-serif;
       }
       .report-header {
         display: grid;
@@ -720,7 +726,7 @@ function buildDescriptiveReportHtml(stats, logoDataUrl) {
       .questions th:nth-child(5) { width: 230px; }
       .questions th:nth-child(6) { width: 200px; }
       .q-text {
-        font-family: "Segoe UI", "Noto Sans Devanagari", "Kohinoor Devanagari", "Mangal", "Arial Unicode MS", Arial, sans-serif;
+        font-family: "Sarala PDF", "Noto Sans Devanagari", "Kohinoor Devanagari", "Mangal", "Arial Unicode MS", Arial, sans-serif;
         font-size: 16px;
         font-weight: 600;
         line-height: 1.45;
@@ -973,6 +979,26 @@ async function downloadDescriptivePdfAsImages(suite, stats, logoDataUrl) {
   savePdf(doc, suite, "descriptive");
 }
 
+async function downloadSummaryPdfAsImages(suite, stats, logoDataUrl) {
+  const [summaryChunk] = splitDescriptiveReportHtml(buildDescriptiveReportHtml(stats, logoDataUrl));
+  const canvas = await renderHtmlToCanvas(summaryChunk);
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  appendCanvasPagesToPdf(doc, canvas);
+  savePdf(doc, suite, "summary");
+}
+
+function reportContainsDevanagari(suite, stats) {
+  return /[\u0900-\u097F]/.test(JSON.stringify({
+    suiteName: suite?.name,
+    categories: stats.allCats,
+    results: stats.results.map(result => ({
+      name: candidateName(result),
+      project: result.project,
+      designation: result.designation,
+    })),
+  }));
+}
+
 function buildWorkbookSummary(wb, stats) {
   const headers = [
     "#",
@@ -1120,6 +1146,11 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
   const reportTitle = reportType === "descriptive" ? "Descriptive Results Report" : "Summary Results Report";
   const stats = buildStats(suite, questions, results);
   const logoDataUrl = await loadImageAsDataUrl(publicAssetUrl("Logo.png"));
+
+  if (reportType === "summary" && reportContainsDevanagari(suite, stats)) {
+    await downloadSummaryPdfAsImages(suite, stats, logoDataUrl);
+    return;
+  }
 
   if (reportType === "descriptive") {
     try {
