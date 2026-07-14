@@ -404,26 +404,28 @@ export default function TestSuiteDetail() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      let fallbackResult = null;
+      let importResult = null;
       try {
-        await axios.post(`${API}/api/test-suites/${suiteId}/import-excel`, formData, {
+        const response = await axios.post(`${API}/api/test-suites/${suiteId}/import-excel`, formData, {
           headers: getAuthHeaders({ "Content-Type": "multipart/form-data" }),
         });
+        importResult = response.data;
       } catch (err) {
-        if (err.response?.status !== 404) throw err;
-        fallbackResult = await importQuestionsFromExcelInBrowser(file);
+        const status = err.response?.status;
+        if (status !== 404 && status < 500) throw err;
+        importResult = await importQuestionsFromExcelInBrowser(file);
       }
       await fetchData();
-      if (fallbackResult) {
-        const details = fallbackResult.errors.length
-          ? `\n\nSkipped ${fallbackResult.skipped} row(s):\n${fallbackResult.errors.slice(0, 5).join("\n")}`
-          : "";
-        alert(`Questions imported successfully: ${fallbackResult.imported}${details}`);
-      } else {
-        alert("Questions imported successfully!");
-      }
+      const errors = Array.isArray(importResult?.errors) ? importResult.errors : [];
+      const details = errors.length
+        ? `\n\nSkipped ${importResult.skipped || errors.length} row(s):\n${errors.slice(0, 5).join("\n")}`
+        : "";
+      alert(`Questions imported successfully: ${importResult?.imported ?? 0}${details}`);
     } catch (err) {
-      alert(err.response?.data?.message || err.message || "Import failed");
+      const serverMessage = err.response?.data?.message;
+      const serverDetail = err.response?.data?.error;
+      const rowErrors = Array.isArray(err.response?.data?.errors) ? err.response.data.errors.slice(0, 5) : [];
+      alert([serverMessage, serverDetail, ...rowErrors].filter(Boolean).join("\n") || err.message || "Import failed");
     } finally {
       setImporting(false);
       e.target.value = "";

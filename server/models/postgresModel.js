@@ -103,6 +103,10 @@ function createModel(collection, defaults = {}, references = {}) {
     static async countDocuments(query = {}) { return (await Model.find(query)).length; }
     static async distinct(field, query = {}) { return [...new Set((await Model.find(query)).map(item => valueAt(item, field)))]; }
     static async create(values) { return new Model(values).save(); }
+    static async insertMany(values = []) {
+      if (!Array.isArray(values)) throw new TypeError("insertMany expects an array of documents");
+      return Promise.all(values.map(valuesForDocument => new Model(valuesForDocument).save()));
+    }
     static async deleteMany(query = {}) { const docs = await Model.find(query); if (docs.length) await getPool().query("DELETE FROM app_documents WHERE id = ANY($1::uuid[])", [docs.map(doc => doc._id)]); return { deletedCount: docs.length }; }
     static async findByIdAndDelete(id) { const document = await Model.findById(id); if (document) await getPool().query("DELETE FROM app_documents WHERE id = $1", [id]); return document; }
     static async findByIdAndUpdate(id, update, options = {}) { return Model.findOneAndUpdate({ _id: id }, update, options); }
