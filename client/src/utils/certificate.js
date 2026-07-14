@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { downloadPdfDocument } from "./pdfDownload";
 
 const LANGUAGE_LABELS = {
   english: "English",
@@ -749,7 +750,7 @@ function downloadBlob(blob, fileName) {
 
 export async function downloadCertificatePDF(result, fallbackSuite = {}, language = "english") {
   const { doc, data, language: normalizedLanguage } = await buildCertificatePDFDocument(result, fallbackSuite, language);
-  doc.save(certificateFileName(data, normalizedLanguage));
+  downloadPdfDocument(doc, certificateFileName(data, normalizedLanguage));
 }
 
 function certificateEmailBody(data, fileName, language) {

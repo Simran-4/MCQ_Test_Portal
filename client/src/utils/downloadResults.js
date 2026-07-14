@@ -4,6 +4,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { downloadPdfDocument } from "./pdfDownload";
 
 const GREEN_DARK = [26, 61, 40];
 const GREEN_SOFT = [232, 242, 236];
@@ -322,7 +323,7 @@ function questionRowsForResult(r, questions, suite) {
   });
 }
 
-function drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth) {
+function drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth, contentFont = "helvetica") {
   doc.setFillColor(...GREEN_DARK);
   doc.rect(0, 0, pageWidth, 25, "F");
 
@@ -336,7 +337,7 @@ function drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
   doc.text("Snehalaya MCQ Portal", logoDataUrl ? 32 : 14, 10);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(/[\u0900-\u097F]/.test(String(suite?.name || "")) ? contentFont : "helvetica", "normal");
   doc.setFontSize(8.5);
   doc.text(`${reportTitle} - ${suite?.name || "Test Suite"}`, logoDataUrl ? 32 : 14, 16);
 
@@ -443,7 +444,7 @@ async function addDevanagariFont(doc) {
 }
 
 function savePdf(doc, suite, reportType) {
-  doc.save(`${reportType}_results_${safeName(suite?.name)}_${new Date().toISOString().slice(0, 10)}.pdf`);
+  downloadPdfDocument(doc, `${reportType}_results_${safeName(suite?.name)}_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
 function gradeClass(grade) {
@@ -952,7 +953,7 @@ function appendCanvasPagesToPdf(doc, canvas, addFirstPage = false) {
 
     if (addFirstPage || page > 0) doc.addPage();
     const imageHeightMm = (currentSliceHeight / canvas.width) * pageWidthMm;
-    doc.addImage(pageCanvas.toDataURL("image/png"), "PNG", 0, 0, pageWidthMm, imageHeightMm);
+    doc.addImage(pageCanvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageWidthMm, imageHeightMm, undefined, "FAST");
     page += 1;
   }
 
@@ -1129,12 +1130,12 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
     }
   }
 
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const tableFont = reportType === "descriptive" ? await addDevanagariFont(doc) : "helvetica";
+  const doc = new jsPDF({ orientation: reportType === "summary" ? "landscape" : "portrait", unit: "mm", format: "a4" });
+  const tableFont = await addDevanagariFont(doc);
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth);
+  drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth, tableFont);
   let y = 34;
   drawMetricCards(doc, stats, y, pageWidth);
   y += 28;
@@ -1145,17 +1146,17 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
   doc.text(reportType === "descriptive" ? "Candidate Summary" : "All Candidates", 14, y);
   y += 6;
 
-  const summaryHead = [["#", "Candidate", "Email", "Score", "%", "Result", ...stats.allCats.map(cat => cat.length > 12 ? `${cat.slice(0, 11)}...` : cat)]];
+  const summaryHead = [["#", "Candidate", "Email", "Project / Department", "Designation", "Score", "%", "Result"]];
   const summaryBody = stats.results.map((r, i) => {
-    const catCols = categoryRowsForResult(r, stats.allCats).map(row => `${row.correct}/${row.total} (${row.pct}%)`);
     return [
       i + 1,
       candidateName(r),
       candidateEmail(r),
+      r.project || "-",
+      r.designation || "-",
       `${r.score ?? 0}/${r.totalMarks ?? 0}`,
       `${r.pct}%`,
       resultStatus(r, stats.suite),
-      ...catCols,
     ];
   });
 
@@ -1164,24 +1165,60 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
     head: summaryHead,
     body: summaryBody,
     columnStyles: {
-      0: { cellWidth: 7, halign: "center" },
-      1: { cellWidth: 28 },
-      2: { cellWidth: 36 },
-      3: { cellWidth: 16, halign: "center" },
-      4: { cellWidth: 12, halign: "center", fontStyle: "bold" },
-      5: { cellWidth: 14, halign: "center", fontStyle: "bold" },
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 40 },
+      2: { cellWidth: 52 },
+      3: { cellWidth: 42 },
+      4: { cellWidth: 36 },
+      5: { cellWidth: 22, halign: "center" },
+      6: { cellWidth: 16, halign: "center", fontStyle: "bold" },
+      7: { cellWidth: 18, halign: "center", fontStyle: "bold" },
     },
     didParseCell(data) {
       if (data.section !== "body") return;
-      if (data.column.index === 4) data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0], 10));
-      if (data.column.index === 5) data.cell.styles.textColor = data.cell.text[0] === "Pass" ? [22, 101, 52] : [185, 28, 28];
+      if (data.column.index === 6) data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0], 10));
+      if (data.column.index === 7) data.cell.styles.textColor = data.cell.text[0] === "Pass" ? [22, 101, 52] : [185, 28, 28];
     },
   }, tableFont);
+
+  if (reportType === "summary" && stats.allCats.length > 0) {
+    doc.addPage();
+    drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth, tableFont);
+    doc.setTextColor(...GREEN_DARK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Category Breakdown", 14, 36);
+    addStyledTable(doc, {
+      startY: 42,
+      head: [["Candidate", "Category", "Correct / Total", "Marks", "Percentage", "Level"]],
+      body: stats.results.flatMap(result => categoryRowsForResult(result, stats.allCats).map(row => [
+        candidateName(result),
+        row.category,
+        `${row.correct}/${row.total}`,
+        `${row.earned}/${row.marks}`,
+        `${row.pct}%`,
+        row.grade,
+      ])),
+      columnStyles: {
+        0: { cellWidth: 52 },
+        1: { cellWidth: 52 },
+        2: { cellWidth: 34, halign: "center" },
+        3: { cellWidth: 34, halign: "center" },
+        4: { cellWidth: 30, halign: "center", fontStyle: "bold" },
+        5: { cellWidth: 34, halign: "center" },
+      },
+      didParseCell(data) {
+        if (data.section === "body" && data.column.index === 4) {
+          data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0], 10));
+        }
+      },
+    }, tableFont);
+  }
 
   if (reportType === "descriptive") {
     stats.results.forEach((r, idx) => {
       doc.addPage();
-      drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth);
+      drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth, tableFont);
       let detailY = 34;
 
       doc.setFillColor(...GREEN_SOFT);
@@ -1262,7 +1299,7 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
         detailY = doc.lastAutoTable.finalY + 4;
         if (detailY > pageHeight - 35) {
           doc.addPage();
-          drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth);
+          drawHeader(doc, suite, reportTitle, logoDataUrl, pageWidth, tableFont);
           detailY = 34;
         }
       });

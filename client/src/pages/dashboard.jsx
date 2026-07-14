@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { downloadPdfDocument } from "../utils/pdfDownload";
 import * as XLSX from "xlsx";
 import "./dashboard.css";
 import { canAdmin, getAuthHeaders } from "../utils/auth";
@@ -503,7 +504,7 @@ function addCanvasPages(doc, canvas) {
     ctx.drawImage(canvas, 0, sourceY, canvas.width, currentSliceHeight, 0, 0, pageCanvas.width, currentSliceHeight);
     if (page > 0) doc.addPage();
     const imageHeight = (currentSliceHeight / canvas.width) * pageWidth;
-    doc.addImage(pageCanvas.toDataURL("image/png"), "PNG", 0, 0, pageWidth, imageHeight);
+    doc.addImage(pageCanvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageWidth, imageHeight, undefined, "FAST");
     page += 1;
   }
 }
@@ -518,7 +519,7 @@ async function saveAdminReportPdf({ title, fileName, columns, rows }) {
   const canvas = await renderAdminReportHtmlToCanvas(html);
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   addCanvasPages(doc, canvas);
-  doc.save(fileName);
+  downloadPdfDocument(doc, fileName);
 }
 
 function matchesUserResult(result, user) {
@@ -1560,7 +1561,7 @@ export default function Dashboard() {
         1: { cellWidth: 70 },
       },
     });
-    doc.save(`attempt_analysis_${new Date().toISOString().slice(0, 10)}.pdf`);
+    downloadPdfDocument(doc, `attempt_analysis_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   const downloadPersonalExcel = () => {
@@ -1861,7 +1862,7 @@ export default function Dashboard() {
       reviewY += 6;
     });
 
-    doc.save(`personal_report_${fileSafeName(selectedReportUser.name)}.pdf`);
+    downloadPdfDocument(doc, `personal_report_${fileSafeName(selectedReportUser.name)}.pdf`);
   };
 
   const openNewSuite = () => {

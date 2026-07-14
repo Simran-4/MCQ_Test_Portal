@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { downloadPdfDocument } from "../utils/pdfDownload";
 import * as XLSX from "xlsx";
 import "./superadmin.css";
 import { ADMIN_PERMISSION_DEFAULTS, getAuthHeaders, getCurrentUser } from "../utils/auth";
@@ -651,7 +652,7 @@ function saveReportsPDF(results, suitesById, reportType) {
     });
   }
 
-  doc.save(`${reportType}_superadmin_results_${new Date().toISOString().slice(0, 10)}.pdf`);
+  downloadPdfDocument(doc, `${reportType}_superadmin_results_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
 function SuperAdmin() {
