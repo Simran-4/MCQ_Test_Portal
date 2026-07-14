@@ -6,6 +6,7 @@ import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { downloadExcelWorkbook, downloadPdfDocument } from "../utils/pdfDownload";
+import { downloadCanvasTablePdf } from "../utils/canvasTablePdf";
 import * as XLSX from "xlsx";
 import "./dashboard.css";
 import { canAdmin, getAuthHeaders } from "../utils/auth";
@@ -510,6 +511,17 @@ function addCanvasPages(doc, canvas) {
 }
 
 async function saveAdminReportPdf({ title, fileName, columns, rows }) {
+  if (typeof HTMLCanvasElement !== "undefined") {
+    await downloadCanvasTablePdf({
+      title,
+      subtitle: `Generated ${formatDateTime(new Date())}`,
+      columns: columns.map((label, index) => ({ label, key: String(index), weight: index === 1 ? 2.2 : 1 })),
+      rows: rows.map(row => Object.fromEntries(row.map((value, index) => [String(index), value]))),
+      fileName,
+    });
+    return;
+  }
+  /* istanbul ignore next -- retained as a compatibility fallback for older browsers */
   const html = buildAdminReportHtml({ title, generatedAt: formatDateTime(new Date()), columns, rows });
   try {
     const canvas = await renderAdminReportHtmlToCanvas(html);

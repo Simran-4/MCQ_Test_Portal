@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { downloadPdfDocument } from "./pdfDownload";
+import { downloadCanvasTablePdf } from "./canvasTablePdf";
 
 const GREEN_DARK = [26, 61, 40];
 const GREEN_SOFT = [232, 242, 236];
@@ -980,11 +981,28 @@ async function downloadDescriptivePdfAsImages(suite, stats, logoDataUrl) {
 }
 
 async function downloadSummaryPdfAsImages(suite, stats, logoDataUrl) {
-  const [summaryChunk] = splitDescriptiveReportHtml(buildDescriptiveReportHtml(stats, logoDataUrl));
-  const canvas = await renderHtmlToCanvas(summaryChunk);
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  appendCanvasPagesToPdf(doc, canvas);
-  savePdf(doc, suite, "summary");
+  void logoDataUrl;
+  await downloadCanvasTablePdf({
+    title: "Summary Results Report",
+    subtitle: suite?.name || "Test Suite",
+    fileName: `summary_results_${safeName(suite?.name)}_${new Date().toISOString().slice(0, 10)}.pdf`,
+    columns: [
+      { label: "Candidate", key: "candidate", weight: 1.4 },
+      { label: "Email", key: "email", weight: 1.8 },
+      { label: "Project / Department", key: "project", weight: 1.5 },
+      { label: "Score", key: "score", weight: 0.8 },
+      { label: "%", key: "pct", weight: 0.6 },
+      { label: "Result", key: "result", weight: 0.8 },
+      { label: "Category Summary", key: "categories", weight: 2.6 },
+    ],
+    rows: stats.results.map(result => ({
+      candidate: candidateName(result), email: candidateEmail(result),
+      project: `${result.project || "-"} / ${result.designation || "-"}`,
+      score: `${result.score ?? 0}/${result.totalMarks ?? 0}`, pct: `${result.pct}%`,
+      result: resultStatus(result, stats.suite),
+      categories: categoryRowsForResult(result, stats.allCats).map(row => `${row.category}: ${row.correct}/${row.total} (${row.pct}%)`).join("; "),
+    })),
+  });
 }
 
 function reportContainsDevanagari(suite, stats) {
@@ -997,6 +1015,32 @@ function reportContainsDevanagari(suite, stats) {
       designation: result.designation,
     })),
   }));
+}
+
+async function downloadDescriptiveCanvasPdf(suite, stats) {
+  await downloadCanvasTablePdf({
+    title: "Descriptive Results Report",
+    subtitle: suite?.name || "Test Suite",
+    fileName: `descriptive_results_${safeName(suite?.name)}_${new Date().toISOString().slice(0, 10)}.pdf`,
+    columns: [
+      { label: "Candidate", key: "candidate", weight: 1.2 },
+      { label: "Question", key: "question", weight: 2.7 },
+      { label: "Category", key: "category", weight: 1.2 },
+      { label: "Selected", key: "selected", weight: 1.4 },
+      { label: "Correct Answer", key: "correct", weight: 1.6 },
+      { label: "Review", key: "review", weight: 0.8 },
+      { label: "Marks", key: "marks", weight: 0.7 },
+    ],
+    rows: stats.results.flatMap(result => questionRowsForResult(result, stats.questions, stats.suite).map(row => ({
+      candidate: candidateName(result),
+      question: `Q${row.number}. ${row.question}`,
+      category: row.categories || "-",
+      selected: row.selected || "-",
+      correct: row.correct || "-",
+      review: row.review || "-",
+      marks: row.marks || "-",
+    }))),
+  });
 }
 
 function buildWorkbookSummary(wb, stats) {
@@ -1149,6 +1193,11 @@ export async function downloadResultsPDF(suite, questions, results, options = {}
 
   if (reportType === "summary" && reportContainsDevanagari(suite, stats)) {
     await downloadSummaryPdfAsImages(suite, stats, logoDataUrl);
+    return;
+  }
+
+  if (reportType === "descriptive" && reportContainsDevanagari(suite, stats)) {
+    await downloadDescriptiveCanvasPdf(suite, stats);
     return;
   }
 
