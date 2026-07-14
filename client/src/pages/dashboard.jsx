@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { downloadPdfDocument } from "../utils/pdfDownload";
+import { downloadExcelWorkbook, downloadPdfDocument } from "../utils/pdfDownload";
 import * as XLSX from "xlsx";
 import "./dashboard.css";
 import { canAdmin, getAuthHeaders } from "../utils/auth";
@@ -510,16 +510,40 @@ function addCanvasPages(doc, canvas) {
 }
 
 async function saveAdminReportPdf({ title, fileName, columns, rows }) {
-  const html = buildAdminReportHtml({
-    title,
-    generatedAt: formatDateTime(new Date()),
-    columns,
-    rows,
-  });
-  const canvas = await renderAdminReportHtmlToCanvas(html);
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-  addCanvasPages(doc, canvas);
-  downloadPdfDocument(doc, fileName);
+  try {
+    const html = buildAdminReportHtml({ title, generatedAt: formatDateTime(new Date()), columns, rows });
+    const canvas = await renderAdminReportHtmlToCanvas(html);
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    addCanvasPages(doc, canvas);
+    downloadPdfDocument(doc, fileName);
+  } catch (renderError) {
+    console.warn("Canvas PDF rendering failed; using table fallback.", renderError);
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const reportFont = await addDevanagariFont(doc);
+    doc.setFillColor(26, 61, 40);
+    doc.rect(0, 0, 297, 24, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(title, 14, 10);
+    doc.setFontSize(8);
+    doc.text(`Generated ${formatDateTime(new Date())}`, 14, 17);
+    autoTable(doc, {
+      startY: 30,
+      head: [columns],
+      body: rows,
+      margin: { left: 10, right: 10 },
+      styles: { font: reportFont, fontStyle: "normal", fontSize: 7.5, cellPadding: 2, overflow: "linebreak" },
+      headStyles: { font: "helvetica", fontStyle: "bold", fillColor: [26, 61, 40], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [248, 247, 244] },
+      didParseCell(data) {
+        if (data.section === "body" && !/[\u0900-\u097F]/.test(String(data.cell.raw || ""))) {
+          data.cell.styles.font = "helvetica";
+        }
+      },
+    });
+    downloadPdfDocument(doc, fileName);
+  }
 }
 
 function matchesUserResult(result, user) {
@@ -1410,27 +1434,23 @@ export default function Dashboard() {
     const ws = XLSX.utils.json_to_sheet(rows);
     ws["!cols"] = Object.keys(rows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }));
     XLSX.utils.book_append_sheet(wb, ws, "Summary Test Report");
-    XLSX.writeFile(wb, `summary_test_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadExcelWorkbook(XLSX, wb, `summary_test_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const downloadTestSummaryPDF = async () => {
     if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     if (testSummaryRows.length === 0) return alert("No submitted test reports found.");
-    await saveAdminReportPdf({
-      title: "Statistical Test Report",
-      fileName: `summary_test_report_${new Date().toISOString().slice(0, 10)}.pdf`,
-      columns: ["Test No.", "Test Name", "Users Attempted", "Passed", "Failed", "Pass Rate", "Avg Score", "Avg Time Taken"],
-      rows: testSummaryRows.map((row, index) => [
-        index + 1,
-        row.testName,
-        row.usersAttempted,
-        row.passed,
-        row.failed,
-        `${row.passRate.toFixed(2)}%`,
-        `${row.averageScore.toFixed(2)}%`,
-        formatDuration(row.averageTime),
-      ]),
-    });
+    try {
+      await saveAdminReportPdf({
+        title: "Statistical Test Report",
+        fileName: `summary_test_report_${new Date().toISOString().slice(0, 10)}.pdf`,
+        columns: ["Test No.", "Test Name", "Users Attempted", "Passed", "Failed", "Pass Rate", "Avg Score", "Avg Time Taken"],
+        rows: testSummaryRows.map((row, index) => [index + 1, row.testName, row.usersAttempted, row.passed, row.failed, `${row.passRate.toFixed(2)}%`, `${row.averageScore.toFixed(2)}%`, formatDuration(row.averageTime)]),
+      });
+    } catch (err) {
+      console.error(err);
+      alert(`Unable to download the Statistical PDF: ${err.message || "Unknown error"}`);
+    }
   };
 
   const downloadDescriptiveTestExcel = () => {
@@ -1451,28 +1471,23 @@ export default function Dashboard() {
     const ws = XLSX.utils.json_to_sheet(rows);
     ws["!cols"] = Object.keys(rows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }));
     XLSX.utils.book_append_sheet(wb, ws, "Descriptive Test Report");
-    XLSX.writeFile(wb, `descriptive_test_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadExcelWorkbook(XLSX, wb, `descriptive_test_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const downloadDescriptiveTestPDF = async () => {
     if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     if (descriptiveTestRows.length === 0) return alert("No submitted test reports found.");
-    await saveAdminReportPdf({
-      title: "Descriptive Test Report",
-      fileName: `descriptive_test_report_${new Date().toISOString().slice(0, 10)}.pdf`,
-      columns: ["Test No.", "Test Name", "Candidate", "Contact", "Attempted Date & Time", "Time Taken", "Score", "%", "Result"],
-      rows: descriptiveTestRows.map(row => [
-        row.index,
-        row.testName,
-        row.candidate,
-        row.contact,
-        formatDateTime(row.attemptedAt),
-        formatDuration(row.timeTakenSeconds),
-        row.score,
-        row.percentage,
-        row.result,
-      ]),
-    });
+    try {
+      await saveAdminReportPdf({
+        title: "Descriptive Test Report",
+        fileName: `descriptive_test_report_${new Date().toISOString().slice(0, 10)}.pdf`,
+        columns: ["Test No.", "Test Name", "Candidate", "Contact", "Attempted Date & Time", "Time Taken", "Score", "%", "Result"],
+        rows: descriptiveTestRows.map(row => [row.index, row.testName, row.candidate, row.contact, formatDateTime(row.attemptedAt), formatDuration(row.timeTakenSeconds), row.score, row.percentage, row.result]),
+      });
+    } catch (err) {
+      console.error(err);
+      alert(`Unable to download the Descriptive PDF: ${err.message || "Unknown error"}`);
+    }
   };
 
   const downloadAttemptAnalysisExcel = () => {
@@ -1507,7 +1522,7 @@ export default function Dashboard() {
     detailWs["!cols"] = Object.keys(rows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }));
     XLSX.utils.book_append_sheet(wb, summaryWs, "Time Span Summary");
     XLSX.utils.book_append_sheet(wb, detailWs, "Attempt Analysis");
-    XLSX.writeFile(wb, `attempt_analysis_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadExcelWorkbook(XLSX, wb, `attempt_analysis_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const downloadAttemptAnalysisPDF = () => {
@@ -1639,7 +1654,7 @@ export default function Dashboard() {
     XLSX.utils.book_append_sheet(wb, ws, "Test Attempts");
     XLSX.utils.book_append_sheet(wb, categoryWs, "Category Details");
     XLSX.utils.book_append_sheet(wb, questionWs, "Question Details");
-    XLSX.writeFile(wb, `personal_report_${fileSafeName(selectedReportUser.name)}.xlsx`);
+    downloadExcelWorkbook(XLSX, wb, `personal_report_${fileSafeName(selectedReportUser.name)}.xlsx`);
   };
 
   const downloadPersonalPDF = async () => {
