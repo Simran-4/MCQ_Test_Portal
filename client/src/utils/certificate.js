@@ -502,6 +502,21 @@ function certificateStyles() {
     }
   `;
 }
+
+async function loadCertificateDevanagariFont() {
+  const family = "Noto Sans Devanagari Certificate";
+  try {
+    if (!document.fonts.check(`16px "${family}"`)) {
+      const font = new FontFace(family, `url("${basePath()}fonts/NotoSansDevanagari-Regular.ttf")`);
+      document.fonts.add(await font.load());
+    }
+    await document.fonts.ready;
+    return `"${family}"`;
+  } catch (err) {
+    console.warn("Unable to load the Marathi certificate font.", err);
+    return '"Noto Sans Devanagari", "Kohinoor Devanagari", Mangal';
+  }
+}
 void certificateMarkup;
 
 // Keep all fallback certificate copy in genuine UTF-8. The older decorative
@@ -638,70 +653,72 @@ async function tryTemplateCertificatePDF(data, language) {
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
     const isMarathi = language === "marathi";
-    const bg = "#fffdf6";
+    const bg = "#ffffff";
     const scale = width / 1600;
-    const headingFamily = `"Noto Sans Devanagari", "Kohinoor Devanagari", Arial, sans-serif`;
-    const serifFamily = `"Noto Sans Devanagari", "Kohinoor Devanagari", Georgia, "Times New Roman", serif`;
+    const devanagariFamily = await loadCertificateDevanagariFont();
+    const headingFamily = isMarathi ? `${devanagariFamily}, Arial, sans-serif` : `Georgia, "Times New Roman", serif`;
+    const candidateFamily = isMarathi ? `${devanagariFamily}, Arial, sans-serif` : `Georgia, "Times New Roman", serif`;
+    const serifFamily = isMarathi ? `${devanagariFamily}, serif` : `Georgia, "Times New Roman", serif`;
     const testName = `[${data.testName}]`;
-    const displayName = isMarathi ? data.candidateName : data.candidateName.toUpperCase();
+    const displayName = data.candidateName;
 
     ctx.fillStyle = bg;
-    ctx.fillRect(mmX(80), mmY(31), mmX(137), mmY(22));
-    ctx.fillRect(mmX(24), mmY(isMarathi ? 72 : 73), mmX(249), mmY(isMarathi ? 26 : 20));
+    ctx.fillRect(mmX(82), mmY(27), mmX(133), mmY(23));
+    ctx.fillRect(mmX(48), mmY(65), mmX(202), mmY(25));
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "#ef59b5";
+    ctx.fillStyle = "#d4a13c";
     const topTitleSize = fittedCanvasFont(ctx, testName, {
       weight: 900,
-      size: 58 * scale,
-      minSize: 28 * scale,
+      size: 62 * scale,
+      minSize: 30 * scale,
       family: headingFamily,
-      maxWidth: mmX(120),
+      maxWidth: mmX(128),
     });
     ctx.font = `900 ${topTitleSize}px ${headingFamily}`;
-    ctx.fillText(testName, mmX(148.5), mmY(42.5));
+    ctx.fillText(testName, mmX(148.5), mmY(39.5));
 
-    ctx.fillStyle = "#b40428";
+    ctx.fillStyle = "#0d416c";
     const candidateSize = fittedCanvasFont(ctx, displayName, {
       weight: 900,
-      size: (isMarathi ? 82 : 78) * scale,
-      minSize: 42 * scale,
-      family: headingFamily,
-      maxWidth: mmX(230),
+      size: (isMarathi ? 76 : 84) * scale,
+      minSize: 38 * scale,
+      family: candidateFamily,
+      maxWidth: mmX(194),
     });
-    ctx.font = `900 ${candidateSize}px ${headingFamily}`;
-    ctx.fillText(displayName, mmX(148.5), mmY(isMarathi ? 86 : 84));
+    ctx.font = `${isMarathi ? "900" : "italic 500"} ${candidateSize}px ${candidateFamily}`;
+    ctx.fillText(displayName, mmX(148.5), mmY(isMarathi ? 80 : 81));
 
     ctx.fillStyle = "#230c08";
     const bodyTestName = `"${data.testName}"`;
     ctx.textAlign = "left";
     if (isMarathi) {
       ctx.fillStyle = bg;
-      ctx.fillRect(mmX(181), mmY(101), mmX(55), mmY(10));
-      ctx.fillStyle = "#230c08";
+      ctx.fillRect(mmX(176), mmY(94), mmX(65), mmY(12));
+      ctx.fillStyle = "#321410";
       const bodySize = fittedCanvasFont(ctx, bodyTestName, {
         weight: 400,
         size: 24 * scale,
         minSize: 13 * scale,
         family: serifFamily,
-        maxWidth: mmX(52),
+        maxWidth: mmX(62),
       });
       ctx.font = `400 ${bodySize}px ${serifFamily}`;
-      ctx.fillText(bodyTestName, mmX(183), mmY(106));
+      ctx.fillText(bodyTestName, mmX(178), mmY(100));
     } else {
       ctx.fillStyle = bg;
-      ctx.fillRect(mmX(208), mmY(95), mmX(52), mmY(9));
-      ctx.fillStyle = "#230c08";
+      ctx.fillRect(mmX(210), mmY(94), mmX(58), mmY(12));
+      ctx.fillStyle = "#0d416c";
       const bodySize = fittedCanvasFont(ctx, bodyTestName, {
         weight: 400,
         size: 22 * scale,
         minSize: 12 * scale,
         family: serifFamily,
-        maxWidth: mmX(48),
+        maxWidth: mmX(54),
       });
       ctx.font = `400 ${bodySize}px ${serifFamily}`;
-      ctx.fillText(bodyTestName, mmX(211), mmY(99.5));
+      ctx.fillText(bodyTestName, mmX(212), mmY(100));
     }
 
     doc.addImage(canvas.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, 297, 210);
