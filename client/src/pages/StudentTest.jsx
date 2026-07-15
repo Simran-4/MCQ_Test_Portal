@@ -585,8 +585,8 @@ export default function StudentTest() {
     return (
       <div style={{ minHeight:"100vh", background: BG, padding:"24px 16px" }}>
         <div style={{ maxWidth:"980px", margin:"0 auto" }}>
-          <div style={{ background: WHITE, borderRadius:"20px", padding:"32px", boxShadow:"0 8px 32px rgba(0,0,0,0.08)" }}>
-            <div style={{ display:"grid", gridTemplateColumns:"minmax(260px, 1fr) minmax(260px, 0.9fr)", gap:"22px", alignItems:"stretch" }}>
+          <div className="student-result-card" style={{ background: WHITE, borderRadius:"20px", padding:"32px", boxShadow:"0 8px 32px rgba(0,0,0,0.08)" }}>
+            <div className="student-result-layout" style={{ display:"grid", gridTemplateColumns:"minmax(260px, 1fr) minmax(260px, 0.9fr)", gap:"22px", alignItems:"stretch" }}>
               <div style={{ textAlign:"center" }}>
                 <div style={{ fontSize:"48px" }}>{passed ? "🎉" : "📚"}</div>
                 <h1 style={{ color: GREEN_DARK }}>{passed ? "Passed!" : "Try Again"}</h1>
@@ -615,7 +615,7 @@ export default function StudentTest() {
                 </button>
 
                 {passed && (
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px" }}>
+                  <div className="student-certificate-actions" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px" }}>
                     <button onClick={() => handleDownloadCertificate("english")} style={{ width:"100%", padding:"12px", background: GREEN, color: WHITE, border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"800" }}>
                       English Certificate
                     </button>

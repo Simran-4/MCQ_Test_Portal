@@ -8,6 +8,7 @@ const jwt = require("jsonwebtoken");
 const { hasAdminPermission } = require("../utils/adminPermissions");
 const { selectQuestionsForSuite } = require("../utils/questionSelection");
 const { selectQuestionsForLanguage, translateQuestionsIfNeeded } = require("../utils/questionLanguage");
+const { canAccessSuite } = require("../utils/suiteAccess");
 
 const requireAdminOrSuperAdmin = (req, res, next) => {
   if (!["admin", "superadmin"].includes(req.user.role)) {
@@ -69,14 +70,6 @@ function readOptionalUser(req) {
   } catch {
     return null;
   }
-}
-
-function canAccessSuite(suite, user) {
-  if (!suite) return false;
-  if (!user) return suite.status === "active" && suite.isPublic !== false;
-  if (user.role !== "candidate") return true;
-  if (suite.status !== "active") return false;
-  return true;
 }
 
 function sanitizeImageUrl(value) {

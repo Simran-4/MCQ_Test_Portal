@@ -602,6 +602,36 @@ table {
     padding: 22px !important;
   }
 
+  .student-result-card {
+    padding: 20px !important;
+  }
+
+  .student-result-layout,
+  .student-certificate-actions,
+  .suite-media-input-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .suite-media-input-grid > button {
+    width: 100%;
+  }
+
+  .candidate-results-tools,
+  .candidate-results-search {
+    width: 100%;
+  }
+
+  .candidate-results-search {
+    flex-wrap: wrap;
+  }
+
+  .candidate-results-search input,
+  .candidate-results-search button,
+  .candidate-results-tools > select {
+    width: 100%;
+    min-width: 0 !important;
+  }
+
   .suite-detail-topbar,
   .suite-results-topbar {
     gap: 12px !important;

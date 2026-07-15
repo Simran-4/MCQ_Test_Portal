@@ -142,13 +142,13 @@ function Login() {
       position: "relative",
     }}>
       {/* Dark overlay */}
-      <div className="auth-inline-card login-inline-card" style={{
+      <div className="auth-inline-overlay" style={{
         position: "absolute", inset: 0,
         background: "rgba(0,0,0,0.35)",
       }} />
 
       {/* Card */}
-      <div style={{
+      <div className="auth-inline-card login-inline-card" style={{
         position: "relative", zIndex: 1,
         background: "rgba(255,255,255,0.15)",
         backdropFilter: "blur(18px)",
@@ -156,8 +156,9 @@ function Login() {
         border: "1px solid rgba(255,255,255,0.3)",
         borderRadius: "24px",
         padding: "40px 36px",
-        width: "100%", maxWidth: "380px",
-        margin: "0 16px",
+        width: "calc(100% - 32px)", maxWidth: "380px",
+        margin: "0 auto",
+        boxSizing: "border-box",
         boxShadow: "0 24px 64px rgba(0,0,0,0.3)",
       }}>
 

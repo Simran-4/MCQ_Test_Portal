@@ -7,6 +7,7 @@ const TestSuite = require("../models/TestSuite");
 const Settings = require("../models/ExamSettings"); 
 const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
+const { canAccessSuite } = require("../utils/suiteAccess");
 const {
   hasAdminPermission,
   scopedResultQuery,
@@ -232,13 +233,6 @@ function isTheoryQuestion(q) {
 
 function isSyntheticMobileEmail(email) {
   return /@mobile\.local$/i.test(String(email || ""));
-}
-
-function canAccessSuite(suite, user) {
-  if (!suite || !user) return false;
-  if (user.role !== "candidate") return true;
-  if (suite.status !== "active") return false;
-  return true;
 }
 
 function metaUserId(entry) {

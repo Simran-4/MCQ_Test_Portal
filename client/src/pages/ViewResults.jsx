@@ -120,8 +120,8 @@ export default function ViewResults() {
             <h1 style={{ color: "#1A3D28", margin: 0 }}>Candidate Results</h1>
             <p style={{ color: "#6B6B5E" }}>Overview of all assessment performances</p>
           </div>
-          <div style={{ display: "flex", gap: "15px", flexWrap: "wrap" }}>
-            <form onSubmit={handleSearch} style={{ display: "flex", gap: "10px" }}>
+          <div className="candidate-results-tools" style={{ display: "flex", gap: "15px", flexWrap: "wrap" }}>
+            <form className="candidate-results-search" onSubmit={handleSearch} style={{ display: "flex", gap: "10px" }}>
               <input
                 type="text"
                 placeholder="Search name, email, project..."

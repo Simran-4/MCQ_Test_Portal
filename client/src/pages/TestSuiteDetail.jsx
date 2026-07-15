@@ -1250,7 +1250,7 @@ export default function TestSuiteDetail() {
                 <textarea rows={3} style={{ ...inputStyle, resize: "vertical" }} placeholder="Enter the question text here…"
                   value={form.questionText} onChange={e => setForm({ ...form, questionText: e.target.value })} />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "end" }}>
+              <div className="suite-media-input-grid" style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "end" }}>
                 <div>
                   <label style={labelStyle}>Question picture (optional)</label>
                   <input
@@ -1280,7 +1280,7 @@ export default function TestSuiteDetail() {
                   </div>
                 )}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "end" }}>
+              <div className="suite-media-input-grid" style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "end" }}>
                 <div>
                   <label style={labelStyle}>Question video (optional)</label>
                   <input

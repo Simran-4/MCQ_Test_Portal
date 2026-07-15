@@ -16,6 +16,7 @@ const {
   selectQuestionsForSuite,
 } = require("../utils/questionSelection");
 const { questionsForLanguage, translateQuestionsIfNeeded } = require("../utils/questionLanguage");
+const { canAccessSuite } = require("../utils/suiteAccess");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -205,15 +206,6 @@ function readOptionalUser(req) {
   } catch {
     return null;
   }
-}
-
-function canAccessSuite(suite, user) {
-  if (!suite) return false;
-  if (suite.deletedAt) return false;
-  if (!user) return suite.status === "active" && suite.isPublic !== false;
-  if (user.role !== "candidate") return true;
-  if (suite.status !== "active") return false;
-  return true;
 }
 
 function sanitizeImageUrl(value) {
