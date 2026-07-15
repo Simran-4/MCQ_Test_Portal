@@ -2,9 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import { downloadPdfDocument } from "../utils/pdfDownload";
+import { downloadCanvasTablePdf } from "../utils/canvasTablePdf";
 import * as XLSX from "xlsx";
 import "./superadmin.css";
 import { ADMIN_PERMISSION_DEFAULTS, getAuthHeaders, getCurrentUser } from "../utils/auth";
@@ -591,68 +589,47 @@ function saveReportsExcel(results, suitesById, reportType) {
   XLSX.writeFile(wb, `${reportType}_superadmin_results_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-function saveReportsPDF(results, suitesById, reportType) {
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+async function saveReportsPDF(results, suitesById, reportType) {
   const title = reportType === "descriptive" ? "Super Admin Descriptive Results" : "Super Admin Summary Results";
-  doc.setFillColor(26, 61, 40);
-  doc.rect(0, 0, 297, 22, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text(title, 14, 14);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text(new Date().toLocaleDateString(), 283, 14, { align: "right" });
-
-  autoTable(doc, {
-    startY: 30,
-    head: [["#", "Test Name", "Candidate", "Email", "Project/Department", "Designation", "Score", "%", "Result", "Attempted At"]],
-    body: results.map((result, index) => [
-      index + 1,
-      resultTestName(result, suitesById),
-      candidateName(result),
-      candidateEmail(result),
-      result.project || "-",
-      result.designation || "-",
-      `${result.score || 0}/${result.totalMarks || 0}`,
-      `${resultPct(result)}%`,
-      resultStatus(result),
-      formatDateTime(result.submittedAt),
-    ]),
-    styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
-    headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
-    alternateRowStyles: { fillColor: [248, 247, 244] },
+  const summaryColumns = [
+    { label: "Test Name", key: "test", weight: 1.8 },
+    { label: "Candidate", key: "candidate", weight: 1.3 },
+    { label: "Email", key: "email", weight: 1.6 },
+    { label: "Project / Department", key: "project", weight: 1.4 },
+    { label: "Designation", key: "designation", weight: 1.1 },
+    { label: "Score", key: "score", weight: 0.8 },
+    { label: "%", key: "percentage", weight: 0.6 },
+    { label: "Result", key: "result", weight: 0.7 },
+    { label: "Attempted At", key: "attemptedAt", weight: 1.2 },
+  ];
+  const summaryRows = results.map(result => ({
+    test: resultTestName(result, suitesById), candidate: candidateName(result), email: candidateEmail(result),
+    project: result.project || "-", designation: result.designation || "-",
+    score: `${result.score || 0}/${result.totalMarks || 0}`, percentage: `${resultPct(result)}%`,
+    result: resultStatus(result), attemptedAt: formatDateTime(result.submittedAt),
+  }));
+  const descriptiveRows = results.flatMap(result => {
+    const categories = Array.isArray(result.categoryResults) && result.categoryResults.length
+      ? result.categoryResults
+      : [{ category: "Overall", score: result.score || 0, total: result.totalMarks || 0, percentage: resultPct(result) }];
+    return categories.map(row => ({
+      test: resultTestName(result, suitesById), candidate: candidateName(result), category: row.category || "Overall",
+      score: `${row.score ?? row.earnedMarks ?? 0}/${row.total ?? 0}`, percentage: `${row.percentage ?? 0}%`,
+      scale: categoryScaleLabel(row), trait: row.scaleLabel || "-", description: row.description || "-",
+    }));
   });
-
-  if (reportType === "descriptive") {
-    results.forEach((result, index) => {
-      doc.addPage("a4", "landscape");
-      doc.setTextColor(26, 61, 40);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.text(`${index + 1}. ${candidateName(result)} - ${resultTestName(result, suitesById)}`, 14, 16);
-      autoTable(doc, {
-        startY: 24,
-        head: [["Category", "Score", "Total", "Percentage", "Scale", "Trait", "Description"]],
-        body: (Array.isArray(result.categoryResults) && result.categoryResults.length
-          ? result.categoryResults
-          : [{ category: "Overall", score: result.score || 0, total: result.totalMarks || 0, percentage: resultPct(result) }]
-        ).map(row => [
-          row.category || "Overall",
-          row.score ?? row.earnedMarks ?? 0,
-          row.total ?? 0,
-          `${row.percentage ?? 0}%`,
-          categoryScaleLabel(row),
-          row.scaleLabel || "-",
-          row.description || "-",
-        ]),
-        headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
-        styles: { fontSize: 8, cellPadding: 2.5 },
-      });
-    });
-  }
-
-  downloadPdfDocument(doc, `${reportType}_superadmin_results_${new Date().toISOString().slice(0, 10)}.pdf`);
+  await downloadCanvasTablePdf({
+    title,
+    subtitle: `Generated ${new Date().toLocaleString("en-IN")}`,
+    fileName: `${reportType}_superadmin_results_${new Date().toISOString().slice(0, 10)}.pdf`,
+    columns: reportType === "descriptive" ? [
+      { label: "Test Name", key: "test", weight: 1.7 }, { label: "Candidate", key: "candidate", weight: 1.2 },
+      { label: "Category", key: "category", weight: 1.2 }, { label: "Score", key: "score", weight: 0.8 },
+      { label: "%", key: "percentage", weight: 0.6 }, { label: "Scale", key: "scale", weight: 0.8 },
+      { label: "Trait", key: "trait", weight: 1.1 }, { label: "Description", key: "description", weight: 2.2 },
+    ] : summaryColumns,
+    rows: reportType === "descriptive" ? descriptiveRows : summaryRows,
+  });
 }
 
 function SuperAdmin() {
@@ -1582,9 +1559,9 @@ function SuperAdmin() {
                 <p>submissions shown</p>
               </div>
               <div className="report-actions">
-                <button type="button" onClick={() => saveReportsPDF(filteredReports, suitesById, "summary")}>Summary PDF</button>
+                <button type="button" onClick={() => saveReportsPDF(filteredReports, suitesById, "summary").catch(err => alert(`Unable to download Summary PDF: ${err.message}`))}>Summary PDF</button>
                 <button type="button" onClick={() => saveReportsExcel(filteredReports, suitesById, "summary")}>Summary Excel</button>
-                <button type="button" onClick={() => saveReportsPDF(filteredReports, suitesById, "descriptive")}>Descriptive PDF</button>
+                <button type="button" onClick={() => saveReportsPDF(filteredReports, suitesById, "descriptive").catch(err => alert(`Unable to download Descriptive PDF: ${err.message}`))}>Descriptive PDF</button>
                 <button type="button" onClick={() => saveReportsExcel(filteredReports, suitesById, "descriptive")}>Descriptive Excel</button>
               </div>
             </div>

@@ -46,6 +46,7 @@ export async function downloadCanvasTablePdf({ title, subtitle = "", columns, ro
   const margin = 58;
   const headerHeight = 128;
   const tableTop = 174;
+  const tableHeaderHeight = 82;
   const footerSpace = 48;
   const weights = columns.map(column => Number(column.weight) || 1);
   const totalWeight = weights.reduce((sum, value) => sum + value, 0);
@@ -63,29 +64,47 @@ export async function downloadCanvasTablePdf({ title, subtitle = "", columns, ro
     ctx.fillStyle = "#1a3d28"; ctx.fillRect(0, 0, width, headerHeight);
     ctx.fillStyle = "#fff"; ctx.font = `700 34px "${family}", Arial`; ctx.fillText(title, margin, 52);
     ctx.font = `400 21px "${family}", Arial`; ctx.fillText(subtitle, margin, 91);
-    ctx.fillStyle = "#e8f2ec"; ctx.fillRect(margin, tableTop, available, 58);
-    ctx.fillStyle = "#174c32"; ctx.font = `700 20px "${family}", Arial`;
+    ctx.fillStyle = "#e8f2ec"; ctx.fillRect(margin, tableTop, available, tableHeaderHeight);
+    ctx.fillStyle = "#174c32"; ctx.font = `700 19px "${family}", Arial`;
+    ctx.strokeStyle = "#b9cec1";
     let x = margin;
-    columns.forEach((column, index) => { ctx.fillText(column.label, x + 12, tableTop + 36); x += colWidths[index]; });
-    y = tableTop + 58;
+    columns.forEach((column, index) => {
+      const cellWidth = colWidths[index];
+      const lines = wrap(ctx, column.label, cellWidth - 24).slice(0, 2);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, tableTop, cellWidth, tableHeaderHeight); ctx.clip();
+      const firstY = tableTop + (tableHeaderHeight - lines.length * 25) / 2 + 20;
+      lines.forEach((line, lineIndex) => ctx.fillText(line, x + 12, firstY + lineIndex * 25));
+      ctx.restore();
+      ctx.strokeRect(x, tableTop, cellWidth, tableHeaderHeight);
+      x += cellWidth;
+    });
+    y = tableTop + tableHeaderHeight;
   };
 
   const finishPage = () => { pages.push(canvas); };
   startPage();
+  let rowIndex = 0;
   for (const row of rows) {
     ctx.font = `400 20px "${family}", Arial`;
     const cellLines = columns.map((column, index) => wrap(ctx, row[column.key], colWidths[index] - 24));
     const rowHeight = Math.max(48, Math.max(...cellLines.map(lines => lines.length)) * 29 + 20);
     if (y + rowHeight > height - footerSpace) { finishPage(); startPage(); }
-    ctx.fillStyle = pages.length % 2 ? "#fbfaf8" : "#fff"; ctx.fillRect(margin, y, available, rowHeight);
-    ctx.strokeStyle = "#dce5df"; ctx.strokeRect(margin, y, available, rowHeight);
+    ctx.fillStyle = rowIndex % 2 ? "#fbfaf8" : "#fff"; ctx.fillRect(margin, y, available, rowHeight);
+    ctx.strokeStyle = "#dce5df";
     ctx.fillStyle = "#26332e";
     let x = margin;
     cellLines.forEach((lines, index) => {
+      const cellWidth = colWidths[index];
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, y, cellWidth, rowHeight); ctx.clip();
       lines.forEach((line, lineIndex) => ctx.fillText(line, x + 12, y + 31 + lineIndex * 29));
-      x += colWidths[index];
+      ctx.restore();
+      ctx.strokeRect(x, y, cellWidth, rowHeight);
+      x += cellWidth;
     });
     y += rowHeight;
+    rowIndex += 1;
   }
   finishPage();
 

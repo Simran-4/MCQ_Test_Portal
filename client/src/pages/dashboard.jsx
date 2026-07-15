@@ -512,10 +512,18 @@ function addCanvasPages(doc, canvas) {
 
 async function saveAdminReportPdf({ title, fileName, columns, rows }) {
   if (typeof HTMLCanvasElement !== "undefined") {
+    const columnWeight = (label) => {
+      if (/Test Name/i.test(label)) return 2.2;
+      if (/Candidate|Contact/i.test(label)) return 1.5;
+      if (/Attempted Date/i.test(label)) return 1.8;
+      if (/Time Taken|Avg Time/i.test(label)) return 1.25;
+      if (/Test No|Passed|Failed|Score|Result|%|Rate/i.test(label)) return 0.85;
+      return 1;
+    };
     await downloadCanvasTablePdf({
       title,
       subtitle: `Generated ${formatDateTime(new Date())}`,
-      columns: columns.map((label, index) => ({ label, key: String(index), weight: index === 1 ? 2.2 : 1 })),
+      columns: columns.map((label, index) => ({ label, key: String(index), weight: columnWeight(label) })),
       rows: rows.map(row => Object.fromEntries(row.map((value, index) => [String(index), value]))),
       fileName,
     });
