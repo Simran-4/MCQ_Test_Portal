@@ -144,6 +144,12 @@ async function updateUserFromPayload(userId, payload, requesterId) {
     const normalizedUsername = normalizeUsername(payload.username || name);
     const normalizedEmail = normalizeEmail(payload.email);
     const normalizedMobile = normalizeMobile(payload.mobile);
+    const currentUsername = normalizeUsername(user.username || user.name);
+    const currentEmail = isSyntheticMobileEmail(user.email) ? "" : normalizeEmail(user.email);
+    const currentMobile = normalizeMobile(user.mobile);
+    const usernameChanged = normalizedUsername !== currentUsername;
+    const emailChanged = normalizedEmail !== currentEmail;
+    const mobileChanged = normalizedMobile !== currentMobile;
     const roleInfo = await resolveRoleForUpdate(payload.role || user.customRole || user.role, user.role);
     const isActive = payload.isActive === undefined ? user.isActive !== false : Boolean(payload.isActive);
     const age = payload.age === "" || payload.age === null || payload.age === undefined
@@ -166,7 +172,7 @@ async function updateUserFromPayload(userId, payload, requesterId) {
         return { status: 400, error: "Enter either email or mobile number" };
     }
 
-    if (normalizedEmail) {
+    if (normalizedEmail && emailChanged) {
         const emailCheck = await verifyDeliverableEmail(normalizedEmail);
         if (!emailCheck.valid) return { status: 400, error: emailCheck.message };
     }
@@ -199,17 +205,19 @@ async function updateUserFromPayload(userId, payload, requesterId) {
     }
 
     const storedEmail = normalizedEmail || `${normalizedUsername}@mobile.local`;
-    const existingUser = await User.findOne({
-        _id: { $ne: user._id },
-        $or: [
-            { username: normalizedUsername },
-            { email: storedEmail },
-            ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
-            ...(normalizedMobile ? [{ mobile: normalizedMobile }] : []),
-        ],
-    });
-    if (existingUser) {
-        return { status: 400, error: "Username, email, or mobile number already exists" };
+    const changedIdentityChecks = [
+        ...(usernameChanged ? [{ username: normalizedUsername }] : []),
+        ...(emailChanged && normalizedEmail ? [{ email: normalizedEmail }] : []),
+        ...(mobileChanged && normalizedMobile ? [{ mobile: normalizedMobile }] : []),
+    ];
+    if (changedIdentityChecks.length) {
+        const existingUser = await User.findOne({
+            _id: { $ne: user._id },
+            $or: changedIdentityChecks,
+        });
+        if (existingUser) {
+            return { status: 400, error: "The updated username, email, or mobile number is already used by another account" };
+        }
     }
 
     user.name = name;
