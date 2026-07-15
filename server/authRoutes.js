@@ -405,24 +405,31 @@ router.post("/login", async (req, res) => {
         const normalizedUsername = normalizeUsername(rawIdentifier);
         const normalizedMobile = normalizeMobile(rawIdentifier);
 
-        const user = await User.findOne({
+        const matchingUsers = await User.find({
             $or: [
                 { email: normalizedIdentifier },
                 { username: normalizedUsername },
                 { mobile: normalizedMobile },
             ],
         });
-        if (!user) {
+        if (matchingUsers.length === 0) {
             return res.status(400).json({ message: "User not found" });
+        }
+
+        const passwordMatches = await Promise.all(matchingUsers.map(async user => {
+            try {
+                return await bcrypt.compare(password, user.password);
+            } catch {
+                return false;
+            }
+        }));
+        const user = matchingUsers.find((candidate, index) => passwordMatches[index]);
+        if (!user) {
+            return res.status(400).json({ message: "Invalid credentials" });
         }
 
         if (user.isActive === false) {
             return res.status(403).json({ message: "Your account has been disabled" });
-        }
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({ message: "Invalid credentials" });
         }
 
       const token = jwt.sign(
