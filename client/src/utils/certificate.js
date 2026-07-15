@@ -77,13 +77,7 @@ function certificateFileName(data, language) {
 
 function templateSources(language) {
   const name = templateBaseName(language);
-  // The approved English certificate is supplied as a JPEG. Prefer it over
-  // the legacy PNG so the old sample paragraph is never painted underneath
-  // the dynamic certificate copy. Marathi keeps its lossless PNG first.
-  const extensions = language === "marathi"
-    ? ["png", "jpeg", "jpg"]
-    : ["jpeg", "png", "jpg"];
-  return extensions.map(extension => `${basePath()}${name}.${extension}`);
+  return ["png", "jpeg", "jpg"].map(extension => `${basePath()}${name}.${extension}`);
 }
 
 function loadImage(src) {
@@ -509,6 +503,17 @@ function certificateStyles() {
   `;
 }
 
+async function loadTemplateImage(language) {
+  for (const source of templateSources(language)) {
+    try {
+      return await loadImage(source);
+    } catch {
+      // Try the next supported template format.
+    }
+  }
+  return null;
+}
+
 async function loadCertificateDevanagariFont() {
   const family = "Noto Sans Devanagari Certificate";
   try {
@@ -635,25 +640,19 @@ function canvasLooksBlank(canvas) {
 
 async function tryTemplateCertificatePDF(data, language) {
   try {
-    let image = null;
-    for (const source of templateSources(language)) {
-      try {
-        image = await loadImage(source);
-        break;
-      } catch {
-        image = null;
-      }
-    }
+    const image = await loadTemplateImage(language);
     if (!image) return null;
 
     const canvas = document.createElement("canvas");
-    const width = image.naturalWidth || 1600;
-    const height = image.naturalHeight || 1131;
+    // Keep every generated certificate at a consistent A4-landscape raster
+    // size even when the approved source template is a smaller export.
+    const width = 1600;
+    const height = Math.round(width * (210 / 297));
     const mmX = value => (value / 297) * width;
     const mmY = value => (value / 210) * height;
-    const ctx = canvas.getContext("2d");
     canvas.width = width;
     canvas.height = height;
+    const ctx = canvas.getContext("2d");
     ctx.drawImage(image, 0, 0, width, height);
 
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
@@ -669,7 +668,7 @@ async function tryTemplateCertificatePDF(data, language) {
     const bodyFamily = isMarathi
       ? `${devanagariFamily}, Arial, sans-serif`
       : `Arial, Helvetica, sans-serif`;
-    const testName = data.testName;
+    const testName = isMarathi ? `[${data.testName}]` : data.testName;
     const displayName = data.candidateName;
     const bodyText = isMarathi
       ? `यांनी स्नेहालय, अहिल्यानगर यांच्या वतीने आयोजित करण्यात आलेली "${data.testName}" ही ऑनलाइन चाचणी यशस्वीरित्या पूर्ण केली आहे. सदर चाचणीमध्ये सहभागी होऊन त्यांनी सर्व आवश्यक प्रक्रिया पूर्ण केल्या असून त्यांची कामगिरी समाधानकारक आहे. त्यांच्या सक्रिय सहभाग व सहकार्याबद्दल स्नेहालय त्यांचे अभिनंदन करते.`
@@ -698,12 +697,24 @@ async function tryTemplateCertificatePDF(data, language) {
 
     ctx.fillStyle = bg;
     ctx.fillRect(mmX(82), mmY(27), mmX(133), mmY(23));
-    ctx.fillRect(mmX(45), mmY(63), mmX(207), mmY(32));
-    // The replacement template deliberately leaves the paragraph area blank.
-    // Do not cover it: retaining the watermark underneath the dynamic copy is
-    // part of the approved design.
     if (isMarathi) {
-      ctx.fillRect(mmX(24), mmY(95), mmX(249), mmY(35));
+      // The supplied Marathi template contains a sample candidate name. Copy
+      // the corresponding clean watermark band from the matching English
+      // template before drawing the real name so the watermark stays visible.
+      const cleanNameTemplate = await loadTemplateImage("english");
+      if (cleanNameTemplate) {
+        const sourceWidth = cleanNameTemplate.naturalWidth || width;
+        const sourceHeight = cleanNameTemplate.naturalHeight || height;
+        const sourceX = value => (value / 297) * sourceWidth;
+        const sourceY = value => (value / 210) * sourceHeight;
+        ctx.drawImage(
+          cleanNameTemplate,
+          sourceX(45), sourceY(66), sourceX(207), sourceY(29),
+          mmX(45), mmY(66), mmX(207), mmY(29),
+        );
+      } else {
+        ctx.fillRect(mmX(45), mmY(66), mmX(207), mmY(29));
+      }
     }
 
     ctx.textAlign = "center";
@@ -750,15 +761,6 @@ async function tryTemplateCertificatePDF(data, language) {
     ctx.font = `${isMarathi ? "900" : "italic 500"} ${candidateSize}px ${candidateFamily}`;
     drawCenteredText(displayName, mmX(148.5), mmY(isMarathi ? 80 : 81));
 
-    if (isMarathi) {
-      ctx.strokeStyle = "#d4a13c";
-      ctx.lineWidth = Math.max(2, 2.5 * scale);
-      ctx.beginPath();
-      ctx.moveTo(mmX(53), mmY(92));
-      ctx.lineTo(mmX(227), mmY(92));
-      ctx.stroke();
-    }
-
     ctx.fillStyle = isMarathi ? "#321410" : "#0d416c";
     let bodySize = (isMarathi ? 26 : 24) * scale;
     let lines = [];
@@ -768,7 +770,7 @@ async function tryTemplateCertificatePDF(data, language) {
       if (lines.length > 3) bodySize -= 1.5 * scale;
     } while (lines.length > 3 && bodySize > 18 * scale);
     const lineHeight = mmY(isMarathi ? 10.5 : 9.5);
-    const firstLineY = mmY(isMarathi ? 102 : 101.5);
+    const firstLineY = mmY(isMarathi ? 104.5 : 101.5);
     lines.slice(0, 3).forEach((line, index) => {
       drawCenteredText(line, mmX(148.5), firstLineY + index * lineHeight);
     });
