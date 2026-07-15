@@ -1557,58 +1557,41 @@ export default function Dashboard() {
     downloadExcelWorkbook(XLSX, wb, `attempt_analysis_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  const downloadAttemptAnalysisPDF = () => {
+  const downloadAttemptAnalysisPDF = async () => {
     if (!canDownloadReports) return alert("Download permission is disabled for your account.");
     if (reportSpanSummaryRows.length === 0) return alert("No attempts found in this time span.");
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    doc.setFillColor(26, 61, 40);
-    doc.rect(0, 0, 297, 25, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("Attempt Analysis by Time Span", 14, 10);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(reportSpanLabel, 14, 17);
-
-    autoTable(doc, {
-      startY: 32,
-      head: [["Total Attempts", "Tests Attempted", "Unique Users", "Passed", "Failed", "Average Score"]],
-      body: [[
-        reportSpanResults.length,
-        reportSpanSummaryRows.length,
-        reportSpanCandidates,
-        reportSpanPassed,
-        reportSpanFailed,
-        `${reportSpanAverage}%`,
-      ]],
-      styles: { fontSize: 9, cellPadding: 3, halign: "center" },
-      headStyles: { fillColor: [234, 246, 239], textColor: [26, 61, 40] },
-      bodyStyles: { textColor: [38, 51, 46] },
-    });
-
-    autoTable(doc, {
-      startY: doc.lastAutoTable.finalY + 10,
-      head: [["Sr.", "Test Name", "Attempts", "Users", "Passed", "Failed", "Pass Rate", "Avg Score", "Avg Time"]],
-      body: reportSpanSummaryRows.map((row, index) => [
-        index + 1,
-        row.testName,
-        row.totalAttempts,
-        row.usersAttempted,
-        row.passed,
-        row.failed,
-        `${row.passRate.toFixed(2)}%`,
-        `${row.averageScore.toFixed(2)}%`,
-        formatDuration(row.averageTime),
-      ]),
-      styles: { fontSize: 7.4, cellPadding: 2, overflow: "linebreak" },
-      headStyles: { fillColor: [26, 61, 40], textColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [248, 247, 244] },
-      columnStyles: {
-        1: { cellWidth: 70 },
-      },
-    });
-    downloadPdfDocument(doc, `attempt_analysis_${new Date().toISOString().slice(0, 10)}.pdf`);
+    try {
+      await downloadCanvasTablePdf({
+        title: "Attempt Analysis by Time Span",
+        subtitle: `${reportSpanLabel} | ${reportSpanResults.length} attempts | ${reportSpanCandidates} users | ${reportSpanPassed} passed | ${reportSpanFailed} failed | ${reportSpanAverage}% average`,
+        columns: [
+          { label: "Sr.", key: "index", weight: 0.55 },
+          { label: "Test Name", key: "testName", weight: 2.8 },
+          { label: "Attempts", key: "attempts", weight: 0.9 },
+          { label: "Users", key: "users", weight: 0.8 },
+          { label: "Passed", key: "passed", weight: 0.8 },
+          { label: "Failed", key: "failed", weight: 0.8 },
+          { label: "Pass Rate", key: "passRate", weight: 1 },
+          { label: "Avg Score", key: "averageScore", weight: 1 },
+          { label: "Avg Time", key: "averageTime", weight: 1.1 },
+        ],
+        rows: reportSpanSummaryRows.map((row, index) => ({
+          index: index + 1,
+          testName: row.testName,
+          attempts: row.totalAttempts,
+          users: row.usersAttempted,
+          passed: row.passed,
+          failed: row.failed,
+          passRate: `${row.passRate.toFixed(2)}%`,
+          averageScore: `${row.averageScore.toFixed(2)}%`,
+          averageTime: formatDuration(row.averageTime),
+        })),
+        fileName: `attempt_analysis_${new Date().toISOString().slice(0, 10)}.pdf`,
+      });
+    } catch (err) {
+      console.error(err);
+      alert(`Unable to download the Attempt Analysis PDF: ${err.message || "Unknown error"}`);
+    }
   };
 
   const downloadPersonalExcel = () => {

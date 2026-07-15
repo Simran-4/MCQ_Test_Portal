@@ -537,6 +537,61 @@ body.superadmin-dashboard-page #root {
   grid-template-columns: 1fr;
 }
 
+.edit-user-search-field {
+  position: relative;
+  z-index: 20;
+}
+
+.edit-user-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #cbdcd2;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 16px 36px rgba(14, 61, 38, 0.18);
+}
+
+.control-panel .edit-user-suggestions button {
+  width: 100%;
+  min-height: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid #edf2ef;
+  border-radius: 0;
+  background: #fff;
+  color: #203029;
+  text-align: left;
+}
+
+.control-panel .edit-user-suggestions button:hover,
+.control-panel .edit-user-suggestions button[aria-selected="true"] {
+  background: #edf8f1;
+  color: #0f5132;
+}
+
+.edit-user-suggestions strong,
+.edit-user-suggestions span {
+  display: block;
+}
+
+.edit-user-suggestions span {
+  margin-top: 3px;
+  color: #68756e;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.edit-user-suggestion-empty {
+  padding: 12px;
+  color: #68756e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .role-card-row {
   grid-column: 1 / -1;
   display: grid;

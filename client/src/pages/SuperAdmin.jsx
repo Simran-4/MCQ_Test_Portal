@@ -664,6 +664,7 @@ function SuperAdmin() {
   const [creatingUser, setCreatingUser] = useState(false);
   const [editUserId, setEditUserId] = useState("");
   const [editUserSearch, setEditUserSearch] = useState("");
+  const [editUserSearchOpen, setEditUserSearchOpen] = useState(false);
   const [editUserForm, setEditUserForm] = useState(emptyEditUserForm);
   const [savingEditUser, setSavingEditUser] = useState(false);
   const [roleForm, setRoleForm] = useState({ name: "", baseRole: "candidate", description: "" });
@@ -833,6 +834,12 @@ function SuperAdmin() {
   const handleEditUserChange = (userId) => {
     setEditUserId(userId);
     setEditUserForm(userToEditForm(users.find(user => user._id === userId)));
+  };
+
+  const selectEditUserSuggestion = (user) => {
+    handleEditUserChange(user._id);
+    setEditUserSearch(user.name || user.email || user.username || "");
+    setEditUserSearchOpen(false);
   };
 
   const updateEditUserForm = (field, value) => {
@@ -1910,11 +1917,35 @@ function SuperAdmin() {
                   <h3>Edit Existing User</h3>
                   <p className="control-panel-note">Search and update the details of an existing user.</p>
                   <div className="control-form-grid controls-edit-search">
-                    <input
-                      value={editUserSearch}
-                      onChange={e => setEditUserSearch(e.target.value)}
-                      placeholder="Search user by name, email, role, project..."
-                    />
+                    <div className="edit-user-search-field">
+                      <input
+                        value={editUserSearch}
+                        onChange={e => { setEditUserSearch(e.target.value); setEditUserSearchOpen(true); }}
+                        onFocus={() => setEditUserSearchOpen(true)}
+                        onBlur={() => window.setTimeout(() => setEditUserSearchOpen(false), 150)}
+                        placeholder="Search user by name, email, role, project..."
+                        autoComplete="off"
+                      />
+                      {editUserSearchOpen && editUserSearch.trim() && (
+                        <div className="edit-user-suggestions" role="listbox" aria-label="Matching users">
+                          {editUserOptions.length === 0 ? (
+                            <div className="edit-user-suggestion-empty">No matching users</div>
+                          ) : editUserOptions.slice(0, 8).map(user => (
+                            <button
+                              key={user._id}
+                              type="button"
+                              role="option"
+                              aria-selected={user._id === editUserId}
+                              onMouseDown={event => event.preventDefault()}
+                              onClick={() => selectEditUserSuggestion(user)}
+                            >
+                              <strong>{user.name || user.username || "Unnamed user"}</strong>
+                              <span>{[user.email || user.mobile, user.role, user.project].filter(Boolean).join(" • ")}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <select value={editUserId} onChange={e => handleEditUserChange(e.target.value)}>
                       <option value="">Select user to edit</option>
                       {editUserOptions.length === 0 && <option value="" disabled>No users found</option>}
