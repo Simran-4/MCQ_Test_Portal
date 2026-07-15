@@ -882,27 +882,13 @@ function SuperAdmin() {
         project: editUserForm.project,
         designation: editUserForm.designation,
         isActive: editUserForm.isActive,
+        ...(editUserForm.resetPassword ? { password: editUserForm.newPassword } : {}),
       };
       const res = await axios.put(`${API_URL}/superadmin/users/${editUserId}`, payload, { headers: getAuthHeaders() });
-      let passwordResetFailed = false;
-      if (editUserForm.resetPassword) {
-        try {
-          await axios.put(
-            `${API_URL}/superadmin/users/${editUserId}/password`,
-            { password: editUserForm.newPassword },
-            { headers: getAuthHeaders() }
-          );
-        } catch {
-          passwordResetFailed = true;
-        }
-      }
       setUsers(prev => prev.map(user => user._id === res.data._id ? res.data : user));
       setEditUserForm(userToEditForm(res.data));
       getOverview().then(setOverview).catch(() => {});
-      alert(passwordResetFailed
-        ? "User details saved, but password reset failed. Try resetting the password again."
-        : "User updated successfully."
-      );
+      alert(editUserForm.resetPassword ? "User updated and password reset successfully." : "User updated successfully.");
     } catch (err) {
       alert(err.response?.data?.message || "Unable to update user. CloudJiffy backend may need redeploy.");
     } finally {

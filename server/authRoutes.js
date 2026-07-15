@@ -179,6 +179,11 @@ async function updateUserFromPayload(userId, payload, requesterId) {
         return { status: 400, error: "Age must be between 10 and 100" };
     }
 
+    const newPassword = payload.password === undefined ? "" : String(payload.password);
+    if (newPassword && newPassword.length < 6) {
+        return { status: 400, error: "Password must be at least 6 characters" };
+    }
+
     if (requesterId === String(user._id) && (roleInfo.role !== "superadmin" || !isActive)) {
         return { status: 400, error: "You cannot remove or disable your own super admin access" };
     }
@@ -218,6 +223,9 @@ async function updateUserFromPayload(userId, payload, requesterId) {
     user.gender = payload.gender || "";
     user.project = String(payload.project || "").trim();
     user.designation = String(payload.designation || "").trim();
+    if (newPassword) {
+        user.password = await bcrypt.hash(newPassword, 10);
+    }
 
     await user.save();
     return { user };
@@ -558,21 +566,22 @@ router.put("/superadmin/users/:id/access", authMiddleware, requireSuperAdmin, as
 // ── RESET USER PASSWORD ──────────────────────────────────────
 router.put("/superadmin/users/:id/password", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
-        const password = String(req.body.password || "");
+        const password = String(req.body?.password || "");
 
         if (password.length < 6) {
             return res.status(400).json({ message: "Password must be at least 6 characters" });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const user = await User.findByIdAndUpdate(
-            req.params.id,
-            { password: hashedPassword },
-            { new: true }
-        );
-
+        const user = await User.findById(req.params.id);
         if (!user) {
             return res.status(404).json({ message: "User not found" });
+        }
+
+        user.password = await bcrypt.hash(password, 10);
+        await user.save();
+
+        if (!(await bcrypt.compare(password, user.password))) {
+            throw new Error("Password verification failed after saving");
         }
 
         res.json({
@@ -581,6 +590,7 @@ router.put("/superadmin/users/:id/password", authMiddleware, requireSuperAdmin, 
         });
 
     } catch (err) {
+        console.error("Super Admin password reset failed:", err);
         res.status(500).json({ message: "Error resetting password" });
     }
 });
