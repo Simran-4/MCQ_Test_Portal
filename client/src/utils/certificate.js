@@ -77,7 +77,13 @@ function certificateFileName(data, language) {
 
 function templateSources(language) {
   const name = templateBaseName(language);
-  return ["png", "jpg", "jpeg"].map(extension => `${basePath()}${name}.${extension}`);
+  // The approved English certificate is supplied as a JPEG. Prefer it over
+  // the legacy PNG so the old sample paragraph is never painted underneath
+  // the dynamic certificate copy. Marathi keeps its lossless PNG first.
+  const extensions = language === "marathi"
+    ? ["png", "jpeg", "jpg"]
+    : ["jpeg", "png", "jpg"];
+  return extensions.map(extension => `${basePath()}${name}.${extension}`);
 }
 
 function loadImage(src) {
@@ -657,9 +663,13 @@ async function tryTemplateCertificatePDF(data, language) {
     const scale = width / 1600;
     const devanagariFamily = await loadCertificateDevanagariFont();
     const headingFamily = isMarathi ? `${devanagariFamily}, Arial, sans-serif` : `Georgia, "Times New Roman", serif`;
-    const candidateFamily = isMarathi ? `${devanagariFamily}, Arial, sans-serif` : `Georgia, "Times New Roman", serif`;
-    const serifFamily = isMarathi ? `${devanagariFamily}, serif` : `Georgia, "Times New Roman", serif`;
-    const testName = `[${data.testName}]`;
+    const candidateFamily = isMarathi
+      ? `${devanagariFamily}, Arial, sans-serif`
+      : `"Snell Roundhand", "Brush Script MT", "Segoe Script", cursive`;
+    const bodyFamily = isMarathi
+      ? `${devanagariFamily}, Arial, sans-serif`
+      : `Arial, Helvetica, sans-serif`;
+    const testName = data.testName;
     const displayName = data.candidateName;
     const bodyText = isMarathi
       ? `यांनी स्नेहालय, अहिल्यानगर यांच्या वतीने आयोजित करण्यात आलेली "${data.testName}" ही ऑनलाइन चाचणी यशस्वीरित्या पूर्ण केली आहे. सदर चाचणीमध्ये सहभागी होऊन त्यांनी सर्व आवश्यक प्रक्रिया पूर्ण केल्या असून त्यांची कामगिरी समाधानकारक आहे. त्यांच्या सक्रिय सहभाग व सहकार्याबद्दल स्नेहालय त्यांचे अभिनंदन करते.`
@@ -689,20 +699,45 @@ async function tryTemplateCertificatePDF(data, language) {
     ctx.fillStyle = bg;
     ctx.fillRect(mmX(82), mmY(27), mmX(133), mmY(23));
     ctx.fillRect(mmX(45), mmY(63), mmX(207), mmY(32));
-    ctx.fillRect(mmX(24), mmY(95), mmX(249), mmY(35));
+    // The replacement template deliberately leaves the paragraph area blank.
+    // Do not cover it: retaining the watermark underneath the dynamic copy is
+    // part of the approved design.
+    if (isMarathi) {
+      ctx.fillRect(mmX(24), mmY(95), mmX(249), mmY(35));
+    }
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#d4a13c";
-    const topTitleSize = fittedCanvasFont(ctx, testName, {
+    const titleMaxWidth = mmX(112);
+    let topTitleSize = fittedCanvasFont(ctx, testName, {
       weight: 900,
       size: 62 * scale,
-      minSize: 30 * scale,
+      minSize: 26 * scale,
       family: headingFamily,
-      maxWidth: mmX(112),
+      maxWidth: titleMaxWidth,
     });
     ctx.font = `900 ${topTitleSize}px ${headingFamily}`;
-    drawCenteredText(testName, mmX(148.5), mmY(39.5));
+    let titleLines = [testName];
+    if (ctx.measureText(testName).width > titleMaxWidth) {
+      topTitleSize = 36 * scale;
+      const minimumTitleSize = 22 * scale;
+      do {
+        ctx.font = `900 ${topTitleSize}px ${headingFamily}`;
+        titleLines = wrappedLines(testName, titleMaxWidth);
+        const widestTitleLine = Math.max(...titleLines.map(line => ctx.measureText(line).width));
+        if (titleLines.length <= 2 && widestTitleLine <= titleMaxWidth) break;
+        topTitleSize -= 2 * scale;
+      } while (topTitleSize > minimumTitleSize);
+      topTitleSize = Math.max(topTitleSize, minimumTitleSize);
+      ctx.font = `900 ${topTitleSize}px ${headingFamily}`;
+    }
+    const titleLineHeight = topTitleSize * 1.06;
+    const titleCenterY = mmY(39.5);
+    const firstTitleY = titleCenterY - ((titleLines.length - 1) * titleLineHeight) / 2;
+    titleLines.slice(0, 2).forEach((line, index) => {
+      drawCenteredText(line, mmX(148.5), firstTitleY + index * titleLineHeight);
+    });
 
     ctx.fillStyle = "#0d416c";
     const candidateSize = fittedCanvasFont(ctx, displayName, {
@@ -715,18 +750,20 @@ async function tryTemplateCertificatePDF(data, language) {
     ctx.font = `${isMarathi ? "900" : "italic 500"} ${candidateSize}px ${candidateFamily}`;
     drawCenteredText(displayName, mmX(148.5), mmY(isMarathi ? 80 : 81));
 
-    ctx.strokeStyle = "#d4a13c";
-    ctx.lineWidth = Math.max(2, 2.5 * scale);
-    ctx.beginPath();
-    ctx.moveTo(mmX(53), mmY(92));
-    ctx.lineTo(mmX(227), mmY(92));
-    ctx.stroke();
+    if (isMarathi) {
+      ctx.strokeStyle = "#d4a13c";
+      ctx.lineWidth = Math.max(2, 2.5 * scale);
+      ctx.beginPath();
+      ctx.moveTo(mmX(53), mmY(92));
+      ctx.lineTo(mmX(227), mmY(92));
+      ctx.stroke();
+    }
 
     ctx.fillStyle = isMarathi ? "#321410" : "#0d416c";
     let bodySize = (isMarathi ? 26 : 24) * scale;
     let lines = [];
     do {
-      ctx.font = `400 ${bodySize}px ${serifFamily}`;
+      ctx.font = `400 ${bodySize}px ${bodyFamily}`;
       lines = wrappedLines(bodyText, mmX(246));
       if (lines.length > 3) bodySize -= 1.5 * scale;
     } while (lines.length > 3 && bodySize > 18 * scale);
