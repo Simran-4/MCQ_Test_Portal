@@ -580,13 +580,14 @@ router.put("/superadmin/users/:id/password", authMiddleware, requireSuperAdmin, 
         user.password = await bcrypt.hash(password, 10);
         await user.save();
 
-        if (!(await bcrypt.compare(password, user.password))) {
+        const savedUser = await User.findById(req.params.id);
+        if (!savedUser || !(await bcrypt.compare(password, savedUser.password))) {
             throw new Error("Password verification failed after saving");
         }
 
         res.json({
             message: "Password reset successfully",
-            user: publicUser(user),
+            user: publicUser(savedUser),
         });
 
     } catch (err) {
