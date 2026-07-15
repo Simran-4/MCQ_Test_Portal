@@ -6,6 +6,99 @@ const LANGUAGE_LABELS = {
   marathi: "Marathi",
 };
 
+const MARATHI_NAME_PARTS = Object.freeze({
+  aditya: "आदित्य", ajay: "अजय", akash: "आकाश", amit: "अमित", amol: "अमोल",
+  anil: "अनिल", anjali: "अंजली", ankita: "अंकिता", aparna: "अपर्णा", arati: "आरती",
+  aarti: "आरती", ashok: "अशोक", bhalekar: "भालेकर", chavan: "चव्हाण", chothe: "चोथे",
+  deepak: "दीपक", deshmukh: "देशमुख", dinesh: "दिनेश", gaikwad: "गायकवाड", ganesh: "गणेश",
+  gavade: "गावडे", ghadge: "घाडगे", girish: "गिरीश", jadhav: "जाधव", jagtap: "जगताप",
+  jaychand: "जयचंद", jyoti: "ज्योती", kadam: "कदम", kale: "काळे", kamble: "कांबळे",
+  kavita: "कविता", kiran: "किरण", kulkarni: "कुलकर्णी", kumbhar: "कुंभार", lad: "लाड",
+  lakshman: "लक्ष्मण", laxman: "लक्ष्मण", madhuri: "माधुरी", mahesh: "महेश", mane: "माने",
+  manisha: "मनीषा", manoj: "मनोज", meena: "मीना", mohan: "मोहन", more: "मोरे",
+  naresh: "नरेश", neha: "नेहा", nikhil: "निखिल", nilesh: "निलेश", nisha: "निशा",
+  omkar: "ओंकार", pankaj: "पंकज", patil: "पाटील", pawar: "पवार", pooja: "पूजा",
+  pratik: "प्रतीक", prateek: "प्रतीक", priya: "प्रिया", rahul: "राहुल", raj: "राज",
+  rajesh: "राजेश", ramesh: "रमेश", ravi: "रवी", rekha: "रेखा", rohit: "रोहित",
+  sachin: "सचिन", sagar: "सागर", salunkhe: "साळुंखे", sanjay: "संजय", santosh: "संतोष",
+  satbhai: "सातभाई", savita: "सविता", seema: "सीमा", shantilal: "शांतिलाल", shashikant: "शशिकांत",
+  shelke: "शेळके", shinde: "शिंदे", shruti: "श्रुती", shweta: "श्वेता", simran: "सिमरन",
+  singh: "सिंह", sneha: "स्नेहा", sohan: "सोहन", somnath: "सोमनाथ", sumit: "सुमित",
+  sunil: "सुनील", suresh: "सुरेश", swami: "स्वामी", swapnil: "स्वप्नील", tambe: "तांबे",
+  tushar: "तुषार", vaibhav: "वैभव", vijay: "विजय", vikas: "विकास", vinod: "विनोद",
+  vivek: "विवेक", wagh: "वाघ", yogesh: "योगेश",
+  alexandria: "अलेक्झांड्रिया", catherine: "कॅथरीन", montgomery: "माँटगोमेरी", wellington: "वेलिंग्टन",
+});
+
+const MARATHI_VOWELS = Object.freeze({
+  aa: ["आ", "ा"], ee: ["ई", "ी"], ii: ["ई", "ी"], oo: ["ऊ", "ू"], uu: ["ऊ", "ू"],
+  ai: ["ऐ", "ै"], au: ["औ", "ौ"], a: ["अ", ""], i: ["इ", "ि"], u: ["उ", "ु"],
+  e: ["ए", "े"], o: ["ओ", "ो"],
+});
+
+const MARATHI_CONSONANTS = Object.freeze({
+  dny: "ज्ञ", ksh: "क्ष", shr: "श्र", chh: "छ", kh: "ख", gh: "घ", ch: "च", jh: "झ",
+  th: "थ", dh: "ध", ph: "फ", bh: "भ", sh: "श", ny: "न्य", ng: "ङ", zh: "झ",
+  k: "क", g: "ग", c: "क", j: "ज", t: "त", d: "द", n: "न", p: "प", b: "ब",
+  m: "म", y: "य", r: "र", l: "ल", v: "व", w: "व", s: "स", h: "ह", f: "फ",
+  q: "क", x: "क्स", z: "झ",
+});
+
+function romanNamePartToMarathi(part) {
+  const lower = String(part || "").toLowerCase();
+  if (MARATHI_NAME_PARTS[lower]) return MARATHI_NAME_PARTS[lower];
+
+  const units = [];
+  let index = 0;
+  const keys = ["dny", "ksh", "shr", "chh", "aa", "ee", "ii", "oo", "uu", "ai", "au", "kh", "gh", "ch", "jh", "th", "dh", "ph", "bh", "sh", "ny", "ng", "zh"];
+  while (index < lower.length) {
+    const sequence = keys.find(key => lower.startsWith(key, index));
+    const token = sequence || lower[index];
+    if (MARATHI_VOWELS[token]) units.push({ type: "vowel", value: token });
+    else if (MARATHI_CONSONANTS[token]) units.push({ type: "consonant", value: MARATHI_CONSONANTS[token] });
+    else units.push({ type: "literal", value: token });
+    index += token.length;
+  }
+
+  let output = "";
+  for (let unitIndex = 0; unitIndex < units.length; unitIndex += 1) {
+    const unit = units[unitIndex];
+    if (unit.type === "vowel") {
+      output += MARATHI_VOWELS[unit.value][0];
+      continue;
+    }
+    if (unit.type !== "consonant") {
+      output += unit.value;
+      continue;
+    }
+
+    output += unit.value;
+    const next = units[unitIndex + 1];
+    if (next?.type === "vowel") {
+      output += MARATHI_VOWELS[next.value][1];
+      unitIndex += 1;
+    } else if (next?.type === "consonant") {
+      const useAnusvara = (unit.value === "न" || unit.value === "म") && !["य", "र", "ल", "व", "ह"].includes(next.value);
+      output += useAnusvara ? "ं" : "्";
+    }
+  }
+  return output;
+}
+
+function transliterateNameToMarathi(name) {
+  const value = String(name || "").trim();
+  if (!value || /[\u0900-\u097F]/.test(value)) return value;
+  return value
+    .split(/(\s+|[-'’]+)/)
+    .map(part => (/^[A-Za-z]+$/.test(part) ? romanNamePartToMarathi(part) : part))
+    .join("")
+    .normalize("NFC");
+}
+
+function marathiCandidateName(data) {
+  return String(data?.candidateNameMarathi || "").trim() || transliterateNameToMarathi(data?.candidateName);
+}
+
 function cleanName(value) {
   return String(value || "candidate")
     .trim()
@@ -51,6 +144,7 @@ export function certificateDataFromResult(result, fallbackSuite = {}) {
   const percentage = totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
   return {
     candidateName: result?.CandidateName || result?.userName || "Candidate",
+    candidateNameMarathi: result?.CandidateNameMarathi || result?.candidateNameMarathi || result?.userNameMarathi || "",
     candidateEmail: result?.CandidateEmail || result?.userEmail || "",
     testName: result?.testName || result?.suiteId?.name || fallbackSuite?.name || "Assessment",
     score,
@@ -104,13 +198,14 @@ function signatureBlock(language, signature, name, title) {
 function certificateMarkup(data, language) {
   const isMarathi = language === "marathi";
   const safeTestName = escapeHtml(data.testName);
-  const safeCandidateName = escapeHtml(isMarathi ? data.candidateName : data.candidateName.toUpperCase());
+  const renderedCandidateName = isMarathi ? marathiCandidateName(data) : data.candidateName.toUpperCase();
+  const safeCandidateName = escapeHtml(renderedCandidateName);
   const testFont = fitFontSize(data.testName, 72, 42, [
     { length: 42, size: 42 },
     { length: 30, size: 50 },
     { length: 22, size: 60 },
   ]);
-  const nameFont = fitFontSize(data.candidateName, isMarathi ? 72 : 64, 40, [
+  const nameFont = fitFontSize(renderedCandidateName, isMarathi ? 72 : 64, 40, [
     { length: 45, size: 40 },
     { length: 34, size: 48 },
     { length: 24, size: 56 },
@@ -535,11 +630,12 @@ void certificateMarkup;
 function certificateMarkupUtf8(data, language) {
   const isMarathi = language === "marathi";
   const testName = escapeHtml(data.testName);
-  const candidateName = escapeHtml(isMarathi ? data.candidateName : data.candidateName.toUpperCase());
+  const renderedCandidateName = isMarathi ? marathiCandidateName(data) : data.candidateName.toUpperCase();
+  const candidateName = escapeHtml(renderedCandidateName);
   const testFont = fitFontSize(data.testName, 72, 42, [
     { length: 42, size: 42 }, { length: 30, size: 50 }, { length: 22, size: 60 },
   ]);
-  const nameFont = fitFontSize(data.candidateName, isMarathi ? 72 : 64, 40, [
+  const nameFont = fitFontSize(renderedCandidateName, isMarathi ? 72 : 64, 40, [
     { length: 45, size: 40 }, { length: 34, size: 48 }, { length: 24, size: 56 },
   ]);
   const body = isMarathi
@@ -669,7 +765,7 @@ async function tryTemplateCertificatePDF(data, language) {
       ? `${devanagariFamily}, Arial, sans-serif`
       : `Arial, Helvetica, sans-serif`;
     const testName = isMarathi ? `[${data.testName}]` : data.testName;
-    const displayName = data.candidateName;
+    const displayName = isMarathi ? marathiCandidateName(data) : data.candidateName;
     const bodyText = isMarathi
       ? `यांनी स्नेहालय, अहिल्यानगर यांच्या वतीने आयोजित करण्यात आलेली "${data.testName}" ही ऑनलाइन चाचणी यशस्वीरित्या पूर्ण केली आहे. सदर चाचणीमध्ये सहभागी होऊन त्यांनी सर्व आवश्यक प्रक्रिया पूर्ण केल्या असून त्यांची कामगिरी समाधानकारक आहे. त्यांच्या सक्रिय सहभाग व सहकार्याबद्दल स्नेहालय त्यांचे अभिनंदन करते.`
       : `This is to certify that the participant has successfully completed the "${data.testName}" online assessment organized by Snehalaya, Ahilyanagar. The participant has fulfilled all the required procedures and demonstrated satisfactory performance. Snehalaya appreciates their active participation and cooperation.`;
@@ -701,19 +797,22 @@ async function tryTemplateCertificatePDF(data, language) {
       // The supplied Marathi template contains a sample candidate name. Copy
       // the corresponding clean watermark band from the matching English
       // template before drawing the real name so the watermark stays visible.
+      // Keep this band clear of the left ribbon, and extend it below every
+      // Devanagari stroke so no part of the sample name remains visible.
       const cleanNameTemplate = await loadTemplateImage("english");
       if (cleanNameTemplate) {
         const sourceWidth = cleanNameTemplate.naturalWidth || width;
         const sourceHeight = cleanNameTemplate.naturalHeight || height;
         const sourceX = value => (value / 297) * sourceWidth;
         const sourceY = value => (value / 210) * sourceHeight;
+        const cleanBand = { x: 60, y: 66, width: 182, height: 31 };
         ctx.drawImage(
           cleanNameTemplate,
-          sourceX(45), sourceY(66), sourceX(207), sourceY(29),
-          mmX(45), mmY(66), mmX(207), mmY(29),
+          sourceX(cleanBand.x), sourceY(cleanBand.y), sourceX(cleanBand.width), sourceY(cleanBand.height),
+          mmX(cleanBand.x), mmY(cleanBand.y), mmX(cleanBand.width), mmY(cleanBand.height),
         );
       } else {
-        ctx.fillRect(mmX(45), mmY(66), mmX(207), mmY(29));
+        ctx.fillRect(mmX(60), mmY(66), mmX(182), mmY(31));
       }
     }
 
