@@ -733,6 +733,7 @@ function buildTestSummaryRows(results) {
 function SuiteModal({ suite, onClose, onSave }) {
   const [name, setName] = useState(suite?.name || "");
   const [description, setDescription] = useState(suite?.description || "");
+  const [instructions, setInstructions] = useState(suite?.instructions || "");
   const [status, setStatus] = useState(suite?.status || "draft");
   const [passingPercentage, setPassingPercentage] = useState(suite?.passingPercentage ?? 50);
   const [loading, setLoading] = useState(false);
@@ -757,6 +758,7 @@ function SuiteModal({ suite, onClose, onSave }) {
       const payload = {
         name: name.trim(),
         description: description.trim(),
+        instructions: instructions.trim(),
         status,
         passingPercentage: passMark,
       };
@@ -787,6 +789,20 @@ function SuiteModal({ suite, onClose, onSave }) {
         <label>
           Description
           <input placeholder="Short description" value={description} onChange={e => setDescription(e.target.value)} />
+        </label>
+
+        <label>
+          Test Instructions
+          <textarea
+            rows={7}
+            maxLength={10000}
+            placeholder={"Write the instructions candidates must read before starting.\nUse a new line for each point."}
+            value={instructions}
+            onChange={e => setInstructions(e.target.value)}
+          />
+          <small className="suite-modal-field-hint">
+            Plain text only. {instructions.length.toLocaleString("en-IN")} / 10,000 characters
+          </small>
         </label>
 
         <label>

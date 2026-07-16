@@ -6,7 +6,9 @@
     "start": "node server/server.js",
     "build": "npm --prefix client ci --include=dev && npm --prefix client run build",
     "postinstall": "npm run build",
-    "import:mongo-dump": "node server/scripts/import-mongo-dump-to-postgres.js"
+    "import:mongo-dump": "node server/scripts/import-mongo-dump-to-postgres.js",
+    "test:translation": "node --test server/tests/questionLanguage.test.js server/tests/questionSelectionToken.test.js",
+    "test:server": "node --test server/tests/questionLanguage.test.js server/tests/questionSelectionToken.test.js server/tests/testInstructions.test.js"
   },
   "engines": {
     "node": ">=22 <23"

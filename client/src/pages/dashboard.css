@@ -1641,8 +1641,10 @@ body {
 
 .suite-modal {
   width: min(460px, 100%);
+  max-height: calc(100vh - 40px);
   display: grid;
   gap: 14px;
+  overflow-y: auto;
   padding: 28px;
   border-radius: 14px;
   background: #fff;
@@ -1666,7 +1668,8 @@ body {
 }
 
 .suite-modal input,
-.suite-modal select {
+.suite-modal select,
+.suite-modal textarea {
   min-height: 44px;
   padding: 10px 12px;
   border: 1px solid #dbe4dd;
@@ -1678,9 +1681,23 @@ body {
 }
 
 .suite-modal input:focus,
-.suite-modal select:focus {
+.suite-modal select:focus,
+.suite-modal textarea:focus {
   border-color: var(--admin-green);
   box-shadow: 0 0 0 4px rgba(31, 107, 58, 0.1);
+}
+
+.suite-modal textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.suite-modal-field-hint {
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .suite-modal .suite-modal-check {

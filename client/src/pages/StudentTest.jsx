@@ -188,13 +188,10 @@ function normalizeLanguage(value) {
   return ["en", "hi", "mr"].includes(base) ? base : "en";
 }
 
-function remapAnswersByQuestionPosition(prevAnswers, previousQuestions, nextQuestions) {
+function remapAnswersByQuestionId(prevAnswers, nextQuestions) {
   const nextAnswers = {};
-  nextQuestions.forEach((question, index) => {
-    const previousQuestion = previousQuestions[index];
-    const answer = previousQuestion && prevAnswers[previousQuestion._id] !== undefined
-      ? prevAnswers[previousQuestion._id]
-      : prevAnswers[question._id];
+  nextQuestions.forEach(question => {
+    const answer = prevAnswers[question._id];
     if (answer !== undefined) nextAnswers[question._id] = answer;
   });
   return nextAnswers;
@@ -214,6 +211,12 @@ export default function StudentTest() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult]         = useState(null);
   const [error, setError]           = useState("");
+  const [translationLoading, setTranslationLoading] = useState(false);
+  const [translationError, setTranslationError] = useState("");
+  const [testStarted, setTestStarted] = useState(false);
+  const [instructionsAccepted, setInstructionsAccepted] = useState(false);
+  const [startingTest, setStartingTest] = useState(false);
+  const [startError, setStartError] = useState("");
   const [showReviewAnswers, setShowReviewAnswers] = useState(false);
   const [blockedResult, setBlockedResult] = useState(null);
 
@@ -227,24 +230,79 @@ export default function StudentTest() {
   const timerRef                      = useRef(null);
   const autoSubmitRef                 = useRef(() => {});
   const answersRef                    = useRef(answers);
-  const questionsRef                  = useRef(questions);
-  const loadedLanguageRef             = useRef(selectedLanguage);
+  const loadedLanguageRef             = useRef("");
+  const lastAttemptedLanguageRef       = useRef("");
+  const languageRequestRef            = useRef(0);
+  const languageAbortRef              = useRef(null);
+  const questionSelectionTokenRef     = useRef("");
   const testStartedAtRef              = useRef(null);
+  const startingTestRef               = useRef(false);
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
-  useEffect(() => { questionsRef.current = questions; }, [questions]);
 
   const loadQuestionsForLanguage = useCallback(async (language) => {
-    const qRes = await axios.get(`${API}/api/questions/${suiteId}/random`, {
-      headers: getAuthHeaders(),
-      params: { language: normalizeLanguage(language) },
-    });
-    const nextQuestions = qRes.data;
-    const previousQuestions = questionsRef.current;
-    setQuestions(nextQuestions);
-    setAnswers(prevAnswers => remapAnswersByQuestionPosition(prevAnswers, previousQuestions, nextQuestions));
-    loadedLanguageRef.current = normalizeLanguage(language);
-    return nextQuestions;
+    const requestedLanguage = normalizeLanguage(language);
+    const requestId = languageRequestRef.current + 1;
+    languageRequestRef.current = requestId;
+    lastAttemptedLanguageRef.current = requestedLanguage;
+    languageAbortRef.current?.abort();
+    const controller = new AbortController();
+    languageAbortRef.current = controller;
+    setTranslationLoading(true);
+    setTranslationError("");
+
+    try {
+      const qRes = await axios.get(`${API}/api/questions/${suiteId}/random`, {
+        headers: getAuthHeaders(),
+        signal: controller.signal,
+        params: {
+          language: requestedLanguage,
+          ...(questionSelectionTokenRef.current
+            ? { selectionToken: questionSelectionTokenRef.current }
+            : {}),
+        },
+      });
+      if (requestId !== languageRequestRef.current) return null;
+
+      const nextQuestions = Array.isArray(qRes.data) ? qRes.data : [];
+      questionSelectionTokenRef.current =
+        nextQuestions[0]?._questionSelectionToken || "";
+      const translationStatus = nextQuestions[0]?._translationStatus || "ready";
+      setQuestions(nextQuestions);
+      setAnswers(prevAnswers =>
+        remapAnswersByQuestionId(prevAnswers, nextQuestions)
+      );
+
+      if (translationStatus === "failed") {
+        setTranslationError(
+          "Translation is temporarily unavailable. The original questions are shown; select Retry to translate them."
+        );
+      } else {
+        loadedLanguageRef.current = requestedLanguage;
+        if (translationStatus === "partial") {
+          setTranslationError(
+            "Some question text could not be translated. You can retry without losing your answers."
+          );
+        }
+      }
+      return nextQuestions;
+    } catch (err) {
+      if (axios.isCancel(err) || err.code === "ERR_CANCELED") return null;
+      if (requestId === languageRequestRef.current) {
+        setTranslationError(
+          err.response?.data?.message ||
+          "Could not translate the questions. Check your connection and retry."
+        );
+      }
+      throw err;
+    } finally {
+      if (languageAbortRef.current === controller) {
+        languageAbortRef.current = null;
+      }
+      if (requestId === languageRequestRef.current) {
+        setTranslationLoading(false);
+      }
+    }
   }, [suiteId]);
 
   useEffect(() => {
@@ -278,6 +336,34 @@ export default function StudentTest() {
   const shouldCheckPreviousAttempt = user.role === "candidate" && Boolean(userSearch);
 
   useEffect(() => {
+    let cancelled = false;
+    languageRequestRef.current += 1;
+    languageAbortRef.current?.abort();
+    questionSelectionTokenRef.current = "";
+    loadedLanguageRef.current = "";
+    lastAttemptedLanguageRef.current = "";
+    startingTestRef.current = false;
+    testStartedAtRef.current = null;
+    clearInterval(timerRef.current);
+    setLoading(true);
+    setSuite(null);
+    setError("");
+    setStartError("");
+    setTestStarted(false);
+    setInstructionsAccepted(false);
+    setStartingTest(false);
+    setSubmitted(false);
+    setSubmitting(false);
+    setResult(null);
+    setBlockedResult(null);
+    setTranslationLoading(false);
+    setTranslationError("");
+    setQuestions([]);
+    setAnswers({});
+    setMarkedForReview([]);
+    setCurrentQuestion(0);
+    setTimeLeft(null);
+
     const fetchData = async () => {
       try {
         const headers = getAuthHeaders();
@@ -289,9 +375,9 @@ export default function StudentTest() {
             : Promise.resolve({ data: [] }),
         ]);
 
+        if (cancelled) return;
         setSuite(suiteRes.data);
 
-        const durationMins = Number(suiteRes.data?.duration) || 30;
         const passing      = suiteRes.data?.passingPercentage ?? 50;
         setPassingPct(passing);
 
@@ -308,36 +394,47 @@ export default function StudentTest() {
           setTimeLeft(null);
           return;
         }
-
-        const qRes = await axios.get(`${API}/api/questions/${suiteId}/random`, {
-          headers,
-          params: { language: loadedLanguageRef.current },
-        });
-        setQuestions(qRes.data);
-        loadedLanguageRef.current = normalizeLanguage(loadedLanguageRef.current);
-        testStartedAtRef.current = new Date();
-        setTimeLeft(durationMins * 60);
       } catch (err) {
+        if (cancelled || axios.isCancel(err) || err.code === "ERR_CANCELED") return;
         console.error("Failed to load test:", err);
         setError("Could not load this test. Please go back and try again.");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     fetchData();
-  }, [suiteId, shouldCheckPreviousAttempt, userId, userSearch]);
+    return () => {
+      cancelled = true;
+      startingTestRef.current = false;
+      languageRequestRef.current += 1;
+      languageAbortRef.current?.abort();
+    };
+  }, [loadQuestionsForLanguage, suiteId, shouldCheckPreviousAttempt, userId, userSearch]);
 
   useEffect(() => {
-    if (loading || submitted || blockedResult || !suite || selectedLanguage === loadedLanguageRef.current) return;
+    if (loading || !testStarted || submitted || blockedResult || !suite) return;
+    if (selectedLanguage === loadedLanguageRef.current) {
+      const returnedToLoadedLanguage =
+        lastAttemptedLanguageRef.current !== selectedLanguage;
+      languageRequestRef.current += 1;
+      languageAbortRef.current?.abort();
+      setTranslationLoading(false);
+      if (returnedToLoadedLanguage) {
+        lastAttemptedLanguageRef.current = selectedLanguage;
+        setTranslationError("");
+      }
+      return;
+    }
+    if (selectedLanguage === lastAttemptedLanguageRef.current) return;
     let cancelled = false;
     loadQuestionsForLanguage(selectedLanguage).catch(err => {
       if (!cancelled) console.error("Failed to switch question language:", err);
     });
     return () => { cancelled = true; };
-  }, [blockedResult, loadQuestionsForLanguage, loading, selectedLanguage, submitted, suite]);
+  }, [blockedResult, loadQuestionsForLanguage, loading, selectedLanguage, submitted, suite, testStarted]);
 
   useEffect(() => {
-    if (timeLeft === null || submitted) return;
+    if (!testStarted || timeLeft === null || submitted) return;
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) { clearInterval(timerRef.current); autoSubmitRef.current(); return 0; }
@@ -346,7 +443,40 @@ export default function StudentTest() {
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
-  }, [timeLeft, submitted]);
+  }, [testStarted, timeLeft, submitted]);
+
+  const handleStartTest = async () => {
+    if (
+      !suite ||
+      !instructionsAccepted ||
+      startingTestRef.current ||
+      testStarted
+    ) {
+      return;
+    }
+
+    startingTestRef.current = true;
+    setStartingTest(true);
+    setStartError("");
+    try {
+      const nextQuestions = await loadQuestionsForLanguage(
+        selectedLanguage
+      );
+      if (!nextQuestions?.length) return;
+
+      testStartedAtRef.current = new Date();
+      setTimeLeft((Number(suite.duration) || 30) * 60);
+      setTestStarted(true);
+    } catch (err) {
+      setStartError(
+        err.response?.data?.message ||
+        "Could not prepare the test. Check your connection and try again."
+      );
+    } finally {
+      startingTestRef.current = false;
+      setStartingTest(false);
+    }
+  };
 
   const handleSelect = (questionId, optionIndex) => {
     if (submitted || blockedResult) return;
@@ -372,6 +502,7 @@ export default function StudentTest() {
   };
 
   const handleSubmitClick = () => {
+    if (!testStarted) return;
     const durationSeconds = (Number(suite?.duration) || 30) * 60;
     const submitDelaySeconds = Math.max(0, Math.min(durationSeconds, (Number(suite?.submitDelayMinutes) || 0) * 60));
     const elapsedSeconds = timeLeft === null ? 0 : Math.max(0, durationSeconds - timeLeft);
@@ -390,9 +521,12 @@ export default function StudentTest() {
   };
 
   const handleSubmitInternal = async (isAuto = false) => {
-    if (blockedResult) return;
+    if (blockedResult || !testStarted) return;
     setShowConfirm(false);
     clearInterval(timerRef.current);
+    languageRequestRef.current += 1;
+    languageAbortRef.current?.abort();
+    setTranslationLoading(false);
     setSubmitting(true);
     try {
       const currentAnswers = isAuto ? answersRef.current : answers;
@@ -497,6 +631,133 @@ export default function StudentTest() {
           <button onClick={() => navigate("/candidate")} style={{ width: "100%", padding: "12px 18px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", cursor: "pointer", fontWeight: "800" }}>
             Back to Tests
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!testStarted) {
+    const instructions = String(suite?.instructions || "").trim();
+    const configuredQuestionCount = suite?.questionSelectionMode === "selected"
+      ? (suite.selectedQuestionIds || []).length
+      : suite?.questionSelectionMode === "random" || suite?.questionsToServe
+        ? Number(suite.questionsToServe) || null
+        : null;
+
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #eee9e0 0%, #f8f5ef 100%)", padding: "28px 16px", fontFamily: "'Segoe UI', sans-serif" }}>
+        <div style={{ maxWidth: "820px", margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "14px", marginBottom: "18px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => navigate("/candidate")}
+              disabled={startingTest}
+              style={{ padding: "10px 15px", border: "1px solid #cad7ce", borderRadius: "10px", background: WHITE, color: GREEN_DARK, cursor: startingTest ? "not-allowed" : "pointer", fontWeight: "800" }}
+            >
+              ← Back to Tests
+            </button>
+            <div style={{ pointerEvents: startingTest ? "none" : "auto", opacity: startingTest ? 0.6 : 1 }}>
+              <LanguageSwitcher className="student-test-language-switcher" />
+            </div>
+          </div>
+
+          <section style={{ overflow: "hidden", border: "1px solid #d8e5db", borderRadius: "24px", background: WHITE, boxShadow: "0 20px 55px rgba(31, 77, 48, 0.10)" }}>
+            <div style={{ padding: "30px clamp(22px, 5vw, 48px)", background: "linear-gradient(135deg, #1a3d28, #2d5f3f)", color: WHITE }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "6px 11px", borderRadius: "999px", background: "rgba(255,255,255,0.12)", fontSize: "12px", fontWeight: "800", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                Before you begin
+              </div>
+              <h1 style={{ margin: "15px 0 8px", fontSize: "clamp(28px, 5vw, 42px)", lineHeight: 1.15 }}>
+                {suite?.name || "Test Instructions"}
+              </h1>
+              {suite?.description && (
+                <p style={{ maxWidth: "650px", margin: 0, color: "rgba(255,255,255,0.82)", lineHeight: 1.55 }}>
+                  {suite.description}
+                </p>
+              )}
+            </div>
+
+            <div style={{ padding: "clamp(22px, 5vw, 44px)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px", marginBottom: "26px" }}>
+                <div style={{ padding: "14px 16px", border: "1px solid #e0e9e2", borderRadius: "12px", background: "#f8fbf8" }}>
+                  <span style={{ display: "block", color: "#7a857e", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>Duration</span>
+                  <strong style={{ display: "block", marginTop: "5px", color: GREEN_DARK, fontSize: "18px" }}>{suite?.duration || 30} minutes</strong>
+                </div>
+                <div style={{ padding: "14px 16px", border: "1px solid #e0e9e2", borderRadius: "12px", background: "#f8fbf8" }}>
+                  <span style={{ display: "block", color: "#7a857e", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>Passing Criteria</span>
+                  <strong style={{ display: "block", marginTop: "5px", color: GREEN_DARK, fontSize: "18px" }}>{suite?.passingPercentage ?? 50}%</strong>
+                </div>
+                {configuredQuestionCount ? (
+                  <div style={{ padding: "14px 16px", border: "1px solid #e0e9e2", borderRadius: "12px", background: "#f8fbf8" }}>
+                    <span style={{ display: "block", color: "#7a857e", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>Questions</span>
+                    <strong style={{ display: "block", marginTop: "5px", color: GREEN_DARK, fontSize: "18px" }}>{configuredQuestionCount}</strong>
+                  </div>
+                ) : null}
+              </div>
+
+              <h2 style={{ margin: "0 0 12px", color: GREEN_DARK, fontSize: "21px" }}>Instructions</h2>
+              <div
+                style={{
+                  minHeight: "130px",
+                  padding: "20px",
+                  border: "1px solid #d9e5dc",
+                  borderRadius: "14px",
+                  background: "#fbfcfa",
+                  color: "#33423a",
+                  fontSize: "15px",
+                  lineHeight: 1.7,
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {instructions || "No additional instructions have been provided for this test. Review the test details above and begin only when you are ready."}
+              </div>
+
+              <div style={{ marginTop: "18px", padding: "14px 16px", borderRadius: "12px", background: "#fff8e8", color: "#76520b", fontSize: "13px", lineHeight: 1.55 }}>
+                The questions and countdown timer will begin only after you confirm the instructions and select Start Test.
+              </div>
+
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginTop: "22px", padding: "16px", border: `1px solid ${instructionsAccepted ? "#6fb187" : "#d8e2da"}`, borderRadius: "13px", background: instructionsAccepted ? "#f0faf4" : WHITE, color: GREEN_DARK, cursor: startingTest ? "wait" : "pointer", fontWeight: "800", lineHeight: 1.45 }}>
+                <input
+                  type="checkbox"
+                  checked={instructionsAccepted}
+                  disabled={startingTest}
+                  onChange={event => {
+                    setInstructionsAccepted(event.target.checked);
+                    setStartError("");
+                  }}
+                  style={{ width: "20px", height: "20px", marginTop: "1px", flex: "0 0 auto", accentColor: GREEN }}
+                />
+                <span>I have read and understood all the instructions carefully and I am ready to begin the test.</span>
+              </label>
+
+              {startError && (
+                <div role="alert" style={{ marginTop: "14px", padding: "11px 14px", border: "1px solid #fecaca", borderRadius: "10px", background: "#fef2f2", color: "#b91c1c", fontSize: "13px", fontWeight: "700" }}>
+                  {startError}
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={!instructionsAccepted || startingTest}
+                onClick={handleStartTest}
+                style={{
+                  width: "100%",
+                  marginTop: "18px",
+                  padding: "15px 20px",
+                  border: "none",
+                  borderRadius: "12px",
+                  background: !instructionsAccepted || startingTest ? "#aab4ad" : "linear-gradient(180deg, #2d6d47, #1a5333)",
+                  color: WHITE,
+                  cursor: !instructionsAccepted || startingTest ? "not-allowed" : "pointer",
+                  fontSize: "16px",
+                  fontWeight: "900",
+                  boxShadow: !instructionsAccepted || startingTest ? "none" : "0 12px 24px rgba(31, 107, 58, 0.18)",
+                }}
+              >
+                {startingTest ? "Preparing Test…" : "Start Test"}
+              </button>
+            </div>
+          </section>
         </div>
       </div>
     );
@@ -787,12 +1048,59 @@ export default function StudentTest() {
           <span style={{ fontSize:"12px", color:"#888" }}>{answeredCount} / {questions.length} Answered</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:"12px", flexWrap:"wrap", justifyContent:"flex-end" }}>
+          {translationLoading && (
+            <span role="status" style={{ color:"#6b7280", fontSize:"12px", fontWeight:"700" }}>
+              Translating questions...
+            </span>
+          )}
           <LanguageSwitcher className="student-test-language-switcher" />
           <div style={{ background: isLowTime ? "#fee2e2" : "#f0faf5", padding:"8px 16px", borderRadius:"999px", color: isLowTime ? "#dc2626" : GREEN, fontWeight:"bold" }}>
             {formatTime(timeLeft)}
           </div>
         </div>
       </div>
+
+      {translationError && (
+        <div
+          role="alert"
+          style={{
+            maxWidth: "1100px",
+            margin: "14px auto 0",
+            padding: "11px 16px",
+            border: "1px solid #f1c27d",
+            borderRadius: "12px",
+            background: "#fff7e6",
+            color: "#7c4a03",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          <span>{translationError}</span>
+          <button
+            type="button"
+            disabled={translationLoading}
+            onClick={() => {
+              loadQuestionsForLanguage(selectedLanguage).catch(err => {
+                console.error("Failed to retry question translation:", err);
+              });
+            }}
+            style={{
+              padding: "7px 12px",
+              border: "1px solid #c57a13",
+              borderRadius: "8px",
+              background: WHITE,
+              color: "#7c4a03",
+              cursor: translationLoading ? "wait" : "pointer",
+              fontWeight: "800",
+            }}
+          >
+            {translationLoading ? "Retrying..." : "Retry translation"}
+          </button>
+        </div>
+      )}
 
       {/* Main Layout */}
       <div className="student-test-layout" style={{ maxWidth:"1100px", margin:"24px auto", padding:"0 16px 120px", display:"flex", gap:"24px", alignItems:"flex-start" }}>

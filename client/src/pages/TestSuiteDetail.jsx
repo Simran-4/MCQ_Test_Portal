@@ -224,6 +224,9 @@ export default function TestSuiteDetail() {
   const [submitDelayVal, setSubmitDelayVal] = useState(0);
   const [showResultsAfterSubmission, setShowResultsAfterSubmission] = useState(true);
   const [savingDur, setSavingDur]       = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [instructionsVal, setInstructionsVal] = useState("");
+  const [savingInstructions, setSavingInstructions] = useState(false);
 
   // Feature 5: Questions to serve
   const [showQtsServe, setShowQtsServe]   = useState(false);
@@ -279,6 +282,7 @@ export default function TestSuiteDetail() {
       setDurationVal(suiteRes.data.duration || 30);
       setSubmitDelayVal(suiteRes.data.submitDelayMinutes || 0);
       setShowResultsAfterSubmission(suiteRes.data.showResultsAfterSubmission !== false);
+      setInstructionsVal(suiteRes.data.instructions || "");
       setQuestionMode(suiteRes.data.questionSelectionMode || (suiteRes.data.selectedQuestionIds?.length ? "selected" : suiteRes.data.questionsToServe ? "random" : "all"));
       setSelectedQuestionIds((suiteRes.data.selectedQuestionIds || []).map(id => String(id?._id || id)));
       setQtsServeVal(suiteRes.data.questionsToServe || "");
@@ -448,6 +452,29 @@ export default function TestSuiteDetail() {
       alert("Duration, submit timing, and result visibility saved!");
     } catch { alert("Failed to save duration"); }
     finally { setSavingDur(false); }
+  };
+
+  const handleSaveInstructions = async () => {
+    if (instructionsVal.length > 10000) {
+      return alert("Test instructions cannot exceed 10,000 characters.");
+    }
+    setSavingInstructions(true);
+    try {
+      const instructions = instructionsVal.trim();
+      await axios.put(
+        `${API}/api/test-suites/${suiteId}`,
+        { instructions },
+        { headers: getAuthHeaders() }
+      );
+      setSuite(prev => ({ ...prev, instructions }));
+      setInstructionsVal(instructions);
+      setShowInstructions(false);
+      alert("Test instructions saved.");
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to save test instructions.");
+    } finally {
+      setSavingInstructions(false);
+    }
   };
 
   const toggleSelectedQuestion = (questionId) => {
@@ -947,6 +974,10 @@ export default function TestSuiteDetail() {
                 style={{ padding: "10px 20px", background: WHITE, color: suite.showResultsAfterSubmission === false ? "#b91c1c" : "#166534", border: "1px solid #bbf7d0", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
                 Show result option ({suite.showResultsAfterSubmission === false ? "off" : "on"})
               </button>
+              <button onClick={() => setShowInstructions(s => !s)}
+                style={{ padding: "10px 20px", background: WHITE, color: "#0f766e", border: "1px solid #99f6e4", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                Test instructions ({suite.instructions?.trim() ? "added" : "not added"})
+              </button>
               <button onClick={() => setShowPassing(s => !s)}
                 style={{ padding: "10px 20px", background: WHITE, color: "#166534", border: "1px solid #86efac", borderRadius: "22px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
                 ✅ Passing criteria ({suite.passingPercentage ?? 50}%)
@@ -973,6 +1004,50 @@ export default function TestSuiteDetail() {
             View results
           </button>
         </div>
+
+        {showInstructions && (
+          <div style={{ background: WHITE, border: "1px solid #99f6e4", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: "700", color: "#115e59", marginTop: 0, marginBottom: "6px" }}>
+              Test Instructions
+            </h2>
+            <p style={{ fontSize: "13px", color: "#66736a", margin: "0 0 14px", lineHeight: 1.5 }}>
+              These instructions are shown to candidates before questions load or the test timer starts.
+            </p>
+            <textarea
+              rows={8}
+              maxLength={10000}
+              value={instructionsVal}
+              onChange={e => setInstructionsVal(e.target.value)}
+              placeholder={"Write the instructions candidates must read before starting.\nUse a new line for each point."}
+              style={{ ...inputStyle, minHeight: "180px", resize: "vertical", lineHeight: 1.55 }}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap", marginTop: "10px" }}>
+              <span style={{ color: "#6b7280", fontSize: "12px" }}>
+                Plain text only. {instructionsVal.length.toLocaleString("en-IN")} / 10,000 characters
+              </span>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInstructionsVal(suite.instructions || "");
+                    setShowInstructions(false);
+                  }}
+                  style={{ padding: "10px 16px", background: WHITE, color: "#555", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveInstructions}
+                  disabled={savingInstructions}
+                  style={{ padding: "10px 20px", background: "#0f766e", color: WHITE, border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: savingInstructions ? "wait" : "pointer", opacity: savingInstructions ? 0.6 : 1 }}
+                >
+                  {savingInstructions ? "Saving…" : "Save Instructions"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="suite-question-search-panel" style={{ background: WHITE, border: "1px solid #d8e9df", borderRadius: "16px", padding: "14px 16px", marginBottom: "20px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
           <input

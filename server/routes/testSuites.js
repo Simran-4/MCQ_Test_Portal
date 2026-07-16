@@ -13,10 +13,14 @@ const { hasAdminPermission } = require("../utils/adminPermissions");
 const {
   getEffectiveQuestionCount,
   resolveQuestionSelectionMode,
-  selectQuestionsForSuite,
 } = require("../utils/questionSelection");
-const { questionsForLanguage, translateQuestionsIfNeeded } = require("../utils/questionLanguage");
+const {
+  questionsForLanguage,
+  selectQuestionsForLanguage,
+  translateQuestionsWithStatus,
+} = require("../utils/questionLanguage");
 const { canAccessSuite } = require("../utils/suiteAccess");
+const { normalizeTestInstructions } = require("../utils/testInstructions");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -137,6 +141,9 @@ function normalizePassingPercentage(value, fallback = 50) {
 
 function sanitizeSuiteUpdatePayload(body) {
   const payload = { ...body };
+  if (payload.instructions !== undefined) {
+    payload.instructions = normalizeTestInstructions(payload.instructions);
+  }
   if (payload.passingPercentage !== undefined) {
     payload.passingPercentage = normalizePassingPercentage(payload.passingPercentage);
   }
@@ -190,9 +197,11 @@ function sanitizeSuiteUpdatePayload(body) {
 function suiteToObject(suite) {
   const data = typeof suite?.toObject === "function" ? suite.toObject() : { ...(suite || {}) };
   return {
+    instructions: "",
     submitDelayMinutes: 0,
     showResultsAfterSubmission: true,
     ...data,
+    instructions: typeof data.instructions === "string" ? data.instructions : "",
     submitDelayMinutes: Number(data.submitDelayMinutes) > 0 ? Math.floor(Number(data.submitDelayMinutes)) : 0,
     showResultsAfterSubmission: data.showResultsAfterSubmission !== false,
   };
@@ -202,7 +211,18 @@ function readOptionalUser(req) {
   const authHeader = req.header("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
   try {
-    return jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET || "snehalaya2024");
+    const payload = jwt.verify(
+      authHeader.split(" ")[1],
+      process.env.JWT_SECRET || "snehalaya2024",
+      { algorithms: ["HS256"] }
+    );
+    if (
+      !payload?.id ||
+      !["candidate", "admin", "superadmin"].includes(payload.role)
+    ) {
+      return null;
+    }
+    return { ...payload, id: String(payload.id) };
   } catch {
     return null;
   }
@@ -303,9 +323,10 @@ router.get("/:id/questions", async (req, res) => {
     const requestedLanguage = req.query.language || req.query.lang;
     const questions = await Question.find({ testSuite: req.params.id }).sort({ createdAt: 1, _id: 1 });
     const visibleQuestions = user?.role === "candidate"
-      ? selectQuestionsForSuite(suite, questions)
+      ? selectQuestionsForLanguage(suite, questions, requestedLanguage)
       : questionsForLanguage(questions, requestedLanguage);
-    res.json(await translateQuestionsIfNeeded(visibleQuestions, requestedLanguage));
+    const translated = await translateQuestionsWithStatus(visibleQuestions, requestedLanguage);
+    res.json(translated.questions);
   } catch (err) {
     console.error("Suite questions error:", err);
     res.status(500).json({ message: "Error fetching questions" });
@@ -500,10 +521,19 @@ router.get("/", async (req, res) => {
 // ── CREATE NEW SUITE ──────────────────────────────────────────
 router.post("/", authMiddleware, requireAdminFeature("canManageSuites", "Test suite management access denied"), async (req, res) => {
   try {
-    const { name, description, status, passingPercentage, scoringMode, showResultsAfterSubmission } = req.body;
+    const {
+      name,
+      description,
+      instructions,
+      status,
+      passingPercentage,
+      scoringMode,
+      showResultsAfterSubmission,
+    } = req.body;
     const newSuite = new TestSuite({
       name,
       description,
+      instructions: normalizeTestInstructions(instructions),
       status: status || "draft",
       passingPercentage: normalizePassingPercentage(passingPercentage),
       showResultsAfterSubmission: showResultsAfterSubmission !== false,
@@ -513,7 +543,9 @@ router.post("/", authMiddleware, requireAdminFeature("canManageSuites", "Test su
     res.status(201).json(savedSuite);
   } catch (err) {
     console.error("Create Suite Error:", err);
-    res.status(500).json({ message: "Error creating test suite" });
+    res.status(err.statusCode || 500).json({
+      message: err.statusCode ? err.message : "Error creating test suite",
+    });
   }
 });
 
@@ -582,7 +614,9 @@ router.put("/:id", authMiddleware, requireAdminFeature("canManageSuites", "Test 
     if (!updatedSuite) return res.status(404).json({ message: "Suite not found" });
     res.json(suiteToObject(updatedSuite));
   } catch (err) {
-    res.status(500).json({ message: "Error updating suite" });
+    res.status(err.statusCode || 500).json({
+      message: err.statusCode ? err.message : "Error updating suite",
+    });
   }
 });
 

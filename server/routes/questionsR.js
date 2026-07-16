@@ -1,13 +1,23 @@
 const express  = require("express");
 const router   = express.Router();
+const crypto = require("crypto");
 const Question = require("../models/Question");
 const TestSuite = require("../models/TestSuite");
 const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
 const jwt = require("jsonwebtoken");
 const { hasAdminPermission } = require("../utils/adminPermissions");
-const { selectQuestionsForSuite } = require("../utils/questionSelection");
-const { selectQuestionsForLanguage, translateQuestionsIfNeeded } = require("../utils/questionLanguage");
+const { resolveQuestionSelectionMode } = require("../utils/questionSelection");
+const {
+  candidateSourceQuestions,
+  selectQuestionsForLanguage,
+  translateQuestionsWithStatus,
+} = require("../utils/questionLanguage");
+const {
+  createQuestionSelectionToken,
+  questionSelectionFingerprint,
+  readQuestionSelectionSeed,
+} = require("../utils/questionSelectionToken");
 const { canAccessSuite } = require("../utils/suiteAccess");
 
 const requireAdminOrSuperAdmin = (req, res, next) => {
@@ -66,7 +76,18 @@ function readOptionalUser(req) {
   const authHeader = req.header("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
   try {
-    return jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET || "snehalaya2024");
+    const payload = jwt.verify(
+      authHeader.split(" ")[1],
+      process.env.JWT_SECRET || "snehalaya2024",
+      { algorithms: ["HS256"] }
+    );
+    if (
+      !payload?.id ||
+      !["candidate", "admin", "superadmin"].includes(payload.role)
+    ) {
+      return null;
+    }
+    return { ...payload, id: String(payload.id) };
   } catch {
     return null;
   }
@@ -213,12 +234,51 @@ router.get("/:suiteId/random", async (req, res) => {
       return res.status(404).json({ message: "No questions found for this suite" });
 
     const requestedLanguage = req.query.language || req.query.lang;
-    const selectedQuestions = selectQuestionsForLanguage(suite, questions, requestedLanguage);
-    const responseQuestions = selectedQuestions.length > 0 ? selectedQuestions : selectQuestionsForSuite(suite, questions);
-    res.json(await translateQuestionsIfNeeded(responseQuestions, requestedLanguage));
+    const selectionMode = resolveQuestionSelectionMode(suite);
+    let selectionSeed = "";
+    let selectionToken = "";
+
+    if (selectionMode === "random") {
+      const selectionBank = candidateSourceQuestions(questions);
+      const fingerprint = questionSelectionFingerprint(suite, selectionBank);
+      selectionSeed = readQuestionSelectionSeed({
+        token: req.query.selectionToken,
+        suiteId: req.params.suiteId,
+        userId: user?.id,
+        fingerprint,
+      }) || crypto.randomUUID();
+      selectionToken = createQuestionSelectionToken({
+        suiteId: req.params.suiteId,
+        userId: user?.id,
+        seed: selectionSeed,
+        fingerprint,
+      });
+    }
+
+    const selectedQuestions = selectQuestionsForLanguage(
+      suite,
+      questions,
+      requestedLanguage,
+      selectionSeed
+    );
+    if (!selectedQuestions.length) {
+      return res.status(404).json({ message: "No configured questions are available for this test" });
+    }
+
+    const translated = await translateQuestionsWithStatus(
+      selectedQuestions,
+      requestedLanguage
+    );
+    res.json(translated.questions.map((question, index) =>
+      index === 0 && selectionToken
+        ? { ...question, _questionSelectionToken: selectionToken }
+        : question
+    ));
   } catch (err) {
     console.error("Random questions error:", err);
-    res.status(500).json({ message: "Error fetching questions" });
+    res.status(err.statusCode || 500).json({
+      message: err.statusCode ? err.message : "Error fetching questions",
+    });
   }
 });
 

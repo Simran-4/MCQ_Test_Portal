@@ -10,10 +10,28 @@ function resolveQuestionSelectionMode(suite) {
   return "all";
 }
 
-function shuffleQuestions(questions) {
+function createSeededRandom(seed) {
+  let state = 2166136261;
+  const text = String(seed || "");
+  for (let index = 0; index < text.length; index += 1) {
+    state ^= text.charCodeAt(index);
+    state = Math.imul(state, 16777619);
+  }
+  state >>>= 0;
+
+  return () => {
+    state += 0x6D2B79F5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffleQuestions(questions, random = Math.random) {
   const shuffled = [...questions];
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
@@ -29,10 +47,10 @@ function questionCategories(question) {
   return [];
 }
 
-function selectBalancedRandomQuestions(questions, limit) {
+function selectBalancedRandomQuestions(questions, limit, random = Math.random) {
   const categorizedGroups = new Map();
   const uncategorized = [];
-  const shuffledQuestions = shuffleQuestions(questions);
+  const shuffledQuestions = shuffleQuestions(questions, random);
 
   shuffledQuestions.forEach(question => {
     const categories = questionCategories(question);
@@ -51,17 +69,17 @@ function selectBalancedRandomQuestions(questions, limit) {
     // its categories, preventing every such question from biasing category[0].
     const smallestSize = Math.min(...categories.map(category => categorizedGroups.get(category).length));
     const leastFilled = categories.filter(category => categorizedGroups.get(category).length === smallestSize);
-    const assignedCategory = leastFilled[Math.floor(Math.random() * leastFilled.length)];
+    const assignedCategory = leastFilled[Math.floor(random() * leastFilled.length)];
     categorizedGroups.get(assignedCategory).push(question);
   });
 
   const groups = Array.from(categorizedGroups.entries())
-    .map(([category, items]) => ({ category, items: shuffleQuestions(items), cursor: 0 }))
+    .map(([category, items]) => ({ category, items: shuffleQuestions(items, random), cursor: 0 }))
     .filter(group => group.items.length > 0);
 
-  if (groups.length < 2) return shuffleQuestions(questions).slice(0, limit);
+  if (groups.length < 2) return shuffleQuestions(questions, random).slice(0, limit);
 
-  const shuffledGroups = shuffleQuestions(groups);
+  const shuffledGroups = shuffleQuestions(groups, random);
   const selected = [];
   const selectedIds = new Set();
 
@@ -93,10 +111,10 @@ function selectBalancedRandomQuestions(questions, limit) {
     });
   }
 
-  return shuffleQuestions(selected).slice(0, limit);
+  return shuffleQuestions(selected, random).slice(0, limit);
 }
 
-function selectQuestionsForSuite(suite, questions) {
+function selectQuestionsForSuite(suite, questions, randomSeed = "") {
   const mode = resolveQuestionSelectionMode(suite);
   if (mode === "selected") {
     const selectedIds = (suite?.selectedQuestionIds || []).map(id => String(id));
@@ -106,7 +124,10 @@ function selectQuestionsForSuite(suite, questions) {
 
   if (mode === "random") {
     const limit = Number(suite?.questionsToServe);
-    if (limit > 0 && limit < questions.length) return selectBalancedRandomQuestions(questions, limit);
+    if (limit > 0 && limit < questions.length) {
+      const random = randomSeed ? createSeededRandom(randomSeed) : Math.random;
+      return selectBalancedRandomQuestions(questions, limit, random);
+    }
   }
 
   return questions;
@@ -125,6 +146,7 @@ function getEffectiveQuestionCount(suite, totalQuestionCount) {
 }
 
 module.exports = {
+  createSeededRandom,
   getEffectiveQuestionCount,
   resolveQuestionSelectionMode,
   selectQuestionsForSuite,

@@ -17,7 +17,8 @@ function isWithinAvailabilityWindow(suite, now = new Date()) {
 
 function canAccessSuite(suite, user) {
   if (!suite || suite.deletedAt) return false;
-  if (user && user.role !== "candidate") return true;
+  if (user && ["admin", "superadmin"].includes(user.role)) return true;
+  if (user && user.role !== "candidate") return false;
   if (suite.status !== "active" || !isWithinAvailabilityWindow(suite)) return false;
   if (!user) return suite.isPublic !== false;
   if (suite.isPublic !== false) return true;
