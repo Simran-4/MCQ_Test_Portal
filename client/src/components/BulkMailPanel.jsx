@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
+import { registerPathForNext } from "../utils/authRedirect";
 
 const API = import.meta.env.VITE_API_URL || "";
 
@@ -60,7 +61,9 @@ export default function BulkMailPanel({ compact = false }) {
   const projects = useMemo(() => [...new Set(users.map(user => user.project).filter(Boolean))].sort(), [users]);
   const roles = useMemo(() => [...new Set(users.map(user => user.customRole || user.role).filter(Boolean))].sort(), [users]);
   const selectedSuite = suites.find(suite => suite._id === suiteId);
-  const testUrl = selectedSuite ? `${window.location.origin}/test/${selectedSuite._id}` : "";
+  const testUrl = selectedSuite
+    ? new URL(registerPathForNext(`/test/${selectedSuite._id}`), window.location.origin).href
+    : "";
 
   const filteredUsers = users.filter(user => {
     const displayRole = user.customRole || user.role;

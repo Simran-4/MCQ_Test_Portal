@@ -10,6 +10,7 @@ import { downloadCanvasTablePdf } from "../utils/canvasTablePdf";
 import * as XLSX from "xlsx";
 import "./dashboard.css";
 import { canAdmin, getAuthHeaders } from "../utils/auth";
+import { registerPathForNext } from "../utils/authRedirect";
 import BulkMailPanel from "../components/BulkMailPanel";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 
@@ -1353,9 +1354,12 @@ export default function Dashboard() {
 
   const handleCopyLink = (suiteId, e) => {
     e.stopPropagation();
-    const url = `${window.location.origin}/test/${suiteId}`;
+    const url = new URL(
+      registerPathForNext(`/test/${suiteId}`),
+      window.location.origin,
+    ).href;
     navigator.clipboard.writeText(url)
-      .then(() => alert("Test link copied. Candidates will log in or register first, then start this test directly."))
+      .then(() => alert("Registration link copied. Candidates will register first, then continue to this test. Existing candidates can use the Login link."))
       .catch(() => alert(`Share this link: ${url}`));
   };
 
