@@ -14,7 +14,8 @@ app.use(cors({
   origin: function(origin, callback) {
     const isLocalhost = origin && origin.includes("localhost");
     const isCloudJiffyApp = origin && /^https?:\/\/([a-z0-9-]+\.)?cloudjiffy\.net$/i.test(origin);
-    if (!origin || allowedOrigins.includes(origin) || isLocalhost || isCloudJiffyApp) {
+    const isSnehalayaCrmDomain = origin && /^https?:\/\/([a-z0-9-]+\.)?snehalayacrm\.org$/i.test(origin);
+    if (!origin || allowedOrigins.includes(origin) || isLocalhost || isCloudJiffyApp || isSnehalayaCrmDomain) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
