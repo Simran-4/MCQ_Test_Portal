@@ -614,6 +614,76 @@ body.superadmin-dashboard-page #root {
   flex: 1;
 }
 
+.role-management-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e1ebe5;
+}
+
+.role-management-list > strong {
+  color: var(--admin-primary-dark);
+  font-size: 13px;
+}
+
+.role-management-empty {
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.role-management-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid #dce8df;
+  border-radius: 8px;
+  background: #f8fbf9;
+}
+
+.role-management-item > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.role-management-item span,
+.role-management-item small {
+  overflow-wrap: anywhere;
+}
+
+.role-management-item span {
+  color: var(--admin-primary-dark);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.role-management-item small {
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.control-panel .role-delete-button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid #efb2b2;
+  background: #fff1f1;
+  color: #a71919;
+  box-shadow: none;
+}
+
+.control-panel .role-delete-button:hover:not(:disabled) {
+  border-color: #dc2626;
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
 .control-form-grid input,
 .control-form-grid select {
   margin-bottom: 0;
@@ -933,6 +1003,30 @@ body.superadmin-dashboard-page #root {
   font-size: 10px;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.custom-right-delete {
+  margin-left: 8px;
+  padding: 3px 8px;
+  border: 1px solid #f3b7b7;
+  border-radius: 6px;
+  background: #fff1f1;
+  color: #a71919;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.custom-right-delete:hover {
+  border-color: #dc2626;
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.custom-right-delete:focus-visible {
+  outline: 2px solid #dc2626;
+  outline-offset: 2px;
 }
 
 .rights-table-wrap {

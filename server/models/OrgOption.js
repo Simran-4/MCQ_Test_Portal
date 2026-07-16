@@ -1,2 +1,6 @@
 const { createModel } = require("./postgresModel");
-module.exports = createModel("OrgOption", { key: "default", projects: [] });
+module.exports = createModel("OrgOption", {
+  key: "default",
+  projects: [],
+  defaultsSeeded: false,
+});

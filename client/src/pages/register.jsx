@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { apiProjectsToMap, defaultOrgOptions, mergeOrgOptions, readLocalOrgOptions } from "../utils/orgOptions";
+import { defaultOrgOptions, syncApiOrgOptions } from "../utils/orgOptions";
 import { getSafeNextPath, loginPathForNext } from "../utils/authRedirect";
 
 const GREEN      = "#2D5F3F";
@@ -58,15 +58,37 @@ function Register() {
 
   useEffect(() => {
     let ignore = false;
-    axios.get(`${API}/api/auth/org-options`)
-      .then(res => {
-        if (!ignore) {
-          setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
-        }
-      })
-      .catch(() => {});
-    return () => { ignore = true; };
+    const loadOrgOptions = () => {
+      axios.get(`${API}/api/auth/org-options`)
+        .then(res => {
+          if (!ignore) {
+            setOrgOptions(syncApiOrgOptions(res.data));
+          }
+        })
+        .catch(() => {});
+    };
+    loadOrgOptions();
+    window.addEventListener("focus", loadOrgOptions);
+    return () => {
+      ignore = true;
+      window.removeEventListener("focus", loadOrgOptions);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!project) {
+      if (designation) setDesignation("");
+      return;
+    }
+    if (!Object.prototype.hasOwnProperty.call(orgOptions, project)) {
+      setProject("");
+      setDesignation("");
+      return;
+    }
+    if (designation && !orgOptions[project].includes(designation)) {
+      setDesignation("");
+    }
+  }, [orgOptions, project, designation]);
 
   const verifyEmail = async (value = email) => {
     const normalized = String(value || "").trim().toLowerCase();

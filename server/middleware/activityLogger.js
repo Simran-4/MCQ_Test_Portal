@@ -39,6 +39,7 @@ function actionLabel(req) {
   if (path.includes("/superadmin/roles")) {
     if (method === "POST") return "Created role";
     if (method === "PUT" || method === "PATCH") return "Updated role";
+    if (method === "DELETE") return "Deleted role";
   }
   if (path.includes("/org-options/projects")) {
     if (method === "POST") return `Added project/department${targetName ? `: ${targetName}` : ""}`;

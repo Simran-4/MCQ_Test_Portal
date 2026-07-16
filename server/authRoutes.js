@@ -239,12 +239,172 @@ async function updateUserFromPayload(userId, payload, requesterId) {
     return { user };
 }
 
-async function getOrgOptionsDoc() {
-    return OrgOption.findOneAndUpdate(
-        { key: "default" },
-        { $setOnInsert: { key: "default", projects: [] } },
-        { upsert: true, new: true }
+const ORG_OPTIONS_DOCUMENT_ID = "00000000-0000-4000-8000-000000000001";
+let defaultOrgProjectsPromise;
+
+async function getDefaultOrgProjects() {
+    if (!defaultOrgProjectsPromise) {
+        defaultOrgProjectsPromise = import("./data/projectDepartments.mjs")
+            .then(({ PROJECT_DEPARTMENTS }) => Object.entries(PROJECT_DEPARTMENTS).map(([name, departments]) => ({
+                name,
+                departments: [...departments],
+            })))
+            .catch(err => {
+                defaultOrgProjectsPromise = null;
+                throw err;
+            });
+    }
+    return defaultOrgProjectsPromise;
+}
+
+function normalizeOrgProjects(projects) {
+    const normalizedProjects = [];
+    const projectIndexes = new Map();
+
+    (Array.isArray(projects) ? projects : []).forEach(project => {
+        const name = String(project?.name || "").trim();
+        if (!name) return;
+        const departments = Array.isArray(project.departments)
+            ? project.departments.map(item => String(item || "").trim()).filter(Boolean)
+            : [];
+        const projectKey = name.toLowerCase();
+        const existingIndex = projectIndexes.get(projectKey);
+
+        if (existingIndex === undefined) {
+            projectIndexes.set(projectKey, normalizedProjects.length);
+            normalizedProjects.push({ name, departments: [] });
+        }
+
+        const targetIndex = projectIndexes.get(projectKey);
+        const existingProject = normalizedProjects[targetIndex];
+        const departmentNames = new Set(existingProject.departments.map(item => item.toLowerCase()));
+        departments.forEach(department => {
+            if (!departmentNames.has(department.toLowerCase())) {
+                existingProject.departments.push(department);
+                departmentNames.add(department.toLowerCase());
+            }
+        });
+    });
+
+    return normalizedProjects;
+}
+
+function mergeOrgProjects(defaultProjects, storedProjects) {
+    return normalizeOrgProjects([
+        ...defaultProjects,
+        ...(Array.isArray(storedProjects) ? storedProjects : []),
+    ]);
+}
+
+function storedProjectsAreAuthoritative(defaultProjects, storedProjects) {
+    const defaultNames = new Set(defaultProjects.map(project => project.name.toLowerCase()));
+    const storedNames = new Set(
+        normalizeOrgProjects(storedProjects).map(project => project.name.toLowerCase())
     );
+    const matchingDefaultProjects = [...storedNames].filter(name => defaultNames.has(name)).length;
+
+    // A broad imported snapshot may already contain intentional renames/deletions.
+    // Sparse legacy records only contained additions layered over client defaults.
+    return matchingDefaultProjects >= Math.ceil(defaultNames.size / 2);
+}
+
+async function getOrgOptionsDoc() {
+    const defaultProjects = await getDefaultOrgProjects();
+    let doc = await OrgOption.findById(ORG_OPTIONS_DOCUMENT_ID);
+    if (!doc) doc = await OrgOption.findOne({ key: "default" });
+
+    if (!doc) {
+        return OrgOption.create({
+            _id: ORG_OPTIONS_DOCUMENT_ID,
+            key: "default",
+            projects: normalizeOrgProjects(defaultProjects),
+            defaultsSeeded: true,
+        });
+    }
+
+    if (!doc.defaultsSeeded) {
+        const storedProjects = normalizeOrgProjects(doc.projects);
+        doc.projects = storedProjectsAreAuthoritative(defaultProjects, storedProjects)
+            ? storedProjects
+            : mergeOrgProjects(defaultProjects, storedProjects);
+        doc.defaultsSeeded = true;
+        delete doc.$setOnInsert;
+        await doc.save();
+    }
+
+    return doc;
+}
+
+async function resolveOrgSelection(projectName, designationName) {
+    const requestedProject = String(projectName || "").trim();
+    const requestedDesignation = String(designationName || "").trim();
+    if (!requestedProject || !requestedDesignation) {
+        return { error: "Select a project/department and designation" };
+    }
+
+    const doc = await getOrgOptionsDoc();
+    const project = doc.projects.find(
+        item => item.name.toLowerCase() === requestedProject.toLowerCase()
+    );
+    if (!project) return { error: "Selected project/department is no longer available" };
+
+    const designation = project.departments.find(
+        item => item.toLowerCase() === requestedDesignation.toLowerCase()
+    );
+    if (!designation) return { error: "Selected designation is no longer available" };
+
+    return { project: project.name, designation };
+}
+
+async function migrateDesignationReferences(projectName, currentDepartment, nextDepartment) {
+    const projectKey = projectName.toLowerCase();
+    const currentKey = currentDepartment.toLowerCase();
+    const nextKey = nextDepartment.toLowerCase();
+    const users = await User.find();
+
+    await Promise.all(users.map(async user => {
+        let changed = false;
+        if (
+            String(user.project || "").toLowerCase() === projectKey &&
+            String(user.designation || "").toLowerCase() === currentKey
+        ) {
+            user.designation = nextDepartment;
+            changed = true;
+        }
+
+        const rawPermissions = user.adminPermissions;
+        const scopeProjects = Array.isArray(rawPermissions?.scopeProjects)
+            ? rawPermissions.scopeProjects
+            : [];
+        const scopeDepartments = Array.isArray(rawPermissions?.scopeDepartments)
+            ? rawPermissions.scopeDepartments
+            : [];
+        const scopeCoversProject = scopeProjects.length === 0 ||
+            scopeProjects.some(item => String(item || "").toLowerCase() === projectKey);
+        const includesCurrentDepartment = scopeDepartments.some(
+            item => String(item || "").toLowerCase() === currentKey
+        );
+
+        if (scopeCoversProject && includesCurrentDepartment) {
+            const nextScopeDepartments = currentKey === nextKey
+                ? scopeDepartments.map(item =>
+                    String(item || "").toLowerCase() === currentKey ? nextDepartment : item
+                )
+                : [
+                    ...scopeDepartments,
+                    ...(scopeDepartments.some(item => String(item || "").toLowerCase() === nextKey)
+                        ? []
+                        : [nextDepartment]),
+                ];
+            user.adminPermissions = {
+                ...rawPermissions,
+                scopeDepartments: nextScopeDepartments,
+            };
+            changed = true;
+        }
+
+        if (changed) await user.save();
+    }));
 }
 
 function normalizeUsername(value) {
@@ -344,7 +504,12 @@ router.post("/validate-email", async (req, res) => {
 
 router.post("/register", async (req, res) => {
     try {
-        const result = await createUserFromPayload({ ...req.body, role: "candidate" }, { allowAdmin: false });
+        const orgSelection = await resolveOrgSelection(req.body.project, req.body.designation);
+        if (orgSelection.error) return res.status(400).json({ message: orgSelection.error });
+        const result = await createUserFromPayload(
+            { ...req.body, ...orgSelection, role: "candidate" },
+            { allowAdmin: false }
+        );
         if (result.error) return res.status(result.status).json({ message: result.error });
         const token = jwt.sign(
             { id: result.user._id, role: result.user.role },
@@ -365,7 +530,12 @@ router.post("/register", async (req, res) => {
 // ── SUPER ADMIN USER CREATION ────────────────────────────────
 router.post("/superadmin/users", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
-        const result = await createUserFromPayload(req.body, { allowAdmin: true });
+        const orgSelection = await resolveOrgSelection(req.body.project, req.body.designation);
+        if (orgSelection.error) return res.status(400).json({ message: orgSelection.error });
+        const result = await createUserFromPayload(
+            { ...req.body, ...orgSelection },
+            { allowAdmin: true }
+        );
         if (result.error) return res.status(result.status).json({ message: result.error });
         res.status(201).json(publicUser(result.user));
     } catch (err) {
@@ -737,6 +907,39 @@ router.put("/superadmin/roles/:id", authMiddleware, requireSuperAdmin, async (re
     }
 });
 
+router.delete("/superadmin/roles/:id", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const identifier = String(req.params.id || "").trim();
+        if (!identifier) return res.status(400).json({ message: "Role is required" });
+        if (systemRoles.some(role => role.name.toLowerCase() === identifier.toLowerCase())) {
+            return res.status(400).json({ message: "System roles cannot be deleted" });
+        }
+
+        let role = await RoleDefinition.findById(identifier);
+        if (!role) role = await RoleDefinition.findOne({ name: identifier });
+        if (!role) return res.status(404).json({ message: "Role not found" });
+        if (systemRoles.some(item => item.name.toLowerCase() === String(role.name || "").toLowerCase())) {
+            return res.status(400).json({ message: "System roles cannot be deleted" });
+        }
+
+        const assignedCount = await User.countDocuments({ customRole: role.name });
+        if (assignedCount > 0) {
+            return res.status(409).json({
+                message: `Reassign ${assignedCount} user${assignedCount === 1 ? "" : "s"} before deleting this role.`,
+                assignedCount,
+            });
+        }
+
+        await RoleDefinition.findByIdAndDelete(role._id);
+        res.json({
+            message: "Role deleted successfully",
+            deletedRole: { _id: role._id, name: role.name },
+        });
+    } catch (err) {
+        res.status(500).json({ message: "Error deleting role" });
+    }
+});
+
 router.put("/superadmin/users/:id/role", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
         const roleName = String(req.body.role || "").trim();
@@ -943,8 +1146,9 @@ router.put("/superadmin/org-options/departments", authMiddleware, requireSuperAd
         );
         if (duplicate) return res.status(409).json({ message: "Designation already exists in this project/department" });
 
-        project.departments.set(departmentIndex, nextDepartment);
+        project.departments.splice(departmentIndex, 1, nextDepartment);
         await doc.save();
+        await migrateDesignationReferences(project.name, currentDepartment, nextDepartment);
         res.json(doc.projects);
     } catch (err) {
         res.status(500).json({ message: "Error updating designation" });

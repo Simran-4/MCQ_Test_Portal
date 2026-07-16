@@ -8,7 +8,7 @@ import "./superadmin.css";
 import { ADMIN_PERMISSION_DEFAULTS, getAuthHeaders, getCurrentUser } from "../utils/auth";
 import BulkMailPanel from "../components/BulkMailPanel";
 import LanguageSwitcher from "../components/LanguageSwitcher";
-import { apiProjectsToMap, defaultOrgOptions, mergeOrgOptions, readLocalOrgOptions, writeLocalOrgOptions } from "../utils/orgOptions";
+import { defaultOrgOptions, mergeOrgOptions, syncApiOrgOptions, writeLocalOrgOptions } from "../utils/orgOptions";
 
 const API_BASE = `${import.meta.env.VITE_API_URL || ""}/api`;
 const API_URL = `${API_BASE}/auth`;
@@ -668,6 +668,7 @@ function SuperAdmin() {
   const [editUserForm, setEditUserForm] = useState(emptyEditUserForm);
   const [savingEditUser, setSavingEditUser] = useState(false);
   const [roleForm, setRoleForm] = useState({ name: "", baseRole: "candidate", description: "" });
+  const [deletingRoleId, setDeletingRoleId] = useState("");
   const [assignUserId, setAssignUserId] = useState("");
   const [assignUserSearch, setAssignUserSearch] = useState("");
   const [assignRole, setAssignRole] = useState("candidate");
@@ -766,7 +767,7 @@ function SuperAdmin() {
       .then(res => setRoles(res.data))
       .catch(() => setRoles(prev => [...prev.filter(role => role.system), ...readLocalRoles()]));
     axios.get(`${API_URL}/org-options`, { headers })
-      .then(res => setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data))))
+      .then(res => setOrgOptions(syncApiOrgOptions(res.data)))
       .catch(() => setOrgOptions(defaultOrgOptions()));
   }, [activeNav]);
 
@@ -976,6 +977,42 @@ function SuperAdmin() {
     }
   };
 
+  const removeRoleFromClient = (roleName) => {
+    const normalizedName = String(roleName || "").toLowerCase();
+    setRoles(prev => prev.filter(role => String(role.name || "").toLowerCase() !== normalizedName));
+    const nextLocalRoles = readLocalRoles().filter(role => String(role.name || "").toLowerCase() !== normalizedName);
+    writeLocalRoles(nextLocalRoles);
+    setAssignRole(prev => String(prev || "").toLowerCase() === normalizedName ? "candidate" : prev);
+    setCreateUserForm(prev => String(prev.role || "").toLowerCase() === normalizedName ? { ...prev, role: "candidate" } : prev);
+    setEditUserForm(prev => String(prev.role || "").toLowerCase() === normalizedName ? { ...prev, role: "candidate" } : prev);
+  };
+
+  const deleteRole = async (role) => {
+    if (!role || role.system) return;
+    const assignedCount = users.filter(user => user.customRole === role.name).length;
+    if (assignedCount > 0) {
+      return alert(`Reassign ${assignedCount} user${assignedCount === 1 ? "" : "s"} before deleting the "${role.name}" role.`);
+    }
+    if (!window.confirm(`Delete the custom role "${role.name}"?\n\nThis action cannot be undone.`)) return;
+
+    const roleIdentifier = role._id || role.name;
+    setDeletingRoleId(roleIdentifier);
+    try {
+      if (role._id) {
+        await axios.delete(
+          `${API_URL}/superadmin/roles/${encodeURIComponent(role._id)}`,
+          { headers: getAuthHeaders() }
+        );
+      }
+      removeRoleFromClient(role.name);
+      alert("Role deleted successfully.");
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to delete role.");
+    } finally {
+      setDeletingRoleId("");
+    }
+  };
+
   const assignUserRole = async () => {
     if (!assignUserId || !assignRole) return alert("Select a user and role.");
     try {
@@ -1053,6 +1090,23 @@ function SuperAdmin() {
       permissions: { ...prev.permissions, [key]: true },
     }));
     setCustomRightForm({ label: "", detail: "" });
+  };
+
+  const deleteCustomRight = (right) => {
+    if (!right?.custom) return;
+    const confirmed = window.confirm(
+      `Delete the custom right "${right.label}"?\n\nBuilt-in rights cannot be deleted.`
+    );
+    if (!confirmed) return;
+
+    const nextRights = customRights.filter(item => item.key !== right.key);
+    setCustomRights(nextRights);
+    writeLocalRights(nextRights);
+    setRightsForm(prev => {
+      const permissions = { ...prev.permissions };
+      delete permissions[right.key];
+      return { ...prev, permissions };
+    });
   };
 
   const saveAdminRights = async () => {
@@ -1225,8 +1279,12 @@ function SuperAdmin() {
     if (!name) return alert("Enter a project/department name.");
     try {
       const res = await axios.post(`${API_URL}/superadmin/org-options/projects`, { name }, { headers: getAuthHeaders() });
-      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
-    } catch {
+      setOrgOptions(syncApiOrgOptions(res.data));
+    } catch (err) {
+      if (err.response) {
+        alert(err.response.data?.message || "Unable to save project/department.");
+        return;
+      }
       saveProjectLocal(name);
       alert("Project saved locally. Redeploy CloudJiffy backend to save it for everyone.");
     }
@@ -1239,8 +1297,12 @@ function SuperAdmin() {
     if (!project || !department) return alert("Select a project/department and enter a designation.");
     try {
       const res = await axios.post(`${API_URL}/superadmin/org-options/departments`, { project, department }, { headers: getAuthHeaders() });
-      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
-    } catch {
+      setOrgOptions(syncApiOrgOptions(res.data));
+    } catch (err) {
+      if (err.response) {
+        alert(err.response.data?.message || "Unable to save designation.");
+        return;
+      }
       const nextOptions = mergeOrgOptions(orgOptions, { [project]: [...(orgOptions[project] || []), department] });
       writeLocalOrgOptions(nextOptions);
       setOrgOptions(nextOptions);
@@ -1259,15 +1321,19 @@ function SuperAdmin() {
         { name: nextName },
         { headers: getAuthHeaders() }
       );
-      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
+      setOrgOptions(syncApiOrgOptions(res.data));
       setEditProjectOriginal(nextName);
       setEditProjectName(nextName);
       alert("Project/department updated successfully.");
     } catch (err) {
+      if (err.response) {
+        alert(err.response.data?.message || "Unable to update project/department.");
+        return;
+      }
       if (saveEditedProjectLocal(currentName, nextName)) {
         setEditProjectOriginal(nextName);
         setEditProjectName(nextName);
-        alert(err.response?.data?.message || "Project updated locally. Redeploy CloudJiffy backend to save it for everyone.");
+        alert("Project updated locally. Redeploy CloudJiffy backend to save it for everyone.");
       }
     }
   };
@@ -1285,15 +1351,54 @@ function SuperAdmin() {
         { project, oldDepartment: currentDepartment, department: nextDepartment },
         { headers: getAuthHeaders() }
       );
-      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
+      setOrgOptions(syncApiOrgOptions(res.data));
+      const projectKey = project.toLowerCase();
+      const currentKey = currentDepartment.toLowerCase();
+      const nextKey = nextDepartment.toLowerCase();
+      setUsers(prev => prev.map(user =>
+        String(user.project || "").toLowerCase() === projectKey &&
+        String(user.designation || "").toLowerCase() === currentKey
+          ? { ...user, designation: nextDepartment }
+          : user
+      ));
+      setCreateUserForm(prev =>
+        String(prev.project || "").toLowerCase() === projectKey &&
+        String(prev.designation || "").toLowerCase() === currentKey
+          ? { ...prev, designation: nextDepartment }
+          : prev
+      );
+      setEditUserForm(prev =>
+        String(prev.project || "").toLowerCase() === projectKey &&
+        String(prev.designation || "").toLowerCase() === currentKey
+          ? { ...prev, designation: nextDepartment }
+          : prev
+      );
+      setRightsForm(prev => {
+        if (!prev.scopeDepartments.some(item => String(item || "").toLowerCase() === currentKey)) return prev;
+        const scopeDepartments = currentKey === nextKey
+          ? prev.scopeDepartments.map(item =>
+              String(item || "").toLowerCase() === currentKey ? nextDepartment : item
+            )
+          : [
+              ...prev.scopeDepartments,
+              ...(prev.scopeDepartments.some(item => String(item || "").toLowerCase() === nextKey)
+                ? []
+                : [nextDepartment]),
+            ];
+        return { ...prev, scopeDepartments };
+      });
       setEditDepartmentOriginal(nextDepartment);
       setEditDepartmentName(nextDepartment);
       alert("Designation updated successfully.");
     } catch (err) {
+      if (err.response) {
+        alert(err.response.data?.message || "Unable to update designation.");
+        return;
+      }
       if (saveEditedDepartmentLocal(project, currentDepartment, nextDepartment)) {
         setEditDepartmentOriginal(nextDepartment);
         setEditDepartmentName(nextDepartment);
-        alert(err.response?.data?.message || "Designation updated locally. Redeploy CloudJiffy backend to save it for everyone.");
+        alert("Designation updated locally. Redeploy CloudJiffy backend to save it for everyone.");
       }
     }
   };
@@ -1310,7 +1415,7 @@ function SuperAdmin() {
         `${API_URL}/superadmin/org-options/projects/${encodeURIComponent(project)}`,
         { headers: getAuthHeaders() }
       );
-      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
+      setOrgOptions(syncApiOrgOptions(res.data));
       if (departmentProject === project) setDepartmentProject("");
       if (editProjectOriginal === project) {
         setEditProjectOriginal("");
@@ -1323,8 +1428,12 @@ function SuperAdmin() {
       }
       alert("Project/department deleted successfully.");
     } catch (err) {
+      if (err.response) {
+        alert(err.response.data?.message || "Unable to delete project/department.");
+        return;
+      }
       deleteProjectLocal(project);
-      alert(err.response?.data?.message || "Project deleted locally. Redeploy CloudJiffy backend to save it for everyone.");
+      alert("Project deleted locally. Redeploy CloudJiffy backend to save it for everyone.");
     }
   };
 
@@ -1339,15 +1448,19 @@ function SuperAdmin() {
         headers: getAuthHeaders(),
         data: { project, department },
       });
-      setOrgOptions(mergeOrgOptions(defaultOrgOptions(), readLocalOrgOptions(), apiProjectsToMap(res.data)));
+      setOrgOptions(syncApiOrgOptions(res.data));
       if (editDepartmentProject === project && editDepartmentOriginal === department) {
         setEditDepartmentOriginal("");
         setEditDepartmentName("");
       }
       alert("Designation deleted successfully.");
     } catch (err) {
+      if (err.response) {
+        alert(err.response.data?.message || "Unable to delete designation.");
+        return;
+      }
       deleteDepartmentLocal(project, department);
-      alert(err.response?.data?.message || "Designation deleted locally. Redeploy CloudJiffy backend to save it for everyone.");
+      alert("Designation deleted locally. Redeploy CloudJiffy backend to save it for everyone.");
     }
   };
 
@@ -1410,6 +1523,7 @@ function SuperAdmin() {
   const editUserDepartments = editUserForm.project ? orgOptions[editUserForm.project] || [] : [];
   const editDepartmentOptions = editDepartmentProject ? orgOptions[editDepartmentProject] || [] : [];
   const assignableRoles = roles.filter(role => role.name !== "superadmin" && !role.disabled);
+  const customRoleRows = roles.filter(role => !role.system);
   const safeEditRoles = roles.filter(role => role.name !== "superadmin" || editUserForm.role === "superadmin");
   const editRoleOptions = safeEditRoles.some(role => role.name === editUserForm.role)
     ? safeEditRoles
@@ -1783,6 +1897,17 @@ function SuperAdmin() {
                             <td>
                               {right.label}
                               {right.custom && <span className="custom-right-badge">custom</span>}
+                              {right.custom && (
+                                <button
+                                  type="button"
+                                  className="custom-right-delete"
+                                  onClick={() => deleteCustomRight(right)}
+                                  aria-label={`Delete ${right.label} right`}
+                                  title={`Delete ${right.label}`}
+                                >
+                                  Delete
+                                </button>
+                              )}
                             </td>
                             <td>{right.detail}</td>
                             <td>
@@ -2084,6 +2209,35 @@ function SuperAdmin() {
                     </select>
                     <textarea value={roleForm.description} onChange={e => setRoleForm({ ...roleForm, description: e.target.value })} placeholder="Role description" rows={3} />
                     <button type="button" onClick={createRole}>Create Role</button>
+                    <div className="role-management-list">
+                      <strong>Custom Roles</strong>
+                      {customRoleRows.length === 0 ? (
+                        <span className="role-management-empty">No custom roles created.</span>
+                      ) : customRoleRows.map(role => {
+                        const assignedCount = users.filter(user => user.customRole === role.name).length;
+                        const roleIdentifier = role._id || role.name;
+                        return (
+                          <div className="role-management-item" key={roleIdentifier}>
+                            <div>
+                              <span>{role.name}</span>
+                              <small>
+                                {role.baseRole}-level · {assignedCount} assigned
+                                {role.disabled ? " · disabled" : ""}
+                              </small>
+                            </div>
+                            <button
+                              type="button"
+                              className="role-delete-button"
+                              onClick={() => deleteRole(role)}
+                              disabled={deletingRoleId === roleIdentifier}
+                              title={assignedCount > 0 ? "Reassign users before deleting this role" : `Delete ${role.name}`}
+                            >
+                              {deletingRoleId === roleIdentifier ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="control-panel role-card">
