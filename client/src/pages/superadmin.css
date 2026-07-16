@@ -992,6 +992,64 @@ body.superadmin-dashboard-page #root {
   white-space: nowrap;
 }
 
+.custom-right-maker button:disabled,
+.custom-right-delete-panel button:disabled,
+.custom-right-delete:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.custom-right-delete-panel {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(220px, 0.8fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #f1caca;
+  border-radius: 12px;
+  background: #fffafa;
+}
+
+.custom-right-delete-panel > div {
+  display: grid;
+  gap: 3px;
+}
+
+.custom-right-delete-panel strong {
+  color: #8c1d1d;
+  font-size: 15px;
+}
+
+.custom-right-delete-panel span {
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.custom-right-delete-panel select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #e4c5c5;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--admin-text);
+  font: inherit;
+}
+
+.custom-right-delete-panel button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #dc2626;
+  border-radius: 6px;
+  background: #dc2626;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .custom-right-badge {
   display: inline-grid;
   place-items: center;
@@ -1006,8 +1064,7 @@ body.superadmin-dashboard-page #root {
 }
 
 .custom-right-delete {
-  margin-left: 8px;
-  padding: 3px 8px;
+  padding: 6px 10px;
   border: 1px solid #f3b7b7;
   border-radius: 6px;
   background: #fff1f1;
@@ -1016,9 +1073,10 @@ body.superadmin-dashboard-page #root {
   font-size: 11px;
   font-weight: 800;
   cursor: pointer;
+  white-space: nowrap;
 }
 
-.custom-right-delete:hover {
+.custom-right-delete:hover:not(:disabled) {
   border-color: #dc2626;
   background: #fee2e2;
   color: #7f1d1d;
@@ -1037,7 +1095,7 @@ body.superadmin-dashboard-page #root {
 }
 
 .rights-table {
-  min-width: 760px;
+  min-width: 900px;
 }
 
 .rights-table thead tr {
@@ -1056,8 +1114,19 @@ body.superadmin-dashboard-page #root {
   text-align: center;
 }
 
+.rights-table th:nth-child(3),
+.rights-table td:nth-child(3) {
+  text-align: center;
+}
+
 .rights-table td:first-child {
   color: var(--admin-text);
+  font-weight: 700;
+}
+
+.system-right-label {
+  color: #67736b;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1090,10 +1159,19 @@ body.superadmin-dashboard-page #root {
   .custom-right-maker {
     grid-template-columns: 1fr 1fr;
   }
+
+  .custom-right-delete-panel {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .custom-right-delete-panel > div {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 700px) {
-  .custom-right-maker {
+  .custom-right-maker,
+  .custom-right-delete-panel {
     grid-template-columns: 1fr;
   }
 }

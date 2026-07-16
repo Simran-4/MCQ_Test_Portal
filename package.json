@@ -8,7 +8,7 @@
     "postinstall": "npm run build",
     "import:mongo-dump": "node server/scripts/import-mongo-dump-to-postgres.js",
     "test:translation": "node --test server/tests/questionLanguage.test.js server/tests/questionSelectionToken.test.js",
-    "test:server": "node --test server/tests/questionLanguage.test.js server/tests/questionSelectionToken.test.js server/tests/testInstructions.test.js"
+    "test:server": "node --test server/tests/questionLanguage.test.js server/tests/questionSelectionToken.test.js server/tests/testInstructions.test.js server/tests/adminRights.test.js"
   },
   "engines": {
     "node": ">=22 <23"

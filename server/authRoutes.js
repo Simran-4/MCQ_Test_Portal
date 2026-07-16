@@ -1,10 +1,13 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const dns = require("dns").promises;
+const { getPool } = require("./db/postgres");
 const User = require("./models/User");
 const Result = require("./models/Result");
 const RoleDefinition = require("./models/RoleDefinition");
+const AdminRightDefinition = require("./models/AdminRightDefinition");
 const OrgOption = require("./models/OrgOption");
 const ActivityLog = require("./models/ActivityLog");
 const authMiddleware = require("./middleware/authMiddleware");
@@ -14,6 +17,14 @@ const {
     hasAdminPermission,
     matchesUserScope,
 } = require("./utils/adminPermissions");
+const {
+    builtInRightDefinitions,
+    customRightDefinition,
+    isBuiltInRightKey,
+    isCustomRightKey,
+    labelFromCustomRightKey,
+    normalizeCustomRightInput,
+} = require("./utils/adminRightDefinitions");
 
 const router = express.Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -41,6 +52,104 @@ const systemRoles = [
     { name: "admin", baseRole: "admin", system: true, description: "Admin dashboard access" },
     { name: "superadmin", baseRole: "admin", system: true, description: "Full system access" },
 ];
+const ADMIN_RIGHTS_LOCK_NAME = "mcq-test-portal:admin-rights";
+
+function routeError(message, statusCode) {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+}
+
+async function withAdminRightsTransaction(work) {
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        await client.query(
+            "SELECT pg_advisory_xact_lock(hashtext($1))",
+            [ADMIN_RIGHTS_LOCK_NAME]
+        );
+        const result = await work(client);
+        await client.query("COMMIT");
+        return result;
+    } catch (err) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+function documentFromRow(row) {
+    return row ? { ...row.data, _id: row.id } : null;
+}
+
+async function persistedCustomRightKeys(client) {
+    const { rows } = await client.query(
+        `SELECT data->>'key' AS key
+         FROM app_documents
+         WHERE collection = 'AdminRightDefinition'`
+    );
+    return rows
+        .map(row => String(row.key || ""))
+        .filter(key => isCustomRightKey(key) && !isBuiltInRightKey(key));
+}
+
+async function legacyCustomRightKeys(client) {
+    const { rows } = await client.query(
+        `SELECT DISTINCT permission.key
+         FROM app_documents AS users
+         CROSS JOIN LATERAL jsonb_object_keys(
+           COALESCE(users.data #> '{adminPermissions,permissions}', '{}'::jsonb)
+         ) AS permission(key)
+         WHERE users.collection = 'User'`
+    );
+    return rows
+        .map(row => String(row.key || ""))
+        .filter(isCustomRightKey);
+}
+
+function rawPermissionValues(user) {
+    const raw = user?.adminPermissions?.permissions;
+    if (raw instanceof Map) return Object.fromEntries(raw);
+    return raw && typeof raw === "object" ? { ...raw } : {};
+}
+
+async function customRightKeysFromUsers() {
+    const users = await User.find().select("adminPermissions");
+    return new Set(users.flatMap(user =>
+        Object.keys(rawPermissionValues(user)).filter(isCustomRightKey)
+    ));
+}
+
+async function listAdminRightDefinitions() {
+    const [storedDefinitions, legacyKeys] = await Promise.all([
+        AdminRightDefinition.find().sort({ label: 1 }),
+        customRightKeysFromUsers(),
+    ]);
+    const storedByKey = new Map();
+    storedDefinitions.forEach(right => {
+        const key = String(right.key || "");
+        if (!isCustomRightKey(key) || isBuiltInRightKey(key)) return;
+        storedByKey.set(key, customRightDefinition(right));
+    });
+
+    legacyKeys.forEach(key => {
+        if (!storedByKey.has(key)) {
+            storedByKey.set(key, customRightDefinition({
+                key,
+                label: labelFromCustomRightKey(key),
+                detail: "Legacy custom right",
+            }, { legacy: true }));
+        }
+    });
+
+    return [
+        ...builtInRightDefinitions(),
+        ...[...storedByKey.values()].sort((left, right) =>
+            left.label.localeCompare(right.label)
+        ),
+    ];
+}
 
 async function resolveRole(roleName) {
     const requested = String(roleName || "candidate").toLowerCase().trim();
@@ -836,6 +945,159 @@ router.get("/users", authMiddleware, requireAdminOrSuperAdmin, async (req, res) 
 });
 
 // ── SUPER ADMIN ROLE MANAGEMENT ───────────────────────────────
+router.get("/superadmin/rights", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        res.json(await listAdminRightDefinitions());
+    } catch (err) {
+        res.status(500).json({ message: "Error fetching user rights" });
+    }
+});
+
+router.post("/superadmin/rights", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const rightInput = normalizeCustomRightInput(req.body);
+        const duplicateBuiltIn = builtInRightDefinitions().some(right =>
+            String(right.key).toLowerCase() === rightInput.key.toLowerCase() ||
+            String(right.label).toLowerCase() === rightInput.label.toLowerCase()
+        );
+        if (duplicateBuiltIn) {
+            return res.status(409).json({ message: "This right already exists." });
+        }
+
+        const created = await withAdminRightsTransaction(async client => {
+            const [duplicateDefinition, legacyDefinition] = await Promise.all([
+                client.query(
+                    `SELECT 1
+                     FROM app_documents
+                     WHERE collection = 'AdminRightDefinition'
+                       AND (
+                         LOWER(COALESCE(data->>'key', '')) = LOWER($1)
+                         OR LOWER(COALESCE(data->>'label', '')) = LOWER($2)
+                       )
+                     LIMIT 1`,
+                    [rightInput.key, rightInput.label]
+                ),
+                client.query(
+                    `SELECT 1
+                     FROM app_documents
+                     WHERE collection = 'User'
+                       AND COALESCE(
+                         data #> '{adminPermissions,permissions}',
+                         '{}'::jsonb
+                       ) ? $1
+                     LIMIT 1`,
+                    [rightInput.key]
+                ),
+            ]);
+            if (duplicateDefinition.rowCount > 0 || legacyDefinition.rowCount > 0) {
+                throw routeError("This right already exists.", 409);
+            }
+
+            const id = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const data = {
+                ...rightInput,
+                createdBy: req.user.id,
+                createdAt: now,
+                updatedAt: now,
+            };
+            await client.query(
+                `INSERT INTO app_documents (collection, id, data, created_at, updated_at)
+                 VALUES ('AdminRightDefinition', $1, $2::jsonb, $3, $3)`,
+                [id, JSON.stringify(data), now]
+            );
+            return customRightDefinition({ _id: id, ...data });
+        });
+        res.status(201).json(created);
+    } catch (err) {
+        res.status(err.statusCode || 500).json({
+            message: err.statusCode ? err.message : "Error creating user right",
+        });
+    }
+});
+
+router.delete("/superadmin/rights/:identifier", authMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+        const identifier = String(req.params.identifier || "").trim();
+        if (!identifier) {
+            return res.status(400).json({ message: "Select a custom right to delete." });
+        }
+        if (isBuiltInRightKey(identifier)) {
+            return res.status(400).json({ message: "Built-in rights cannot be deleted." });
+        }
+
+        const result = await withAdminRightsTransaction(async client => {
+            const definitionResult = await client.query(
+                `SELECT id, data
+                 FROM app_documents
+                 WHERE collection = 'AdminRightDefinition'
+                   AND (id::text = $1 OR data->>'key' = $1)
+                 ORDER BY CASE WHEN id::text = $1 THEN 0 ELSE 1 END
+                 LIMIT 1`,
+                [identifier]
+            );
+            const definition = documentFromRow(definitionResult.rows[0]);
+            const key = String(definition?.key || identifier);
+            if (isBuiltInRightKey(key)) {
+                throw routeError("Built-in rights cannot be deleted.", 400);
+            }
+            if (!isCustomRightKey(key)) {
+                throw routeError("Custom right not found.", 404);
+            }
+
+            const now = new Date().toISOString();
+            const affected = await client.query(
+                `UPDATE app_documents
+                 SET data = jsonb_set(
+                       data,
+                       '{adminPermissions,permissions}',
+                       COALESCE(
+                         data #> '{adminPermissions,permissions}',
+                         '{}'::jsonb
+                       ) - $1::text,
+                       true
+                     ) || jsonb_build_object('updatedAt', $2::text),
+                     updated_at = $2::timestamptz
+                 WHERE collection = 'User'
+                   AND COALESCE(
+                     data #> '{adminPermissions,permissions}',
+                     '{}'::jsonb
+                   ) ? $1`,
+                [key, now]
+            );
+
+            let deletedDefinitionCount = 0;
+            if (definition) {
+                const deleted = await client.query(
+                    `DELETE FROM app_documents
+                     WHERE collection = 'AdminRightDefinition'
+                       AND data->>'key' = $1`,
+                    [key]
+                );
+                deletedDefinitionCount = deleted.rowCount;
+            } else if (affected.rowCount === 0) {
+                throw routeError("Custom right not found.", 404);
+            }
+
+            return {
+                message: "Custom right deleted successfully.",
+                deletedRight: {
+                    _id: definition?._id || "",
+                    key,
+                    label: definition?.label || labelFromCustomRightKey(key),
+                },
+                affectedUsers: affected.rowCount,
+                deletedDefinitionCount,
+            };
+        });
+        res.json(result);
+    } catch (err) {
+        res.status(err.statusCode || 500).json({
+            message: err.statusCode ? err.message : "Error deleting user right",
+        });
+    }
+});
+
 router.get("/superadmin/roles", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
         const customRoles = await RoleDefinition.find().sort({ name: 1 });
@@ -973,38 +1235,73 @@ router.put("/superadmin/users/:id/role", authMiddleware, requireSuperAdmin, asyn
 
 router.put("/superadmin/users/:id/permissions", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
-        const rawPermissions = Object.keys(ADMIN_PERMISSION_DEFAULTS).reduce((acc, key) => {
-            acc[key] = req.body.permissions?.[key] === undefined
-                ? ADMIN_PERMISSION_DEFAULTS[key]
-                : Boolean(req.body.permissions[key]);
-            return acc;
-        }, {});
-        Object.entries(req.body.permissions || {}).forEach(([key, value]) => {
-            if (!ADMIN_PERMISSION_DEFAULTS[key] && /^[A-Za-z][A-Za-z0-9_:-]{1,80}$/.test(key)) {
-                rawPermissions[key] = Boolean(value);
+        const updatedUser = await withAdminRightsTransaction(async client => {
+            const targetResult = await client.query(
+                `SELECT id, data
+                 FROM app_documents
+                 WHERE collection = 'User' AND id::text = $1
+                 FOR UPDATE`,
+                [String(req.params.id || "")]
+            );
+            const targetUser = documentFromRow(targetResult.rows[0]);
+            if (!targetUser) throw routeError("User not found", 404);
+            if (targetUser.role !== "admin") {
+                throw routeError(
+                    targetUser.role === "superadmin"
+                        ? "Super admin rights cannot be restricted."
+                        : "Rights can only be saved for admins.",
+                    400
+                );
             }
+
+            const allowedCustomKeys = new Set([
+                ...await persistedCustomRightKeys(client),
+                ...await legacyCustomRightKeys(client),
+            ]);
+            const currentAccess = normalizeAdminPermissions(targetUser);
+            const rawPermissions = Object.keys(ADMIN_PERMISSION_DEFAULTS).reduce((acc, key) => {
+                acc[key] = req.body.permissions?.[key] === undefined
+                    ? currentAccess.permissions[key]
+                    : Boolean(req.body.permissions[key]);
+                return acc;
+            }, {});
+            allowedCustomKeys.forEach(key => {
+                if (Object.prototype.hasOwnProperty.call(currentAccess.permissions, key)) {
+                    rawPermissions[key] = Boolean(currentAccess.permissions[key]);
+                }
+            });
+            Object.entries(req.body.permissions || {}).forEach(([key, value]) => {
+                if (allowedCustomKeys.has(key)) {
+                    rawPermissions[key] = Boolean(value);
+                }
+            });
+            const permissions = normalizeAdminPermissions({ permissions: rawPermissions }).permissions;
+            const scopeProjects = Array.isArray(req.body.scopeProjects)
+                ? [...new Set(req.body.scopeProjects.map(item => String(item || "").trim()).filter(Boolean))]
+                : currentAccess.scopeProjects;
+            const scopeDepartments = Array.isArray(req.body.scopeDepartments)
+                ? [...new Set(req.body.scopeDepartments.map(item => String(item || "").trim()).filter(Boolean))]
+                : currentAccess.scopeDepartments;
+            const adminPermissions = { permissions, scopeProjects, scopeDepartments };
+            const now = new Date().toISOString();
+            const updateResult = await client.query(
+                `UPDATE app_documents
+                 SET data = data || jsonb_build_object(
+                       'adminPermissions', $2::jsonb,
+                       'updatedAt', $3::text
+                     ),
+                     updated_at = $3::timestamptz
+                 WHERE collection = 'User' AND id = $1
+                 RETURNING id, data`,
+                [targetUser._id, JSON.stringify(adminPermissions), now]
+            );
+            return publicUser(documentFromRow(updateResult.rows[0]));
         });
-        const permissions = normalizeAdminPermissions({ permissions: rawPermissions }).permissions;
-        const scopeProjects = Array.isArray(req.body.scopeProjects)
-            ? [...new Set(req.body.scopeProjects.map(item => String(item || "").trim()).filter(Boolean))]
-            : [];
-        const scopeDepartments = Array.isArray(req.body.scopeDepartments)
-            ? [...new Set(req.body.scopeDepartments.map(item => String(item || "").trim()).filter(Boolean))]
-            : [];
-
-        const user = await User.findByIdAndUpdate(
-            req.params.id,
-            { adminPermissions: { permissions, scopeProjects, scopeDepartments } },
-            { new: true }
-        );
-
-        if (!user) return res.status(404).json({ message: "User not found" });
-        if (!["admin", "superadmin"].includes(user.role)) {
-            return res.status(400).json({ message: "Rights can only be saved for admins" });
-        }
-        res.json(publicUser(user));
+        res.json(updatedUser);
     } catch (err) {
-        res.status(500).json({ message: "Error updating user rights" });
+        res.status(err.statusCode || 500).json({
+            message: err.statusCode ? err.message : "Error updating user rights",
+        });
     }
 });
 

@@ -22,6 +22,7 @@ export const ADMIN_PERMISSION_DEFAULTS = {
   canViewQuestions: true,
   canManageQuestions: true,
   canAssignTests: true,
+  canManageSettings: true,
   canBulkMail: true,
   canViewUsers: true,
 };
@@ -69,5 +70,8 @@ export function getAdminPermissions(user = getCurrentUser()) {
 export function canAdmin(feature, user = getCurrentUser()) {
   if (user.role === "superadmin") return true;
   if (user.role !== "admin") return false;
-  return getAdminPermissions(user).permissions[feature] !== false;
+  const permissions = getAdminPermissions(user).permissions;
+  return Object.prototype.hasOwnProperty.call(ADMIN_PERMISSION_DEFAULTS, feature)
+    ? permissions[feature] !== false
+    : permissions[feature] === true;
 }

@@ -13,7 +13,6 @@ import { defaultOrgOptions, mergeOrgOptions, syncApiOrgOptions, writeLocalOrgOpt
 const API_BASE = `${import.meta.env.VITE_API_URL || ""}/api`;
 const API_URL = `${API_BASE}/auth`;
 const LOCAL_ROLES_KEY = "snehalaya_custom_roles";
-const LOCAL_RIGHTS_KEY = "snehalaya_custom_rights";
 const USERS_PER_PAGE = 10;
 const emptyCreateUserForm = {
   firstName: "",
@@ -52,16 +51,17 @@ const emptyEditUserForm = {
   newPassword: "",
 };
 const ADMIN_RIGHTS = [
-  { key: "canViewReports", label: "View reports", detail: "Can open report pages and see result rows" },
-  { key: "canViewTestReports", label: "View test reports", detail: "Can open the statistical and descriptive test report section" },
-  { key: "canDownloadReports", label: "Download reports", detail: "Can export summary/descriptive PDF or Excel" },
-  { key: "canViewSuites", label: "Open test suites", detail: "Can open test suite pages within scope" },
-  { key: "canManageSuites", label: "Create / edit test suites", detail: "Can create, edit, activate, deactivate, and delete suites" },
-  { key: "canViewQuestions", label: "View questions", detail: "Can see questions inside a test suite" },
-  { key: "canManageQuestions", label: "Manage questions", detail: "Can add, import, edit, and delete questions" },
-  { key: "canAssignTests", label: "Assign tests", detail: "Can assign test suites to candidates" },
-  { key: "canBulkMail", label: "Mail candidates", detail: "Can prepare bulk emails and certificate emails" },
-  { key: "canViewUsers", label: "View users", detail: "Can see candidate/admin lists within scope" },
+  { key: "canViewReports", label: "View reports", detail: "Can open report pages and see result rows", system: true, custom: false },
+  { key: "canViewTestReports", label: "View test reports", detail: "Can open the statistical and descriptive test report section", system: true, custom: false },
+  { key: "canDownloadReports", label: "Download reports", detail: "Can export summary/descriptive PDF or Excel", system: true, custom: false },
+  { key: "canViewSuites", label: "Open test suites", detail: "Can open test suite pages within scope", system: true, custom: false },
+  { key: "canManageSuites", label: "Create / edit test suites", detail: "Can create, edit, activate, deactivate, and delete suites", system: true, custom: false },
+  { key: "canViewQuestions", label: "View questions", detail: "Can see questions inside a test suite", system: true, custom: false },
+  { key: "canManageQuestions", label: "Manage questions", detail: "Can add, import, edit, and delete questions", system: true, custom: false },
+  { key: "canAssignTests", label: "Assign tests", detail: "Can assign test suites to candidates", system: true, custom: false },
+  { key: "canManageSettings", label: "Manage settings", detail: "Can change assessment-wide settings", system: true, custom: false },
+  { key: "canBulkMail", label: "Mail candidates", detail: "Can prepare bulk emails and certificate emails", system: true, custom: false },
+  { key: "canViewUsers", label: "View users", detail: "Can see candidate/admin lists within scope", system: true, custom: false },
 ];
 const CONTROL_MODES = [
   { key: "rights", label: "User rights" },
@@ -114,28 +114,6 @@ function writeLocalRoles(roles) {
   localStorage.setItem(LOCAL_ROLES_KEY, JSON.stringify(roles));
 }
 
-function readLocalRights() {
-  try {
-    return JSON.parse(localStorage.getItem(LOCAL_RIGHTS_KEY)) || [];
-  } catch {
-    return [];
-  }
-}
-
-function writeLocalRights(rights) {
-  localStorage.setItem(LOCAL_RIGHTS_KEY, JSON.stringify(rights));
-}
-
-function customRightKey(label) {
-  const slug = String(label || "")
-    .trim()
-    .replace(/([a-z])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase();
-  return `custom_${slug || Date.now()}`;
-}
-
 function candidateName(result) {
   return result.CandidateName || result.userName || "Unknown";
 }
@@ -172,6 +150,10 @@ function readableActivityAction(log) {
     if (path.includes("/superadmin/users/") && path.endsWith("/password")) return "Reset user password";
     if (path.includes("/superadmin/users/") && path.endsWith("/role")) return "Changed user role";
     if (path.includes("/superadmin/users/") && path.endsWith("/permissions")) return "Updated admin rights";
+    if (path.includes("/superadmin/rights")) {
+      if (method === "POST") return "Created custom admin right";
+      if (method === "DELETE") return "Deleted custom admin right";
+    }
     if (path.includes("/superadmin/users")) {
       if (method === "POST") return "Created user account";
       if (method === "PUT" || method === "PATCH") return "Updated user account";
@@ -687,7 +669,12 @@ function SuperAdmin() {
   const [rightsUserId, setRightsUserId] = useState("");
   const [rightsForm, setRightsForm] = useState(() => normalizeRights());
   const [rightsSaving, setRightsSaving] = useState(false);
-  const [customRights, setCustomRights] = useState(() => readLocalRights());
+  const [rightDefinitions, setRightDefinitions] = useState(ADMIN_RIGHTS);
+  const [rightsLoading, setRightsLoading] = useState(false);
+  const [rightsError, setRightsError] = useState("");
+  const [rightCreating, setRightCreating] = useState(false);
+  const [deletingRightKey, setDeletingRightKey] = useState("");
+  const [deleteRightSelection, setDeleteRightSelection] = useState("");
   const [customRightForm, setCustomRightForm] = useState({ label: "", detail: "" });
 
   useEffect(() => {
@@ -762,14 +749,54 @@ function SuperAdmin() {
 
   useEffect(() => {
     if (activeNav !== "management") return;
+    let ignore = false;
     const headers = getAuthHeaders();
+    setRightsLoading(true);
+    setRightsError("");
     axios.get(`${API_URL}/superadmin/roles`, { headers })
       .then(res => setRoles(res.data))
       .catch(() => setRoles(prev => [...prev.filter(role => role.system), ...readLocalRoles()]));
     axios.get(`${API_URL}/org-options`, { headers })
       .then(res => setOrgOptions(syncApiOrgOptions(res.data)))
       .catch(() => setOrgOptions(defaultOrgOptions()));
+    axios.get(`${API_URL}/superadmin/rights`, { headers })
+      .then(res => {
+        if (!ignore) {
+          setRightDefinitions(Array.isArray(res.data) ? res.data : ADMIN_RIGHTS);
+          setRightsError("");
+        }
+      })
+      .catch(err => {
+        if (!ignore) {
+          setRightDefinitions(ADMIN_RIGHTS);
+          setRightsError(err.response?.data?.message || "Unable to load user rights");
+        }
+      })
+      .finally(() => {
+        if (!ignore) setRightsLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
   }, [activeNav]);
+
+  useEffect(() => {
+    if (!rightsUserId) return;
+    const selected = users.find(user => user._id === rightsUserId);
+    if (!selected || selected.role !== "admin") {
+      setRightsUserId("");
+      setRightsForm(normalizeRights());
+    }
+  }, [rightsUserId, users]);
+
+  useEffect(() => {
+    if (
+      deleteRightSelection &&
+      !rightDefinitions.some(right => right.custom && right.key === deleteRightSelection)
+    ) {
+      setDeleteRightSelection("");
+    }
+  }, [deleteRightSelection, rightDefinitions]);
 
   useEffect(() => {
     if (activeNav !== "activity") return;
@@ -1057,7 +1084,11 @@ function SuperAdmin() {
 
   const toggleRight = (key) => {
     setRightsForm(prev => {
-      const nextValue = !prev.permissions[key];
+      const right = rightDefinitions.find(item => item.key === key);
+      const currentValue = right?.custom
+        ? prev.permissions[key] === true
+        : prev.permissions[key] !== false;
+      const nextValue = !currentValue;
       const permissions = { ...prev.permissions, [key]: nextValue };
       if (key === "canViewSuites" && !nextValue) permissions.canManageSuites = false;
       if (key === "canManageSuites" && nextValue) permissions.canViewSuites = true;
@@ -1067,51 +1098,88 @@ function SuperAdmin() {
     });
   };
 
-  const addCustomRight = () => {
+  const addCustomRight = async () => {
     const label = customRightForm.label.trim();
     if (!label) return alert("Enter a right name.");
-    const key = customRightKey(label);
-    const allRights = [...ADMIN_RIGHTS, ...customRights];
-    if (allRights.some(right => right.key === key || right.label.toLowerCase() === label.toLowerCase())) {
-      return alert("This right already exists.");
+    setRightCreating(true);
+    setRightsError("");
+    try {
+      const res = await axios.post(
+        `${API_URL}/superadmin/rights`,
+        {
+          label,
+          detail: customRightForm.detail.trim(),
+        },
+        { headers: getAuthHeaders() }
+      );
+      setRightDefinitions(prev => {
+        const systemRights = prev.filter(right => !right.custom);
+        const customRights = [
+          ...prev.filter(right => right.custom),
+          res.data,
+        ].sort((left, right) => left.label.localeCompare(right.label));
+        return [...systemRights, ...customRights];
+      });
+      setCustomRightForm({ label: "", detail: "" });
+      alert("Custom right added successfully.");
+    } catch (err) {
+      const message = err.response?.data?.message || "Unable to add custom right.";
+      setRightsError(message);
+      alert(message);
+    } finally {
+      setRightCreating(false);
     }
-
-    const nextRight = {
-      key,
-      label,
-      detail: customRightForm.detail.trim() || "Custom right created by superadmin",
-      custom: true,
-    };
-    const nextRights = [...customRights, nextRight];
-    setCustomRights(nextRights);
-    writeLocalRights(nextRights);
-    setRightsForm(prev => ({
-      ...prev,
-      permissions: { ...prev.permissions, [key]: true },
-    }));
-    setCustomRightForm({ label: "", detail: "" });
   };
 
-  const deleteCustomRight = (right) => {
+  const deleteCustomRight = async (right) => {
     if (!right?.custom) return;
     const confirmed = window.confirm(
-      `Delete the custom right "${right.label}"?\n\nBuilt-in rights cannot be deleted.`
+      `Delete the custom right "${right.label}"?\n\nThis removes the right from every admin. Built-in rights cannot be deleted.`
     );
     if (!confirmed) return;
 
-    const nextRights = customRights.filter(item => item.key !== right.key);
-    setCustomRights(nextRights);
-    writeLocalRights(nextRights);
-    setRightsForm(prev => {
-      const permissions = { ...prev.permissions };
-      delete permissions[right.key];
-      return { ...prev, permissions };
-    });
+    setDeletingRightKey(right.key);
+    setRightsError("");
+    try {
+      const identifier = right._id || right.key;
+      const res = await axios.delete(
+        `${API_URL}/superadmin/rights/${encodeURIComponent(identifier)}`,
+        { headers: getAuthHeaders() }
+      );
+      setRightDefinitions(prev => prev.filter(item => item.key !== right.key));
+      setDeleteRightSelection("");
+      setRightsForm(prev => {
+        const permissions = { ...prev.permissions };
+        delete permissions[right.key];
+        return { ...prev, permissions };
+      });
+      setUsers(prev => prev.map(user => {
+        const access = user.adminPermissions || {};
+        const permissions = { ...(access.permissions || {}) };
+        delete permissions[right.key];
+        return {
+          ...user,
+          adminPermissions: {
+            ...access,
+            permissions,
+          },
+        };
+      }));
+      alert(res.data?.message || "Custom right deleted successfully.");
+    } catch (err) {
+      const message = err.response?.data?.message || "Unable to delete custom right.";
+      setRightsError(message);
+      alert(message);
+    } finally {
+      setDeletingRightKey("");
+    }
   };
 
   const saveAdminRights = async () => {
-    if (!rightsUserId) return alert("Select an admin first.");
+    const targetAdmin = users.find(user => user._id === rightsUserId && user.role === "admin");
+    if (!targetAdmin) return alert("Select an admin first.");
     setRightsSaving(true);
+    setRightsError("");
     try {
       const res = await axios.put(
         `${API_URL}/superadmin/users/${rightsUserId}/permissions`,
@@ -1122,7 +1190,9 @@ function SuperAdmin() {
       setRightsForm(normalizeRights(res.data));
       alert("Admin rights saved.");
     } catch (err) {
-      alert(err.response?.data?.message || "Unable to save admin rights.");
+      const message = err.response?.data?.message || "Unable to save admin rights.";
+      setRightsError(message);
+      alert(message);
     } finally {
       setRightsSaving(false);
     }
@@ -1511,8 +1581,13 @@ function SuperAdmin() {
       result.designation,
     ].join(" ").toLowerCase().includes(reportSearch.toLowerCase())
   );
-  const adminUsers = displayUsers.filter(user => user.role === "admin" || user.role === "superadmin");
-  const rightsRows = [...ADMIN_RIGHTS, ...customRights];
+  const adminUsers = users
+    .filter(user => user.role === "admin")
+    .sort((left, right) => (left.name || "").localeCompare(right.name || ""));
+  const rightsRows = rightDefinitions;
+  const customRights = rightsRows.filter(right => right.custom);
+  const selectedDeleteRight = customRights.find(right => right.key === deleteRightSelection);
+  const rightsMutating = rightsLoading || rightsSaving || rightCreating || Boolean(deletingRightKey);
   const selectedRightsUser = users.find(user => user._id === rightsUserId);
   const rightsProject = rightsForm.scopeProjects[0] || "";
   const rightsDepartments = rightsProject
@@ -1813,24 +1888,38 @@ function SuperAdmin() {
             {controlMode === "rights" && (
               <div className="rights-console">
                 <div className="rights-filters">
-                  <select value={rightsUserId} onChange={e => handleRightsUserChange(e.target.value)}>
+                  <select
+                    value={rightsUserId}
+                    onChange={e => handleRightsUserChange(e.target.value)}
+                    disabled={rightsMutating}
+                  >
                     <option value="">Select admin</option>
+                    {adminUsers.length === 0 && (
+                      <option value="" disabled>No admin accounts available</option>
+                    )}
                     {adminUsers.map(user => (
                       <option key={user._id} value={user._id}>
                         {user.name} - {user.customRole || user.role}
                       </option>
                     ))}
                   </select>
-                  <select value={rightsProject} onChange={e => setRightsProject(e.target.value)}>
+                  <select
+                    value={rightsProject}
+                    onChange={e => setRightsProject(e.target.value)}
+                    disabled={rightsMutating || !rightsUserId}
+                  >
                     <option value="">All project/departments</option>
                     {Object.keys(orgOptions).sort((a, b) => a.localeCompare(b)).map(project => (
                       <option key={project} value={project}>{project}</option>
                     ))}
                   </select>
-                  <button type="button" onClick={saveAdminRights} disabled={rightsSaving || !rightsUserId}>
+                  <button type="button" onClick={saveAdminRights} disabled={rightsMutating || !rightsUserId}>
                     {rightsSaving ? "Saving..." : "Save Rights"}
                   </button>
                 </div>
+
+                {rightsLoading && <p className="empty-message">Loading user rights...</p>}
+                {rightsError && <p className="error-message">{rightsError}</p>}
 
                 {selectedRightsUser && (
                   <div className="rights-scope-card">
@@ -1855,6 +1944,7 @@ function SuperAdmin() {
                         type="button"
                         className={rightsForm.scopeDepartments.includes(department) ? "selected" : ""}
                         onClick={() => toggleRightsDepartment(department)}
+                        disabled={rightsMutating}
                       >
                         {rightsForm.scopeDepartments.includes(department) ? "✓" : "×"} {department}
                       </button>
@@ -1865,19 +1955,49 @@ function SuperAdmin() {
                 <div className="custom-right-maker">
                   <div>
                     <strong>Make New Right</strong>
-                    <span>Create an extra right row, then allow or deny it for the selected admin.</span>
+                    <span>Create a reusable permission for application features configured to use it.</span>
                   </div>
                   <input
                     value={customRightForm.label}
                     onChange={e => setCustomRightForm(prev => ({ ...prev, label: e.target.value }))}
                     placeholder="Right name"
+                    disabled={rightsMutating}
                   />
                   <input
                     value={customRightForm.detail}
                     onChange={e => setCustomRightForm(prev => ({ ...prev, detail: e.target.value }))}
                     placeholder="Right details"
+                    disabled={rightsMutating}
                   />
-                  <button type="button" onClick={addCustomRight}>＋ Add Right</button>
+                  <button type="button" onClick={addCustomRight} disabled={rightsMutating}>
+                    {rightCreating ? "Adding..." : "+ Add Right"}
+                  </button>
+                </div>
+
+                <div className="custom-right-delete-panel">
+                  <div>
+                    <strong>Delete Custom Right</strong>
+                    <span>Select a custom right to remove it from every admin account.</span>
+                  </div>
+                  <select
+                    value={deleteRightSelection}
+                    onChange={e => setDeleteRightSelection(e.target.value)}
+                    disabled={customRights.length === 0 || rightsMutating}
+                  >
+                    <option value="">
+                      {customRights.length === 0 ? "No custom rights available" : "Select custom right"}
+                    </option>
+                    {customRights.map(right => (
+                      <option key={right.key} value={right.key}>{right.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => deleteCustomRight(selectedDeleteRight)}
+                    disabled={!selectedDeleteRight || rightsMutating}
+                  >
+                    {deletingRightKey ? "Deleting..." : "Delete Right"}
+                  </button>
                 </div>
 
                 <div className="rights-table-wrap">
@@ -1887,27 +2007,19 @@ function SuperAdmin() {
                         <th>Feature</th>
                         <th>Details</th>
                         <th>Allowed</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {rightsRows.map(right => {
-                        const allowed = rightsForm.permissions[right.key] !== false;
+                        const allowed = right.custom
+                          ? rightsForm.permissions[right.key] === true
+                          : rightsForm.permissions[right.key] !== false;
                         return (
                           <tr key={right.key}>
                             <td>
                               {right.label}
                               {right.custom && <span className="custom-right-badge">custom</span>}
-                              {right.custom && (
-                                <button
-                                  type="button"
-                                  className="custom-right-delete"
-                                  onClick={() => deleteCustomRight(right)}
-                                  aria-label={`Delete ${right.label} right`}
-                                  title={`Delete ${right.label}`}
-                                >
-                                  Delete
-                                </button>
-                              )}
                             </td>
                             <td>{right.detail}</td>
                             <td>
@@ -1915,11 +2027,27 @@ function SuperAdmin() {
                                 type="button"
                                 className={`rights-toggle ${allowed ? "allowed" : "blocked"}`}
                                 onClick={() => toggleRight(right.key)}
-                                disabled={!rightsUserId}
+                                disabled={!rightsUserId || rightsMutating}
                                 title={allowed ? "Allowed" : "Blocked"}
                               >
                                 {allowed ? "✓" : "×"}
                               </button>
+                            </td>
+                            <td>
+                              {right.custom ? (
+                                <button
+                                  type="button"
+                                  className="custom-right-delete"
+                                  onClick={() => deleteCustomRight(right)}
+                                  disabled={rightsMutating}
+                                  aria-label={`Delete ${right.label} right`}
+                                  title={`Delete ${right.label}`}
+                                >
+                                  {deletingRightKey === right.key ? "Deleting..." : "Delete Right"}
+                                </button>
+                              ) : (
+                                <span className="system-right-label">Protected</span>
+                              )}
                             </td>
                           </tr>
                         );

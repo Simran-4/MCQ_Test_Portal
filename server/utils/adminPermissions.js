@@ -7,21 +7,23 @@ const ADMIN_PERMISSION_DEFAULTS = {
   canViewQuestions: true,
   canManageQuestions: true,
   canAssignTests: true,
+  canManageSettings: true,
   canBulkMail: true,
   canViewUsers: true,
 };
 
 const ADMIN_PERMISSION_LABELS = [
-  { key: "canViewReports", label: "View reports" },
-  { key: "canViewTestReports", label: "View test reports" },
-  { key: "canDownloadReports", label: "Download reports" },
-  { key: "canViewSuites", label: "Open test suites" },
-  { key: "canManageSuites", label: "Create / edit test suites" },
-  { key: "canViewQuestions", label: "View questions" },
-  { key: "canManageQuestions", label: "Add / import / delete questions" },
-  { key: "canAssignTests", label: "Assign tests to candidates" },
-  { key: "canBulkMail", label: "Send bulk mail" },
-  { key: "canViewUsers", label: "See users" },
+  { key: "canViewReports", label: "View reports", detail: "Can open report pages and see result rows" },
+  { key: "canViewTestReports", label: "View test reports", detail: "Can open statistical and descriptive test reports" },
+  { key: "canDownloadReports", label: "Download reports", detail: "Can export summary and descriptive reports" },
+  { key: "canViewSuites", label: "Open test suites", detail: "Can open test suite pages within scope" },
+  { key: "canManageSuites", label: "Create / edit test suites", detail: "Can create, edit, activate, deactivate, and delete suites" },
+  { key: "canViewQuestions", label: "View questions", detail: "Can see questions inside a test suite" },
+  { key: "canManageQuestions", label: "Manage questions", detail: "Can add, import, edit, and delete questions" },
+  { key: "canAssignTests", label: "Assign tests", detail: "Can assign test suites to candidates" },
+  { key: "canManageSettings", label: "Manage settings", detail: "Can change assessment-wide settings" },
+  { key: "canBulkMail", label: "Mail candidates", detail: "Can prepare bulk emails and certificate emails" },
+  { key: "canViewUsers", label: "View users", detail: "Can see candidate and admin lists within scope" },
 ];
 
 function cleanList(values) {
@@ -59,7 +61,10 @@ function normalizeAdminPermissions(userOrPermissions = {}) {
 function hasAdminPermission(user, key) {
   if (user?.role === "superadmin") return true;
   if (user?.role !== "admin") return false;
-  return normalizeAdminPermissions(user).permissions[key] !== false;
+  const permissions = normalizeAdminPermissions(user).permissions;
+  return Object.prototype.hasOwnProperty.call(ADMIN_PERMISSION_DEFAULTS, key)
+    ? permissions[key] !== false
+    : permissions[key] === true;
 }
 
 function scopedResultQuery(user) {
