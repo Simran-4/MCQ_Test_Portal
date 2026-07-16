@@ -7,12 +7,17 @@ const LANGUAGES = [
   { value: "mr", label: "Marathi" },
 ];
 
+function normalizeLanguage(value) {
+  const base = String(value || "en").trim().toLowerCase().split(/[-_]/)[0];
+  return LANGUAGES.some(language => language.value === base) ? base : "en";
+}
+
 export default function LanguageSwitcher({ className = "" }) {
   const { i18n, t } = useTranslation();
-  const currentLanguage = i18n.resolvedLanguage || i18n.language || "en";
+  const currentLanguage = normalizeLanguage(i18n.resolvedLanguage || i18n.language);
 
   const changeLanguage = async (event) => {
-    const language = event.target.value;
+    const language = normalizeLanguage(event.target.value);
     await i18n.changeLanguage(language);
     localStorage.setItem("selectedLang", language);
     document.documentElement.lang = language;

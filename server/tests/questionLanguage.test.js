@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   questionsForLanguage,
   selectQuestionsForLanguage,
+  translateTextWithStatus,
   translateQuestionsWithStatus,
   resetTranslationStateForTests,
 } = require("../utils/questionLanguage");
@@ -73,6 +74,33 @@ test("translates English question text, options, and explanation to Marathi", as
   assert.deepEqual(result.questions[0].correctAnswer, source.correctAnswer);
   assert.equal(result.questions[0]._id, source._id);
   assert(calls.every(call => call.source === "en" && call.target === "mr"));
+});
+
+test("translates plain instruction text with status metadata", async () => {
+  global.fetch = async url => {
+    const params = new URL(url).searchParams;
+    return translatedResponse(`mr:${params.get("q")}`);
+  };
+
+  const result = await translateTextWithStatus("Read carefully before starting.", "mr");
+
+  assert.equal(result.status, "translated");
+  assert.equal(result.language, "mr");
+  assert.equal(result.failedCount, 0);
+  assert.equal(result.text, "mr:Read carefully before starting.");
+});
+
+test("plain instruction text falls back when translation fails", async () => {
+  global.fetch = async () => {
+    throw new Error("temporary outage");
+  };
+
+  const result = await translateTextWithStatus("Read carefully before starting.", "hi");
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.language, "hi");
+  assert.equal(result.failedCount, 1);
+  assert.equal(result.text, "Read carefully before starting.");
 });
 
 test("mixed target-language rows do not block translation of English rows", async () => {

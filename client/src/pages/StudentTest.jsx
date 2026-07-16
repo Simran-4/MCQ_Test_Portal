@@ -200,7 +200,7 @@ function remapAnswersByQuestionId(prevAnswers, nextQuestions) {
 export default function StudentTest() {
   const { suiteId } = useParams();
   const navigate    = useNavigate();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const selectedLanguage = normalizeLanguage(i18n.resolvedLanguage || i18n.language);
 
   const [suite, setSuite]           = useState(null);
@@ -213,6 +213,9 @@ export default function StudentTest() {
   const [error, setError]           = useState("");
   const [translationLoading, setTranslationLoading] = useState(false);
   const [translationError, setTranslationError] = useState("");
+  const [instructionTranslationLoading, setInstructionTranslationLoading] = useState(false);
+  const [translatedInstructions, setTranslatedInstructions] = useState("");
+  const [instructionTranslationError, setInstructionTranslationError] = useState("");
   const [testStarted, setTestStarted] = useState(false);
   const [instructionsAccepted, setInstructionsAccepted] = useState(false);
   const [startingTest, setStartingTest] = useState(false);
@@ -358,6 +361,9 @@ export default function StudentTest() {
     setBlockedResult(null);
     setTranslationLoading(false);
     setTranslationError("");
+    setInstructionTranslationLoading(false);
+    setTranslatedInstructions("");
+    setInstructionTranslationError("");
     setQuestions([]);
     setAnswers({});
     setMarkedForReview([]);
@@ -410,6 +416,53 @@ export default function StudentTest() {
       languageAbortRef.current?.abort();
     };
   }, [loadQuestionsForLanguage, suiteId, shouldCheckPreviousAttempt, userId, userSearch]);
+
+  useEffect(() => {
+    if (!suite || testStarted) return;
+    const sourceInstructions = String(suite.instructions || "").trim();
+    setInstructionTranslationError("");
+
+    if (!sourceInstructions) {
+      setTranslatedInstructions("");
+      setInstructionTranslationLoading(false);
+      return;
+    }
+
+    if (selectedLanguage === "en") {
+      setTranslatedInstructions(sourceInstructions);
+      setInstructionTranslationLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+    setInstructionTranslationLoading(true);
+
+    axios.get(`${API}/api/test-suites/${suiteId}/instructions`, {
+      headers: getAuthHeaders(),
+      signal: controller.signal,
+      params: { language: selectedLanguage },
+    }).then(res => {
+      if (cancelled) return;
+      setTranslatedInstructions(String(res.data?.instructions || sourceInstructions));
+      if (res.data?._translationStatus === "failed") {
+        setInstructionTranslationError(t("instructionTranslationFailed"));
+      }
+    }).catch(err => {
+      if (cancelled || axios.isCancel(err) || err.code === "ERR_CANCELED") return;
+      setTranslatedInstructions(sourceInstructions);
+      setInstructionTranslationError(
+        err.response?.data?.message || t("instructionTranslationFailed")
+      );
+    }).finally(() => {
+      if (!cancelled) setInstructionTranslationLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [selectedLanguage, suite, suiteId, t, testStarted]);
 
   useEffect(() => {
     if (loading || !testStarted || submitted || blockedResult || !suite) return;
@@ -470,7 +523,7 @@ export default function StudentTest() {
     } catch (err) {
       setStartError(
         err.response?.data?.message ||
-        "Could not prepare the test. Check your connection and try again."
+        t("prepareTestError")
       );
     } finally {
       startingTestRef.current = false;
@@ -596,7 +649,7 @@ export default function StudentTest() {
   if (loading) {
     return (
       <div style={{ minHeight: "100vh", background: BG, display: "grid", placeItems: "center", color: GREEN_DARK, fontFamily: "'Segoe UI', sans-serif" }}>
-        Loading test...
+        {t("loadingTest")}
       </div>
     );
   }
@@ -605,10 +658,10 @@ export default function StudentTest() {
     return (
       <div style={{ minHeight: "100vh", background: BG, display: "grid", placeItems: "center", padding: "20px", fontFamily: "'Segoe UI', sans-serif" }}>
         <div style={{ background: WHITE, borderRadius: "16px", padding: "28px", maxWidth: "420px", textAlign: "center" }}>
-          <h2 style={{ color: GREEN_DARK }}>Unable to load test</h2>
+          <h2 style={{ color: GREEN_DARK }}>{t("unableToLoadTest")}</h2>
           <p style={{ color: "#666" }}>{error}</p>
           <button onClick={() => navigate("/candidate")} style={{ padding: "10px 18px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", cursor: "pointer" }}>
-            Back to Tests
+            {t("backToTests")}
           </button>
         </div>
       </div>
@@ -621,15 +674,15 @@ export default function StudentTest() {
       <div style={{ minHeight: "100vh", background: BG, display: "grid", placeItems: "center", padding: "20px", fontFamily: "'Segoe UI', sans-serif" }}>
         <div style={{ background: WHITE, borderRadius: "18px", padding: "30px", maxWidth: "460px", width: "100%", textAlign: "center", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" }}>
           <div style={{ fontSize: "42px", marginBottom: "8px" }}>✓</div>
-          <h2 style={{ color: GREEN_DARK, margin: "0 0 8px" }}>You already attempted this test.</h2>
+          <h2 style={{ color: GREEN_DARK, margin: "0 0 8px" }}>{t("alreadyAttemptedTitle")}</h2>
           <p style={{ color: "#666", margin: "0 0 18px", lineHeight: 1.5 }}>
-            You passed this assessment earlier, so another attempt is not allowed.
+            {t("alreadyAttemptedMessage")}
           </p>
           <div style={{ background: "#eef8f1", border: "1px solid #c6e2d0", borderRadius: "12px", padding: "14px", marginBottom: "18px", color: GREEN_DARK, fontWeight: "800" }}>
-            Score: {blockedResult.score || 0} / {blockedResult.totalMarks || 0} ({blockedPct}%)
+            {t("scoreLabel")}: {blockedResult.score || 0} / {blockedResult.totalMarks || 0} ({blockedPct}%)
           </div>
           <button onClick={() => navigate("/candidate")} style={{ width: "100%", padding: "12px 18px", background: GREEN, color: WHITE, border: "none", borderRadius: "10px", cursor: "pointer", fontWeight: "800" }}>
-            Back to Tests
+            {t("backToTests")}
           </button>
         </div>
       </div>
@@ -637,7 +690,7 @@ export default function StudentTest() {
   }
 
   if (!testStarted) {
-    const instructions = String(suite?.instructions || "").trim();
+    const instructions = translatedInstructions || String(suite?.instructions || "").trim();
     const configuredQuestionCount = suite?.questionSelectionMode === "selected"
       ? (suite.selectedQuestionIds || []).length
       : suite?.questionSelectionMode === "random" || suite?.questionsToServe
@@ -654,7 +707,7 @@ export default function StudentTest() {
               disabled={startingTest}
               style={{ padding: "10px 15px", border: "1px solid #cad7ce", borderRadius: "10px", background: WHITE, color: GREEN_DARK, cursor: startingTest ? "not-allowed" : "pointer", fontWeight: "800" }}
             >
-              ← Back to Tests
+              ← {t("backToTests")}
             </button>
             <div style={{ pointerEvents: startingTest ? "none" : "auto", opacity: startingTest ? 0.6 : 1 }}>
               <LanguageSwitcher className="student-test-language-switcher" />
@@ -664,10 +717,10 @@ export default function StudentTest() {
           <section style={{ overflow: "hidden", border: "1px solid #d8e5db", borderRadius: "24px", background: WHITE, boxShadow: "0 20px 55px rgba(31, 77, 48, 0.10)" }}>
             <div style={{ padding: "30px clamp(22px, 5vw, 48px)", background: "linear-gradient(135deg, #1a3d28, #2d5f3f)", color: WHITE }}>
               <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "6px 11px", borderRadius: "999px", background: "rgba(255,255,255,0.12)", fontSize: "12px", fontWeight: "800", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                Before you begin
+                {t("beforeYouBegin")}
               </div>
               <h1 style={{ margin: "15px 0 8px", fontSize: "clamp(28px, 5vw, 42px)", lineHeight: 1.15 }}>
-                {suite?.name || "Test Instructions"}
+                {suite?.name || t("testInstructions")}
               </h1>
               {suite?.description && (
                 <p style={{ maxWidth: "650px", margin: 0, color: "rgba(255,255,255,0.82)", lineHeight: 1.55 }}>
@@ -679,22 +732,22 @@ export default function StudentTest() {
             <div style={{ padding: "clamp(22px, 5vw, 44px)" }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px", marginBottom: "26px" }}>
                 <div style={{ padding: "14px 16px", border: "1px solid #e0e9e2", borderRadius: "12px", background: "#f8fbf8" }}>
-                  <span style={{ display: "block", color: "#7a857e", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>Duration</span>
-                  <strong style={{ display: "block", marginTop: "5px", color: GREEN_DARK, fontSize: "18px" }}>{suite?.duration || 30} minutes</strong>
+                  <span style={{ display: "block", color: "#7a857e", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>{t("duration")}</span>
+                  <strong style={{ display: "block", marginTop: "5px", color: GREEN_DARK, fontSize: "18px" }}>{suite?.duration || 30} {t("minutesUnit")}</strong>
                 </div>
                 <div style={{ padding: "14px 16px", border: "1px solid #e0e9e2", borderRadius: "12px", background: "#f8fbf8" }}>
-                  <span style={{ display: "block", color: "#7a857e", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>Passing Criteria</span>
+                  <span style={{ display: "block", color: "#7a857e", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>{t("passingCriteria")}</span>
                   <strong style={{ display: "block", marginTop: "5px", color: GREEN_DARK, fontSize: "18px" }}>{suite?.passingPercentage ?? 50}%</strong>
                 </div>
                 {configuredQuestionCount ? (
                   <div style={{ padding: "14px 16px", border: "1px solid #e0e9e2", borderRadius: "12px", background: "#f8fbf8" }}>
-                    <span style={{ display: "block", color: "#7a857e", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>Questions</span>
+                    <span style={{ display: "block", color: "#7a857e", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>{t("questions")}</span>
                     <strong style={{ display: "block", marginTop: "5px", color: GREEN_DARK, fontSize: "18px" }}>{configuredQuestionCount}</strong>
                   </div>
                 ) : null}
               </div>
 
-              <h2 style={{ margin: "0 0 12px", color: GREEN_DARK, fontSize: "21px" }}>Instructions</h2>
+              <h2 style={{ margin: "0 0 12px", color: GREEN_DARK, fontSize: "21px" }}>{t("instructionsTitle")}</h2>
               <div
                 style={{
                   minHeight: "130px",
@@ -709,11 +762,16 @@ export default function StudentTest() {
                   overflowWrap: "anywhere",
                 }}
               >
-                {instructions || "No additional instructions have been provided for this test. Review the test details above and begin only when you are ready."}
+                {instructions || t("defaultTestInstructions")}
               </div>
+              {(instructionTranslationLoading || instructionTranslationError) && (
+                <div role={instructionTranslationError ? "alert" : "status"} style={{ marginTop: "10px", color: instructionTranslationError ? "#b45309" : "#5f6f64", fontSize: "13px", fontWeight: "700" }}>
+                  {instructionTranslationError || t("loading")}
+                </div>
+              )}
 
               <div style={{ marginTop: "18px", padding: "14px 16px", borderRadius: "12px", background: "#fff8e8", color: "#76520b", fontSize: "13px", lineHeight: 1.55 }}>
-                The questions and countdown timer will begin only after you confirm the instructions and select Start Test.
+                {t("instructionStartNotice")}
               </div>
 
               <label style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginTop: "22px", padding: "16px", border: `1px solid ${instructionsAccepted ? "#6fb187" : "#d8e2da"}`, borderRadius: "13px", background: instructionsAccepted ? "#f0faf4" : WHITE, color: GREEN_DARK, cursor: startingTest ? "wait" : "pointer", fontWeight: "800", lineHeight: 1.45 }}>
@@ -727,7 +785,7 @@ export default function StudentTest() {
                   }}
                   style={{ width: "20px", height: "20px", marginTop: "1px", flex: "0 0 auto", accentColor: GREEN }}
                 />
-                <span>I have read and understood all the instructions carefully and I am ready to begin the test.</span>
+                <span>{t("instructionAcceptance")}</span>
               </label>
 
               {startError && (
@@ -754,7 +812,7 @@ export default function StudentTest() {
                   boxShadow: !instructionsAccepted || startingTest ? "none" : "0 12px 24px rgba(31, 107, 58, 0.18)",
                 }}
               >
-                {startingTest ? "Preparing Test…" : "Start Test"}
+                {startingTest ? t("preparingTest") : t("startTest")}
               </button>
             </div>
           </section>

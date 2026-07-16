@@ -302,6 +302,24 @@ async function translateQuestionsWithStatus(questions, requestedLanguage) {
   return { questions: translatedQuestions, status, failedCount };
 }
 
+async function translateTextWithStatus(text, requestedLanguage, declaredLanguage = "en") {
+  const source = String(text || "");
+  const language = normalizeLanguage(requestedLanguage);
+  if (!source.trim()) {
+    return { text: source, status: "ready", failedCount: 0, language };
+  }
+
+  const result = await translateText(source, language, declaredLanguage);
+  return {
+    text: result.value,
+    status: result.success
+      ? result.attempted ? "translated" : "ready"
+      : "failed",
+    failedCount: result.success ? 0 : 1,
+    language,
+  };
+}
+
 async function translateQuestionsIfNeeded(questions, requestedLanguage) {
   return (await translateQuestionsWithStatus(questions, requestedLanguage)).questions;
 }
@@ -354,5 +372,6 @@ module.exports = {
   selectQuestionsForLanguage,
   translateQuestionsIfNeeded,
   translateQuestionsWithStatus,
+  translateTextWithStatus,
   resetTranslationStateForTests,
 };

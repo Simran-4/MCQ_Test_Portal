@@ -18,6 +18,7 @@ const {
   questionsForLanguage,
   selectQuestionsForLanguage,
   translateQuestionsWithStatus,
+  translateTextWithStatus,
 } = require("../utils/questionLanguage");
 const { canAccessSuite } = require("../utils/suiteAccess");
 const { normalizeTestInstructions } = require("../utils/testInstructions");
@@ -330,6 +331,35 @@ router.get("/:id/questions", async (req, res) => {
   } catch (err) {
     console.error("Suite questions error:", err);
     res.status(500).json({ message: "Error fetching questions" });
+  }
+});
+
+router.get("/:id/instructions", async (req, res) => {
+  try {
+    const user = readOptionalUser(req);
+    if (!(await optionalAdminHasFeature(user, "canViewSuites"))) {
+      return res.status(403).json({ message: "Test suite viewing access denied" });
+    }
+    const suite = await TestSuite.findById(req.params.id);
+    if (!suite) return res.status(404).json({ message: "Suite not found" });
+    if (!canAccessSuite(suite, user)) {
+      return res.status(403).json({ message: "This test is not available" });
+    }
+
+    const translated = await translateTextWithStatus(
+      suiteToObject(suite).instructions,
+      req.query.language || req.query.lang,
+      "en"
+    );
+    res.json({
+      instructions: translated.text,
+      _translationStatus: translated.status,
+      _translationRequestedLanguage: translated.language,
+      _translationFailedCount: translated.failedCount,
+    });
+  } catch (err) {
+    console.error("Suite instructions translation error:", err);
+    res.status(500).json({ message: "Error fetching test instructions" });
   }
 });
 
