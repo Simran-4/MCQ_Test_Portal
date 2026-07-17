@@ -234,6 +234,15 @@ function resultGrade(result) {
   return "Low";
 }
 
+function descriptiveAttemptSummary(result) {
+  const percentage = resultPct(result);
+  const status = resultStatus(result);
+  const correct = result.correctAnswers ?? 0;
+  const total = result.totalQuestions ?? 0;
+  const duration = formatDuration(resultTimeTakenSeconds(result));
+  return `${status} — ${percentage}% (${correct}/${total} correct). Grade: ${resultGrade(result)}. Time taken: ${duration}.`;
+}
+
 function categoryLabel(category) {
   if (category?.scaleLabel) return category.scaleLabel;
   const pct = Number(category?.percentage || 0);
@@ -1724,6 +1733,7 @@ export default function Dashboard() {
       "Percentage": resultPct(result),
       "Grade": resultGrade(result),
       "Result": resultStatus(result),
+      "Performance Summary": descriptiveAttemptSummary(result),
     }));
     const categoryRows = selectedUserResults.flatMap(result =>
       categoryRowsForResult(result).map((category, categoryIndex) => ({
@@ -1747,11 +1757,61 @@ export default function Dashboard() {
       personalQuestionExportRows(result, selectedReportUser)
     );
     const wb = XLSX.utils.book_new();
-    const overviewWs = XLSX.utils.json_to_sheet(overviewRows);
+    const profileEntries = Object.entries(overviewRows[0]).slice(0, 12);
+    const outcomeEntries = Object.entries(overviewRows[0]).slice(12);
+    const attemptSummaryRows = selectedUserResults.map((result, index) => [
+      index + 1,
+      resultTestName(result),
+      formatDateTime(result.submittedAt),
+      `${result.score || 0}/${result.totalMarks || 0}`,
+      `${resultPct(result)}%`,
+      resultStatus(result),
+      descriptiveAttemptSummary(result),
+    ]);
+    const profileStartRow = 4;
+    const outcomeStartRow = profileStartRow + profileEntries.length + 2;
+    const attemptsTitleRow = outcomeStartRow + outcomeEntries.length + 2;
+    const attemptsHeaderRow = attemptsTitleRow + 1;
+    const reportRows = [
+      ["Snehalaya Personal Descriptive Report"],
+      ["Generated On", formatDateTime(new Date())],
+      [],
+      ["Candidate Profile"],
+      ...profileEntries,
+      [],
+      ["Assessment Outcome"],
+      ...outcomeEntries,
+      [],
+      ["Attempt-by-Attempt Descriptive Summary"],
+      ["Sr. No.", "Test Name", "Submitted At", "Score", "Percentage", "Result", "Performance Summary"],
+      ...attemptSummaryRows,
+    ];
+    const reportWs = XLSX.utils.aoa_to_sheet(reportRows);
+    reportWs["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 6 } },
+      { s: { r: outcomeStartRow - 1, c: 0 }, e: { r: outcomeStartRow - 1, c: 6 } },
+      { s: { r: attemptsTitleRow - 1, c: 0 }, e: { r: attemptsTitleRow - 1, c: 6 } },
+    ];
+    reportWs["!cols"] = [{ wch: 24 }, { wch: 34 }, { wch: 22 }, { wch: 15 }, { wch: 14 }, { wch: 14 }, { wch: 62 }];
+    const titleStyle = { font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1A3D28" } }, alignment: { horizontal: "center" } };
+    const sectionStyle = { font: { bold: true, color: { rgb: "1A3D28" } }, fill: { fgColor: { rgb: "E7F4EB" } } };
+    const tableHeaderStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2D5F3F" } }, alignment: { wrapText: true } };
+    const styleRow = (row, style, columns = 7) => {
+      for (let column = 0; column < columns; column += 1) {
+        const address = XLSX.utils.encode_cell({ r: row, c: column });
+        if (reportWs[address]) reportWs[address].s = style;
+      }
+    };
+    styleRow(0, titleStyle);
+    styleRow(profileStartRow - 1, sectionStyle);
+    styleRow(outcomeStartRow - 1, sectionStyle);
+    styleRow(attemptsTitleRow - 1, sectionStyle);
+    styleRow(attemptsHeaderRow - 1, tableHeaderStyle);
+
     const ws = XLSX.utils.json_to_sheet(rows);
     const categoryWs = XLSX.utils.json_to_sheet(categoryRows.length > 0 ? categoryRows : [{ "Category": "No category breakdown available" }]);
     const questionWs = XLSX.utils.json_to_sheet(questionRows.length > 0 ? questionRows : [{ "Question": "No question-wise answer data available" }]);
-    overviewWs["!cols"] = Object.keys(overviewRows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }));
     ws["!cols"] = Object.keys(rows[0]).map(key => ({ wch: Math.max(16, key.length + 4) }));
     categoryWs["!cols"] = categoryRows.length > 0
       ? Object.keys(categoryRows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }))
@@ -1759,11 +1819,11 @@ export default function Dashboard() {
     questionWs["!cols"] = questionRows.length > 0
       ? Object.keys(questionRows[0]).map(key => ({ wch: key === "Question" || key.includes("Answer") ? 42 : 20 }))
       : [{ wch: 42 }];
-    XLSX.utils.book_append_sheet(wb, overviewWs, "Overview");
-    XLSX.utils.book_append_sheet(wb, ws, "Test Attempts");
-    XLSX.utils.book_append_sheet(wb, categoryWs, "Category Details");
-    XLSX.utils.book_append_sheet(wb, questionWs, "Question Details");
-    downloadExcelWorkbook(XLSX, wb, `personal_report_${fileSafeName(selectedReportUser.name)}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, reportWs, "Descriptive Report");
+    XLSX.utils.book_append_sheet(wb, ws, "Attempt Details");
+    XLSX.utils.book_append_sheet(wb, categoryWs, "Category Analysis");
+    XLSX.utils.book_append_sheet(wb, questionWs, "Question Review");
+    downloadExcelWorkbook(XLSX, wb, `descriptive_personal_report_${fileSafeName(selectedReportUser.name)}.xlsx`);
   };
 
   const downloadPersonalPDF = async () => {
