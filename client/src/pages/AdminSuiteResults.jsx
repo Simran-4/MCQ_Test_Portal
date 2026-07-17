@@ -4,7 +4,7 @@ import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { downloadResultsPDF, downloadResultsExcel } from "../utils/downloadResults";
 import { canAdmin, clearAuthSession, getAuthHeaders, getCurrentUser } from "../utils/auth";
-import { sendCertificateEmail } from "../utils/certificate";
+import { openCertificateEmail } from "../utils/certificate";
 
 const API = import.meta.env.VITE_API_URL || "";
 
@@ -196,9 +196,9 @@ export default function AdminSuiteResults() {
     const passed = typeof result.passed === "boolean" ? result.passed : result.pct >= 50;
     if (!passed) return alert("Certificate can be sent only for passed candidates.");
     try {
-      await sendCertificateEmail(result, suite, language);
+      await openCertificateEmail(result, suite, language);
     } catch (err) {
-      alert(err.message || "Unable to prepare certificate email.");
+      alert(err.message || "Unable to prepare the certificate email draft.");
     }
   };
 

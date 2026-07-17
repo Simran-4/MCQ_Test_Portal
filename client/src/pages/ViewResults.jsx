@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import "../styles/quiz.css";
 import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
-import { sendCertificateEmail } from "../utils/certificate";
+import { openCertificateEmail } from "../utils/certificate";
 
 const API = import.meta.env.VITE_API_URL || "";
 
@@ -105,9 +105,9 @@ export default function ViewResults() {
       return;
     }
     try {
-      await sendCertificateEmail(res, { name: getResultTestName(res) }, language);
+      await openCertificateEmail(res, { name: getResultTestName(res) }, language);
     } catch (err) {
-      alert(err.message || "Unable to prepare certificate email.");
+      alert(err.message || "Unable to prepare the certificate email draft.");
     }
   };
 
