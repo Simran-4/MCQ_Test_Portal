@@ -964,16 +964,42 @@ router.get("/superadmin/overview", authMiddleware, requireSuperAdmin, async (req
 
 router.get("/superadmin/activity-logs", authMiddleware, requireSuperAdmin, async (req, res) => {
     try {
-        const { search, from, to } = req.query;
+        const { search, from, to, tzOffsetMinutes } = req.query;
         const logs = await ActivityLog.find().sort({ occurredAt: -1, createdAt: -1 });
         const searchTerm = String(search || "").trim().toLowerCase();
-        const fromTime = from ? new Date(`${from}T00:00:00.000`).getTime() : null;
-        const toTime = to ? new Date(`${to}T23:59:59.999`).getTime() : null;
+        const offsetCandidate = Number(tzOffsetMinutes);
+        const timezoneOffsetMinutes = Number.isFinite(offsetCandidate) && offsetCandidate >= -840 && offsetCandidate <= 840
+            ? offsetCandidate
+            : -330;
+        const parseDateBoundary = (value, endOfDay = false) => {
+            if (!value) return null;
+            const matched = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!matched) return NaN;
+            const [, year, month, day] = matched.map(Number);
+            const timestamp = Date.UTC(year, month - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+            const check = new Date(timestamp);
+            if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return NaN;
+            return timestamp + timezoneOffsetMinutes * 60 * 1000;
+        };
+        const fromTime = parseDateBoundary(from);
+        const toTime = parseDateBoundary(to, true);
+        if (Number.isNaN(fromTime) || Number.isNaN(toTime)) {
+            return res.status(400).json({ message: "Enter valid From and To dates." });
+        }
+        if (fromTime !== null && toTime !== null && fromTime > toTime) {
+            return res.status(400).json({ message: "The From date cannot be after the To date." });
+        }
         const filtered = logs.filter(log => {
             const occurred = new Date(log.occurredAt || log.createdAt || 0).getTime();
-            if (fromTime && occurred < fromTime) return false;
-            if (toTime && occurred > toTime) return false;
+            if (fromTime !== null && occurred < fromTime) return false;
+            if (toTime !== null && occurred > toTime) return false;
             if (!searchTerm) return true;
+            const flattenDetails = value => {
+                if (value === null || value === undefined) return "";
+                if (Array.isArray(value)) return value.map(flattenDetails).join(" ");
+                if (typeof value === "object") return Object.values(value).map(flattenDetails).join(" ");
+                return String(value);
+            };
             const haystack = [
                 log.actorName,
                 log.actorRole,
@@ -987,7 +1013,7 @@ router.get("/superadmin/activity-logs", authMiddleware, requireSuperAdmin, async
                 log.details?.department,
                 log.details?.name,
                 log.details?.email,
-                log.details?.mobile,
+                flattenDetails(log.details),
             ].join(" ").toLowerCase();
             return haystack.includes(searchTerm);
         });

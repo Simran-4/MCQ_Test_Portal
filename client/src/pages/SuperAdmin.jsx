@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
@@ -634,6 +634,7 @@ function SuperAdmin() {
   const [activitySearch, setActivitySearch] = useState("");
   const [activityFromDate, setActivityFromDate] = useState("");
   const [activityToDate, setActivityToDate] = useState("");
+  const activityRequestId = useRef(0);
   const [controlMode, setControlMode] = useState("rights");
   const [openActionUserId, setOpenActionUserId] = useState("");
   const [roles, setRoles] = useState([
@@ -689,26 +690,34 @@ function SuperAdmin() {
   }, []);
 
   const loadActivityLogs = useCallback(async (overrides = {}) => {
-    const nextSearch = overrides.search ?? activitySearch;
+    const nextSearch = String(overrides.search ?? activitySearch).trim();
     const nextFrom = overrides.from ?? activityFromDate;
     const nextTo = overrides.to ?? activityToDate;
+    if (nextFrom && nextTo && nextFrom > nextTo) {
+      setError("The From date cannot be after the To date.");
+      return;
+    }
+    const requestId = ++activityRequestId.current;
     setActivityLoading(true);
     setError("");
     try {
       const res = await axios.get(`${API_URL}/superadmin/activity-logs`, {
         headers: getAuthHeaders(),
         params: {
-          search: nextSearch.trim() || undefined,
+          search: nextSearch || undefined,
           from: nextFrom || undefined,
           to: nextTo || undefined,
+          tzOffsetMinutes: new Date().getTimezoneOffset(),
           _: Date.now(),
         },
       });
-      setActivityLogs(res.data);
+      if (requestId === activityRequestId.current) setActivityLogs(res.data);
     } catch (err) {
-      setError(err.response?.data?.message || "Unable to load activity logs");
+      if (requestId === activityRequestId.current) {
+        setError(err.response?.data?.message || "Unable to load activity logs");
+      }
     } finally {
-      setActivityLoading(false);
+      if (requestId === activityRequestId.current) setActivityLoading(false);
     }
   }, [activitySearch, activityFromDate, activityToDate]);
 
@@ -1808,9 +1817,14 @@ function SuperAdmin() {
                 <h2>Activity Logs</h2>
                 <p>Successful changes made by candidates, administrators, and super admins.</p>
               </div>
-              <button type="button" className="refresh-btn" onClick={() => loadActivityLogs()}>Refresh</button>
             </div>
-            <form className="activity-filters" onSubmit={(event) => { event.preventDefault(); loadActivityLogs(); }}>
+            <form
+              className="activity-filters"
+              onSubmit={(event) => {
+                event.preventDefault();
+                loadActivityLogs({ search: activitySearch, from: activityFromDate, to: activityToDate });
+              }}
+            >
               <input
                 type="text"
                 value={activitySearch}
@@ -1838,7 +1852,12 @@ function SuperAdmin() {
               >
                 Clear
               </button>
-              <button type="button" onClick={() => loadActivityLogs()}>Refresh</button>
+              <button
+                type="button"
+                onClick={() => loadActivityLogs({ search: activitySearch, from: activityFromDate, to: activityToDate })}
+              >
+                Refresh
+              </button>
             </form>
             {activityLoading ? <p className="empty-message">Loading activity…</p> : (
               <div className="table-wrapper activity-table-wrapper">
