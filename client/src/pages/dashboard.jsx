@@ -194,6 +194,10 @@ function firstPresent(...values) {
   return found === undefined ? "" : String(found).trim();
 }
 
+function normalizedIdentity(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function resultCandidateName(result, fallbackUser = null) {
   return firstPresent(result?.CandidateName, result?.userName, fallbackUser?.name, fallbackUser?.username, "Unknown");
 }
@@ -249,6 +253,19 @@ function categoryRowsForResult(result) {
 
 function categoryName(category, index = 0) {
   return firstPresent(category?.category, category?.name, `Category ${index + 1}`);
+}
+
+function exportText(value) {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.map(exportText).join(", ");
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
 }
 
 function uniqueIndexes(indexes) {
@@ -354,6 +371,54 @@ async function addDevanagariFont(doc) {
     console.warn("Unable to load Devanagari PDF font. Falling back to Helvetica.", err);
     return "helvetica";
   }
+}
+
+function personalQuestionExportRows(result, fallbackUser) {
+  return (result.answers || []).map((answer, index) => {
+    const question = getAnswerQuestion(answer);
+    const review = questionReviewRows(result)[index] || {};
+    const rawQuestionId = question?._id || (typeof answer?.questionId === "object" ? answer?.questionId?._id : answer?.questionId) || "";
+    const options = Array.isArray(question?.options) ? question.options : [];
+    return {
+      "Result ID": result._id || "",
+      "Suite ID": resultSuiteId(result),
+      "Test Name": resultTestName(result),
+      "Candidate": resultCandidateName(result, fallbackUser),
+      "Submitted At": formatDateTime(result.submittedAt),
+      "Question No.": index + 1,
+      "Question ID": rawQuestionId,
+      "Question Type": question?.questionType || (answer?.textAnswer ? "theory" : "objective"),
+      "Question": review.question || "",
+      "Categories": review.categories || "",
+      "Options": options.map((option, optionIndex) => `${optionIndex + 1}. ${exportText(option)}`).join("\n"),
+      "Selected Option Index(es)": exportText(answer?.selectedOptions),
+      "Text Answer": answer?.textAnswer || "",
+      "Selected Answer": review.selected || "",
+      "Correct Answer": review.correct || "",
+      "Is Correct": typeof answer?.isCorrect === "boolean" ? (answer.isCorrect ? "Yes" : "No") : "",
+      "Earned Marks": answer?.earnedMarks ?? "",
+      "Question Marks": question?.marks ?? "",
+      "Review": review.review || "",
+      "Raw Answer Data": exportText(answer),
+    };
+  });
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const field = document.createElement("textarea");
+  field.value = text;
+  field.setAttribute("readonly", "");
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  field.select();
+  const copied = document.execCommand("copy");
+  field.remove();
+  if (!copied) throw new Error("Copy is not available in this browser.");
 }
 
 function escapeHtml(value) {
@@ -580,19 +645,24 @@ async function saveAdminReportPdf({ title, fileName, columns, rows }) {
 }
 
 function matchesUserResult(result, user) {
-  const tokens = [
-    user.email,
-    user.mobile,
-    user.username,
-    user.name,
-  ].filter(Boolean).map(value => String(value).toLowerCase());
-  const haystack = [
-    result.CandidateEmail,
-    result.userEmail,
-    result.CandidateName,
-    result.userName,
-  ].filter(Boolean).join(" ").toLowerCase();
-  return tokens.some(token => haystack.includes(token));
+  if (!result || !user) return false;
+  if (result.candidateUserId && String(result.candidateUserId) === String(user._id)) return true;
+
+  const userContacts = [user.email, user.mobile, user.username]
+    .map(normalizedIdentity)
+    .filter(Boolean);
+  const resultContacts = [result.CandidateEmail, result.userEmail]
+    .map(normalizedIdentity)
+    .filter(Boolean);
+  if (userContacts.length && resultContacts.length) {
+    return userContacts.some(userValue => resultContacts.includes(userValue));
+  }
+
+  const userName = normalizedIdentity(user.name);
+  const resultNames = [result.CandidateName, result.userName]
+    .map(normalizedIdentity)
+    .filter(Boolean);
+  return Boolean(userName) && resultNames.includes(userName);
 }
 
 function resultSuiteId(result) {
@@ -1374,7 +1444,7 @@ export default function Dashboard() {
       registerPathForNext(`/test/${suiteId}`),
       window.location.origin,
     ).href;
-    navigator.clipboard.writeText(url)
+    copyTextToClipboard(url)
       .then(() => alert("Registration link copied. Candidates will register first, then continue to this test. Existing candidates can use the Login link."))
       .catch(() => alert(`Share this link: ${url}`));
   };
@@ -1620,8 +1690,16 @@ export default function Dashboard() {
     if (selectedUserResults.length === 0) return alert("No reports found for this user.");
 
     const overviewRows = [{
+      "User ID": selectedReportUser._id || "-",
       "Candidate": selectedReportUser.name || "-",
-      "Contact": userContact(selectedReportUser) || "-",
+      "Username": selectedReportUser.username || "-",
+      "Email": selectedReportUser.email || "-",
+      "Mobile": selectedReportUser.mobile || "-",
+      "Preferred Contact": userContact(selectedReportUser) || "-",
+      "Role": selectedReportUser.customRole || selectedReportUser.role || "-",
+      "Account Status": selectedReportUser.isActive === false ? "Inactive" : "Active",
+      "Age": selectedReportUser.age ?? "-",
+      "Gender": selectedReportUser.gender || "-",
       "Project/Department": selectedReportUser.project || "-",
       "Designation": selectedReportUser.designation || "-",
       "Total Reports": selectedUserResults.length,
@@ -1633,44 +1711,46 @@ export default function Dashboard() {
     }];
 
     const rows = selectedUserResults.map(result => ({
+      "Result ID": result._id || "",
+      "Candidate User ID": result.candidateUserId || selectedReportUser._id || "",
+      "Suite ID": resultSuiteId(result),
       "Test Name": resultTestName(result),
       "Candidate": resultCandidateName(result, selectedReportUser),
-      "Contact": resultCandidateContact(result, selectedReportUser),
+      "Candidate Email/Mobile": resultCandidateContact(result, selectedReportUser),
       "Project/Department": resultProject(result, selectedReportUser),
       "Designation": resultDesignation(result, selectedReportUser),
-      "Score": `${result.score || 0}/${result.totalMarks || 0}`,
+      "Started At": formatDateTime(result.startedAt),
+      "Submitted At": formatDateTime(result.submittedAt),
+      "Time Taken (seconds)": resultTimeTakenSeconds(result) ?? "",
+      "Time Taken": formatDuration(resultTimeTakenSeconds(result)),
+      "Score": Number(result.score || 0),
+      "Total Marks": Number(result.totalMarks || 0),
       "Correct Answers": result.correctAnswers ?? "-",
       "Total Questions": result.totalQuestions ?? "-",
-      "Percentage": `${resultPct(result)}%`,
+      "Percentage": resultPct(result),
       "Grade": resultGrade(result),
       "Result": resultStatus(result),
-      "Time Taken": formatDuration(resultTimeTakenSeconds(result)),
-      "Submitted At": formatDateTime(result.submittedAt),
     }));
     const categoryRows = selectedUserResults.flatMap(result =>
       categoryRowsForResult(result).map((category, categoryIndex) => ({
+        "Result ID": result._id || "",
+        "Suite ID": resultSuiteId(result),
         "Test Name": resultTestName(result),
+        "Candidate": resultCandidateName(result, selectedReportUser),
         "Submitted At": formatDateTime(result.submittedAt),
         "Category": categoryName(category, categoryIndex),
-        "Score": `${category.score ?? category.earnedMarks ?? 0}/${category.total ?? 0}`,
-        "Percentage": `${category.percentage || 0}%`,
-        "Scale Score": category.scaleScore ? `${category.scaleScore}/10` : "-",
+        "Score": category.score ?? category.earnedMarks ?? 0,
+        "Total": category.total ?? "",
+        "Percentage": category.percentage ?? "",
+        "Scale Score": category.scaleScore ?? "",
         "Grade": categoryLabel(category),
+        "Scale Label": category.scaleLabel || "",
         "Description": category.description || "-",
+        "Raw Category Data": exportText(category),
       }))
     );
     const questionRows = selectedUserResults.flatMap(result =>
-      questionReviewRows(result).map(row => ({
-        "Test Name": resultTestName(result),
-        "Submitted At": formatDateTime(result.submittedAt),
-        "Question No.": row.number,
-        "Question": row.question,
-        "Category": row.categories,
-        "Selected Answer": row.selected,
-        "Correct Answer": row.correct,
-        "Review": row.review,
-        "Marks": row.marks,
-      }))
+      personalQuestionExportRows(result, selectedReportUser)
     );
     const wb = XLSX.utils.book_new();
     const overviewWs = XLSX.utils.json_to_sheet(overviewRows);

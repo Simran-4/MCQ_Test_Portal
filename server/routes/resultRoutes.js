@@ -483,6 +483,7 @@ router.post("/", authMiddleware, async (req, res) => {
 
     const result = new Result({
       suiteId,
+      candidateUserId: req.user.role === "candidate" ? String(req.user.id) : "",
       testName:       suite?.name || testName || "",
       CandidateName:  storedName,
       CandidateEmail: storedEmail,
