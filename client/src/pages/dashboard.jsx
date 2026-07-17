@@ -9,7 +9,7 @@ import { downloadExcelWorkbook, downloadPdfDocument } from "../utils/pdfDownload
 import { downloadCanvasTablePdf } from "../utils/canvasTablePdf";
 import * as XLSX from "xlsx";
 import "./dashboard.css";
-import { canAdmin, getAuthHeaders } from "../utils/auth";
+import { canAdmin, clearAuthSession, getAuthHeaders, getCurrentUser } from "../utils/auth";
 import { registerPathForNext } from "../utils/authRedirect";
 import BulkMailPanel from "../components/BulkMailPanel";
 import LanguageSwitcher from "../components/LanguageSwitcher";
@@ -1104,13 +1104,7 @@ export default function Dashboard() {
   const [deletingSuite, setDeletingSuite] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
-  const user = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem("user") || "{}");
-    } catch {
-      return {};
-    }
-  }, []);
+  const user = useMemo(() => getCurrentUser(), []);
   const canViewReports = canAdmin("canViewReports", user);
   const canViewTestReports = canAdmin("canViewTestReports", user);
   const canDownloadReports = canAdmin("canDownloadReports", user);
@@ -2012,8 +2006,7 @@ export default function Dashboard() {
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    clearAuthSession();
     navigate("/");
   };
 

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
 import LanguageSwitcher from "../components/LanguageSwitcher";
-import { getAuthHeaders } from "../utils/auth";
+import { clearAuthSession, getAuthHeaders, getCurrentUser } from "../utils/auth";
 import { downloadCertificatePDF } from "../utils/certificate";
 import "./candidateDashboard.css";
 
@@ -85,13 +85,7 @@ export default function CandidateDashboard() {
   const [activeTab, setActiveTab] = useState("available");
   const [loading, setLoading] = useState(true);
 
-  const user = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem("user") || "{}");
-    } catch {
-      return {};
-    }
-  }, []);
+  const user = useMemo(() => getCurrentUser(), []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -124,7 +118,7 @@ export default function CandidateDashboard() {
   const failureRate = historyResults.length ? Math.round((failedCount / historyResults.length) * 100) : 0;
 
   const logout = () => {
-    localStorage.clear();
+    clearAuthSession();
     navigate("/");
   };
 

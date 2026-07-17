@@ -3,7 +3,7 @@ import { useCallback, useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
+import { canAdmin, clearAuthSession, getAuthHeaders, getCurrentUser } from "../utils/auth";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import "./testSuiteDetail.css";
 
@@ -935,7 +935,7 @@ export default function TestSuiteDetail() {
             📅 {new Date(suite.startDate).toLocaleDateString()} – {suite.endDate ? new Date(suite.endDate).toLocaleDateString() : "∞"}
           </span>
         )}
-        <span onClick={() => { localStorage.removeItem("token"); navigate("/"); }} style={{ fontSize: "14px", color: "#C0392B", fontWeight: "500", cursor: "pointer", marginLeft: "auto" }}>Logout</span>
+        <span onClick={() => { clearAuthSession(); navigate("/"); }} style={{ fontSize: "14px", color: "#C0392B", fontWeight: "500", cursor: "pointer", marginLeft: "auto" }}>Logout</span>
         <LanguageSwitcher className="suite-language-switcher" />
       </div>
 

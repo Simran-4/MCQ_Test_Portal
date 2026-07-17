@@ -5,7 +5,7 @@ import axios from "axios";
 import { downloadCanvasTablePdf } from "../utils/canvasTablePdf";
 import * as XLSX from "xlsx";
 import "./superadmin.css";
-import { ADMIN_PERMISSION_DEFAULTS, getAuthHeaders, getCurrentUser } from "../utils/auth";
+import { ADMIN_PERMISSION_DEFAULTS, clearAuthSession, getAuthHeaders, getCurrentUser } from "../utils/auth";
 import BulkMailPanel from "../components/BulkMailPanel";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import { defaultOrgOptions, mergeOrgOptions, syncApiOrgOptions, writeLocalOrgOptions } from "../utils/orgOptions";
@@ -1544,7 +1544,7 @@ function SuperAdmin() {
   };
 
   const logout = () => {
-    localStorage.clear();
+    clearAuthSession();
     navigate("/");
   };
 

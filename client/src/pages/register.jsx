@@ -3,6 +3,7 @@ import axios from "axios";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { defaultOrgOptions, syncApiOrgOptions } from "../utils/orgOptions";
 import { getSafeNextPath, loginPathForNext } from "../utils/authRedirect";
+import { setAuthSession } from "../utils/auth";
 
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
@@ -155,8 +156,7 @@ function Register() {
         designation,
       });
       if (nextPath.startsWith("/test/") && res.data?.token && res.data?.user) {
-        localStorage.setItem("token", `Bearer ${res.data.token}`);
-        localStorage.setItem("user", JSON.stringify(res.data.user));
+        setAuthSession(res.data.token, res.data.user);
         alert("Registration Successful. Starting your test now.");
         navigate(nextPath);
         return;

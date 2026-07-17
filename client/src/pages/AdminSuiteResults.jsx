@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { downloadResultsPDF, downloadResultsExcel } from "../utils/downloadResults";
-import { canAdmin, getAuthHeaders, getCurrentUser } from "../utils/auth";
+import { canAdmin, clearAuthSession, getAuthHeaders, getCurrentUser } from "../utils/auth";
 import { sendCertificateEmail } from "../utils/certificate";
 
 const API = import.meta.env.VITE_API_URL || "";
@@ -388,7 +388,7 @@ export default function AdminSuiteResults() {
       {/* Nav */}
       <div className="suite-results-nav" style={{ padding:"12px 28px", display:"flex", gap:"16px", alignItems:"center", borderBottom:"0.5px solid rgba(0,0,0,0.09)", marginTop:"12px" }}>
         <span onClick={() => navigate(`/admin/test-suites/${suiteId}`)} style={{ fontSize:"14px", color:"#4A7A5C", fontWeight:"500", cursor:"pointer" }}>← Back to suite</span>
-        <span onClick={() => { localStorage.removeItem("token"); navigate("/"); }} style={{ fontSize:"14px", color:"#C0392B", fontWeight:"500", cursor:"pointer", marginLeft:"auto" }}>Logout</span>
+        <span onClick={() => { clearAuthSession(); navigate("/"); }} style={{ fontSize:"14px", color:"#C0392B", fontWeight:"500", cursor:"pointer", marginLeft:"auto" }}>Logout</span>
       </div>
 
       {/* Content */}

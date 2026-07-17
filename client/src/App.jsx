@@ -18,7 +18,7 @@ import AdminSuiteResults from "./pages/AdminSuiteResults";
 // Student Pages
 import StudentDashboard from "./pages/StudentDashboard";
 import StudentTest from "./pages/StudentTest";
-import { refreshCurrentUser } from "./utils/auth";
+import { clearAuthSession, getAuthToken, getCurrentUser, refreshCurrentUser } from "./utils/auth";
 import { loginPathForNext } from "./utils/authRedirect";
 
 function homePathForRole(role) {
@@ -30,14 +30,8 @@ function homePathForRole(role) {
 
 // ── PROTECTIVE WRAPPER ────────────────────────────────────
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const token = localStorage.getItem("token");
-  const [user, setUser] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("user") || "{}");
-    } catch {
-      return {};
-    }
-  });
+  const token = getAuthToken();
+  const [user, setUser] = useState(() => getCurrentUser());
   const [checkingUser, setCheckingUser] = useState(Boolean(token));
   const [userVersion, setUserVersion] = useState(0);
   const location = useLocation();
@@ -68,8 +62,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
         .then(applyFreshUser)
         .catch(err => {
           if (err.status === 401 || err.status === 403) {
-            localStorage.removeItem("token");
-            localStorage.removeItem("user");
+            clearAuthSession();
             if (!cancelled) setUser({});
           }
         })

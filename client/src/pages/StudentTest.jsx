@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import LanguageSwitcher from "../components/LanguageSwitcher";
-import { getAuthHeaders } from "../utils/auth";
+import { getAuthHeaders, getCurrentUser } from "../utils/auth";
 import { downloadCertificatePDF } from "../utils/certificate";
 
 const API = import.meta.env.VITE_API_URL || "";
@@ -330,10 +330,7 @@ export default function StudentTest() {
     });
   }, [questions]);
 
-  const user = (() => {
-    try { return JSON.parse(localStorage.getItem("user")) || {}; }
-    catch { return {}; }
-  })();
+  const user = getCurrentUser();
   const userId = getUserId(user);
   const userSearch = user.email || user.mobile || user.username || user.name || "";
   const shouldCheckPreviousAttempt = user.role === "candidate" && Boolean(userSearch);

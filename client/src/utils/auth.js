@@ -1,9 +1,28 @@
 const API = import.meta.env.VITE_API_URL || "";
+const TOKEN_KEY = "token";
+const USER_KEY = "user";
 
 export function getAuthToken() {
-  const token = localStorage.getItem("token") || "";
+  const token = sessionStorage.getItem(TOKEN_KEY) || "";
   if (!token) return "";
   return token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+}
+
+export function setAuthSession(token, user) {
+  sessionStorage.setItem(TOKEN_KEY, String(token || "").startsWith("Bearer ") ? token : `Bearer ${token}`);
+  sessionStorage.setItem(USER_KEY, JSON.stringify(user || {}));
+  // Authentication used to be shared in localStorage, which caused any login
+  // in another tab to replace the active account. Remove only legacy auth keys.
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+}
+
+export function clearAuthSession() {
+  sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(USER_KEY);
+  // Also remove a pre-session-storage login left by an older app version.
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
 }
 
 export function getAuthHeaders(extraHeaders = {}) {
@@ -29,7 +48,7 @@ export const ADMIN_PERMISSION_DEFAULTS = {
 
 export function getCurrentUser() {
   try {
-    return JSON.parse(localStorage.getItem("user") || "{}");
+    return JSON.parse(sessionStorage.getItem(USER_KEY) || "{}");
   } catch {
     return {};
   }
@@ -45,7 +64,7 @@ export async function refreshCurrentUser() {
     throw err;
   }
   const user = await res.json();
-  localStorage.setItem("user", JSON.stringify(user));
+  sessionStorage.setItem(USER_KEY, JSON.stringify(user));
   return user;
 }
 

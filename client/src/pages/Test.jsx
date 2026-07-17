@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import "../styles/quiz.css";
-import { getAuthHeaders } from "../utils/auth";
+import { getAuthHeaders, getCurrentUser } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL || "";
 
@@ -179,7 +179,7 @@ function Test() {
         // if settings fetch fails, default passed = false
       }
 
-      const user = JSON.parse(localStorage.getItem("user")) || {};
+      const user = getCurrentUser();
 
       await axios.post(
         `${API}/api/results/add`,

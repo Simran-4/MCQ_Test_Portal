@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import axios from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getSafeNextPath, registerPathForNext } from "../utils/authRedirect";
+import { clearAuthSession, setAuthSession } from "../utils/auth";
 
 const GREEN      = "#2D5F3F";
 const GREEN_DARK = "#1A3D28";
@@ -44,8 +45,7 @@ function Login() {
         { identifier: loginId, email: loginId, password: loginPassword }
       );
 
-      localStorage.setItem("token", `Bearer ${res.data.token}`);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+      setAuthSession(res.data.token, res.data.user);
 
       if (nextPath.startsWith("/test/")) {
         navigate(nextPath);
@@ -75,8 +75,7 @@ function Login() {
   };
 
   const cancelRoleChoice = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    clearAuthSession();
     setLoginChoiceUser(null);
     setPassword("");
   };
