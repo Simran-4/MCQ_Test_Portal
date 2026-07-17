@@ -1,5 +1,8 @@
 import jsPDF from "jspdf";
 import { downloadPdfDocument } from "./pdfDownload";
+import { getAuthHeaders } from "./auth";
+
+const API = import.meta.env.VITE_API_URL || "";
 
 const LANGUAGE_LABELS = {
   english: "English",
@@ -907,6 +910,20 @@ async function buildCertificatePDFFile(result, fallbackSuite = {}, language = "e
   return { ...built, file, fileName };
 }
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Certificate PDF could not be prepared for email."));
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      const base64 = dataUrl.split(",", 2)[1] || "";
+      if (!base64) return reject(new Error("Certificate PDF could not be prepared for email."));
+      resolve(base64);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function downloadBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -921,6 +938,29 @@ function downloadBlob(blob, fileName) {
 export async function downloadCertificatePDF(result, fallbackSuite = {}, language = "english") {
   const { doc, data, language: normalizedLanguage } = await buildCertificatePDFDocument(result, fallbackSuite, language);
   downloadPdfDocument(doc, certificateFileName(data, normalizedLanguage));
+}
+
+export async function sendCertificateEmail(result, fallbackSuite = {}, language = "english") {
+  const normalizedLanguage = language === "marathi" ? "marathi" : "english";
+  if (!result?._id) throw new Error("The candidate result is unavailable. Refresh the page and try again.");
+
+  const { data, file, fileName } = await buildCertificatePDFFile(result, fallbackSuite, normalizedLanguage);
+  if (!data.candidateEmail || !data.candidateEmail.includes("@")) {
+    throw new Error("Candidate email is not available.");
+  }
+  const response = await fetch(`${API}/api/auth/certificates/email`, {
+    method: "POST",
+    headers: getAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      resultId: result._id,
+      language: normalizedLanguage,
+      fileName,
+      pdfBase64: await fileToBase64(file),
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.message || "Unable to send the certificate email.");
+  return payload;
 }
 
 function certificateEmailBody(data, fileName, language) {

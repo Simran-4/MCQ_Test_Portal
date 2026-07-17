@@ -10,7 +10,18 @@ const RoleDefinition = require("./models/RoleDefinition");
 const AdminRightDefinition = require("./models/AdminRightDefinition");
 const OrgOption = require("./models/OrgOption");
 const ActivityLog = require("./models/ActivityLog");
+const PasswordResetOtp = require("./models/PasswordResetOtp");
 const authMiddleware = require("./middleware/authMiddleware");
+const {
+    OTP_EXPIRY_MINUTES,
+    OTP_RESEND_COOLDOWN_SECONDS,
+    OTP_MAX_ATTEMPTS,
+    createOtp,
+    hashOtp,
+    otpMatches,
+    sendWhatsAppOtp,
+} = require("./utils/passwordResetOtp");
+const { sendCertificateEmail } = require("./utils/certificateMailer");
 const {
     ADMIN_PERMISSION_DEFAULTS,
     normalizeAdminPermissions,
@@ -729,6 +740,64 @@ router.post("/login", async (req, res) => {
 });
 
 // ── CURRENT USER ───────────────────────────────────────────────
+// The certificate is rendered in the browser so it matches the preview and
+// download. This endpoint sends that generated PDF as an email attachment.
+router.post("/certificates/email", authMiddleware, requireAdminOrSuperAdmin, async (req, res) => {
+    try {
+        const requester = req.currentUser;
+        if (!hasAdminPermission(requester, "canBulkMail")) {
+            return res.status(403).json({ message: "Certificate email permission is disabled for your account." });
+        }
+
+        const resultId = String(req.body?.resultId || "").trim();
+        const language = req.body?.language === "marathi" ? "marathi" : "english";
+        const suppliedFileName = String(req.body?.fileName || "").trim();
+        const pdfBase64 = String(req.body?.pdfBase64 || "").trim();
+        if (!resultId || !pdfBase64 || !suppliedFileName) {
+            return res.status(400).json({ message: "Certificate PDF and result details are required." });
+        }
+        if (pdfBase64.length > 7 * 1024 * 1024) {
+            return res.status(413).json({ message: "Certificate PDF is too large to email." });
+        }
+
+        const result = await Result.findById(resultId);
+        if (!result) return res.status(404).json({ message: "Result not found." });
+        if (!result.passed) return res.status(400).json({ message: "A certificate can be emailed only for a passed candidate." });
+        if (!matchesUserScope(requester, result)) {
+            return res.status(403).json({ message: "You do not have access to this candidate result." });
+        }
+
+        const recipient = normalizeEmail(result.CandidateEmail || result.userEmail);
+        if (!EMAIL_RE.test(recipient)) return res.status(400).json({ message: "Candidate email is not available." });
+        const pdf = Buffer.from(pdfBase64, "base64");
+        if (pdf.length === 0 || pdf.length > 5 * 1024 * 1024 || pdf.subarray(0, 5).toString() !== "%PDF-") {
+            return res.status(400).json({ message: "The generated certificate is not a valid PDF." });
+        }
+
+        const safeFileName = suppliedFileName
+            .replace(/[^a-zA-Z0-9._-]/g, "_")
+            .replace(/^_+/, "")
+            .slice(0, 176) || "certificate";
+        const fileName = safeFileName.toLowerCase().endsWith(".pdf")
+            ? safeFileName
+            : safeFileName + ".pdf";
+        const candidateName = String(result.CandidateName || result.userName || "Candidate").trim();
+        const testName = String(result.testName || "Assessment").trim();
+        const subject = "Certificate - " + testName + " (" + (language === "marathi" ? "Marathi" : "English") + ")";
+        const text = language === "marathi"
+            ? "Dear " + candidateName + ",\n\nYour " + testName + " certificate PDF is attached.\n\nRegards,\nSnehalaya"
+            : "Dear " + candidateName + ",\n\nCongratulations on successfully completing " + testName + ". Your certificate PDF is attached.\n\nRegards,\nSnehalaya";
+        await sendCertificateEmail({ to: recipient, subject, text, fileName, pdf });
+        res.json({ message: "Certificate PDF emailed successfully." });
+    } catch (err) {
+        console.error("Certificate email failed:", err.code || err.message);
+        if (err.code === "SMTP_NOT_CONFIGURED") {
+            return res.status(503).json({ message: "Certificate email is not configured yet. Please contact IT support." });
+        }
+        res.status(502).json({ message: "Unable to send the certificate email. Please try again." });
+    }
+});
+
 router.get("/me", authMiddleware, async (req, res) => {
     try {
         const user = req.currentUser || await User.findById(req.user.id).select(
@@ -751,20 +820,121 @@ router.post("/forgot-password", async (req, res) => {
             return res.status(400).json({ message: "Username, email, or mobile number is required" });
         }
 
-        await User.findOne({
+        const user = await User.findOne({
             $or: [
                 { email: normalizeEmail(rawIdentifier) },
                 { username: normalizeUsername(rawIdentifier) },
                 { mobile: normalizeMobile(rawIdentifier) },
             ],
         });
+        const genericMessage = "If an active account matches these details, a WhatsApp OTP has been sent to its registered mobile number.";
+        if (!user || user.isActive === false) {
+            return res.json({ message: genericMessage, otpRequired: true });
+        }
+        if (!normalizeMobile(user.mobile)) {
+            return res.status(400).json({ message: "This account does not have a registered WhatsApp mobile number. Please contact IT support." });
+        }
+
+        const now = new Date();
+        let resetOtp = await PasswordResetOtp.findOne({ userId: String(user._id) });
+        const lastSent = new Date(resetOtp?.lastSentAt || 0).getTime();
+        const elapsedSeconds = Math.floor((now.getTime() - lastSent) / 1000);
+        if (resetOtp && elapsedSeconds >= 0 && elapsedSeconds < OTP_RESEND_COOLDOWN_SECONDS) {
+            return res.json({
+                message: "An OTP was sent recently. Please check WhatsApp before requesting another one.",
+                otpRequired: true,
+                retryAfterSeconds: OTP_RESEND_COOLDOWN_SECONDS - elapsedSeconds,
+            });
+        }
+
+        const otp = createOtp();
+        await sendWhatsAppOtp({ mobile: user.mobile, otp });
+        if (!resetOtp) resetOtp = new PasswordResetOtp({ userId: String(user._id) });
+        resetOtp.otpHash = hashOtp(otp);
+        resetOtp.expiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000).toISOString();
+        resetOtp.attempts = 0;
+        resetOtp.lastSentAt = now.toISOString();
+        resetOtp.usedAt = "";
+        await resetOtp.save();
         res.json({
-            message: "If this account is registered, please contact the IT Department to reset the password.",
-            contactEmail: "crm@snehalaya.org",
-            contactPhone: "9011020190",
+            message: genericMessage,
+            otpRequired: true,
         });
     } catch (err) {
-        res.status(500).json({ message: "Unable to process reset request" });
+        console.error("WhatsApp password reset request failed:", err.code || err.message, err.detail || "");
+        const message = err.code === "WHATSAPP_NOT_CONFIGURED"
+            ? "WhatsApp OTP is not configured yet. Please contact IT support."
+            : "Unable to send the WhatsApp OTP right now. Please try again shortly.";
+        res.status(503).json({ message });
+    }
+});
+
+router.post("/forgot-password/verify-otp", async (req, res) => {
+    try {
+        const rawIdentifier = String(req.body.identifier || "").trim();
+        const otp = String(req.body.otp || "").replace(/\s/g, "");
+        if (!rawIdentifier || !/^\d{6}$/.test(otp)) {
+            return res.status(400).json({ message: "Enter the six-digit OTP from WhatsApp." });
+        }
+        const user = await User.findOne({
+            $or: [
+                { email: normalizeEmail(rawIdentifier) },
+                { username: normalizeUsername(rawIdentifier) },
+                { mobile: normalizeMobile(rawIdentifier) },
+            ],
+        });
+        const resetOtp = user && await PasswordResetOtp.findOne({ userId: String(user._id) });
+        const isExpired = !resetOtp || new Date(resetOtp.expiresAt || 0).getTime() <= Date.now();
+        if (!user || user.isActive === false || isExpired || resetOtp.usedAt || resetOtp.attempts >= OTP_MAX_ATTEMPTS) {
+            return res.status(400).json({ message: "This OTP is invalid or has expired. Request a new OTP and try again." });
+        }
+        if (!otpMatches(otp, resetOtp.otpHash)) {
+            resetOtp.attempts += 1;
+            await resetOtp.save();
+            return res.status(400).json({ message: "This OTP is invalid or has expired. Request a new OTP and try again." });
+        }
+
+        const resetToken = jwt.sign(
+            { id: user._id, passwordResetOtpId: resetOtp._id, purpose: "password-reset" },
+            process.env.JWT_SECRET || "snehalaya2024",
+            { expiresIn: "10m" }
+        );
+        res.json({ message: "OTP verified. Choose your new password.", resetToken });
+    } catch (err) {
+        res.status(500).json({ message: "Unable to verify the OTP" });
+    }
+});
+
+router.post("/forgot-password/reset", async (req, res) => {
+    try {
+        const password = String(req.body.password || "");
+        const resetToken = String(req.body.resetToken || "");
+        if (password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
+        if (!resetToken) return res.status(400).json({ message: "Your reset session has expired. Request a new OTP." });
+
+        let payload;
+        try {
+            payload = jwt.verify(resetToken, process.env.JWT_SECRET || "snehalaya2024");
+        } catch {
+            return res.status(400).json({ message: "Your reset session has expired. Request a new OTP." });
+        }
+        if (payload.purpose !== "password-reset" || !payload.id || !payload.passwordResetOtpId) {
+            return res.status(400).json({ message: "Your reset session has expired. Request a new OTP." });
+        }
+        const [user, resetOtp] = await Promise.all([
+            User.findById(payload.id),
+            PasswordResetOtp.findById(payload.passwordResetOtpId),
+        ]);
+        if (!user || user.isActive === false || !resetOtp || String(resetOtp.userId) !== String(user._id)
+            || resetOtp.usedAt || new Date(resetOtp.expiresAt || 0).getTime() <= Date.now()) {
+            return res.status(400).json({ message: "Your reset session has expired. Request a new OTP." });
+        }
+        user.password = await bcrypt.hash(password, 10);
+        resetOtp.usedAt = new Date().toISOString();
+        await Promise.all([user.save(), resetOtp.save()]);
+        res.json({ message: "Your password has been reset. You can now log in." });
+    } catch (err) {
+        res.status(500).json({ message: "Unable to reset the password" });
     }
 });
 

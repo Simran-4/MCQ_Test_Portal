@@ -9,6 +9,13 @@ This repository is configured as one Node.js application: Express serves the API
    - `JWT_SECRET`: a long random secret.
    - `NODE_ENV=production`.
    - `CORS_ORIGINS`: only needed if the client is deployed on a different origin; comma-separate allowed origins.
+   - `WHATSAPP_ACCESS_TOKEN`: a permanent access token for the Meta WhatsApp Cloud API.
+   - `WHATSAPP_PHONE_NUMBER_ID`: the WhatsApp Cloud API phone-number ID that sends password reset messages.
+   - `WHATSAPP_OTP_TEMPLATE_NAME`: an approved WhatsApp template name (defaults to `password_reset_otp`). Its body must have two variables: the OTP and its validity in minutes.
+   - `WHATSAPP_OTP_TEMPLATE_LANGUAGE`: the template language code (defaults to `en_US`).
+   - `WHATSAPP_GRAPH_API_VERSION`: optional Graph API version (defaults to `v21.0`); update it when Meta retires that version.
+   - `PASSWORD_RESET_OTP_SECRET`: optional additional secret used to hash OTPs at rest; use a long random value in production.
+   - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`: the SMTP account used to send certificate PDFs as email attachments. Set `SMTP_SECURE=true` only for port 465 (it defaults to false for port 587).
 4. Set the build command to `npm run build`.
 5. Set the start command to `npm start` (the included `Procfile` uses this command). CloudJiffy supplies `PORT`; do not set a fixed port.
 6. Use `/health` as the platform health check URL.

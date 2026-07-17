@@ -16,6 +16,11 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+  const [resetStep, setResetStep] = useState("request");
+  const [resetOtp, setResetOtp] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginChoiceUser, setLoginChoiceUser] = useState(null);
   const identifierInputRef = useRef(null);
@@ -77,7 +82,7 @@ function Login() {
   };
 
   const handleForgotPassword = async () => {
-    const targetIdentifier = identifier.trim();
+    const targetIdentifier = (identifierInputRef.current?.value || identifier).trim();
     if (!targetIdentifier) {
       setResetMessage("Enter your username, email, or mobile number above, then click Forgot password.");
       return;
@@ -86,13 +91,56 @@ function Login() {
     setResetMessage("");
     try {
       const res = await axios.post(`${API_AUTH}/forgot-password`, { identifier: targetIdentifier, email: targetIdentifier });
-      setResetMessage(res.data?.message || "Please contact the IT Department to reset your password.");
+      setResetMessage(res.data?.message || "Check WhatsApp for your six-digit OTP.");
+      setResetStep("verify");
+      setResetOtp("");
+      setResetToken("");
     } catch (err) {
-      if (err.response?.status === 404) {
-        setResetMessage("Please contact the IT Department to reset your password: 9011020190 or crm@snehalaya.org.");
-      } else {
-        setResetMessage(err.response?.data?.message || "Please contact the IT Department to reset your password.");
-      }
+      setResetMessage(err.response?.data?.message || "Unable to send the WhatsApp OTP. Please try again shortly.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleVerifyResetOtp = async () => {
+    const targetIdentifier = (identifierInputRef.current?.value || identifier).trim();
+    if (!/^\d{6}$/.test(resetOtp)) {
+      setResetMessage("Enter the six-digit OTP received on WhatsApp.");
+      return;
+    }
+    setResetLoading(true);
+    try {
+      const res = await axios.post(`${API_AUTH}/forgot-password/verify-otp`, { identifier: targetIdentifier, otp: resetOtp });
+      setResetToken(res.data.resetToken || "");
+      setResetStep("password");
+      setResetMessage(res.data.message || "OTP verified. Choose your new password.");
+    } catch (err) {
+      setResetMessage(err.response?.data?.message || "Unable to verify the OTP. Please try again.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (newPassword.length < 6) {
+      setResetMessage("Your new password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setResetMessage("The new passwords do not match.");
+      return;
+    }
+    setResetLoading(true);
+    try {
+      const res = await axios.post(`${API_AUTH}/forgot-password/reset`, { resetToken, password: newPassword });
+      setResetMessage(res.data?.message || "Your password has been reset. You can now log in.");
+      setResetStep("complete");
+      setPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setResetToken("");
+    } catch (err) {
+      setResetMessage(err.response?.data?.message || "Unable to reset your password. Request a new OTP and try again.");
     } finally {
       setResetLoading(false);
     }
@@ -275,7 +323,13 @@ function Login() {
               autoComplete="username"
               style={inputStyle}
               value={identifier}
-              onChange={e => setIdentifier(e.target.value)}
+              onChange={e => {
+                setIdentifier(e.target.value);
+                if (resetStep !== "request") {
+                  setResetStep("request");
+                  setResetToken("");
+                }
+              }}
             />
           </div>
           <div>
@@ -314,6 +368,73 @@ function Login() {
         {resetMessage && (
           <div style={{ marginTop: "12px", padding: "10px 12px", borderRadius: "10px", background: "rgba(255,255,255,0.18)", color: WHITE, fontSize: "12px", lineHeight: 1.5 }}>
             {resetMessage}
+          </div>
+        )}
+
+        {resetStep === "verify" && (
+          <div style={{ marginTop: "12px", display: "grid", gap: "8px" }}>
+            <label style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              WhatsApp OTP
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              placeholder="Enter 6-digit OTP"
+              value={resetOtp}
+              onChange={e => setResetOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              style={inputStyle}
+            />
+            <button
+              type="button"
+              onClick={handleVerifyResetOtp}
+              disabled={resetLoading}
+              style={{ width: "100%", padding: "10px", fontSize: "13px", fontWeight: "700", background: GREEN, color: WHITE, border: "none", borderRadius: "18px", cursor: resetLoading ? "wait" : "pointer", opacity: resetLoading ? 0.75 : 1 }}
+            >
+              {resetLoading ? "Verifying..." : "Verify OTP"}
+            </button>
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={resetLoading}
+              style={{ padding: 0, border: "none", background: "transparent", color: WHITE, fontSize: "12px", fontWeight: "700", textDecoration: "underline", cursor: resetLoading ? "wait" : "pointer" }}
+            >
+              Resend OTP on WhatsApp
+            </button>
+          </div>
+        )}
+
+        {resetStep === "password" && (
+          <div style={{ marginTop: "12px", display: "grid", gap: "8px" }}>
+            <label style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              New password
+            </label>
+            <input
+              type="password"
+              autoComplete="new-password"
+              placeholder="At least 6 characters"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              style={inputStyle}
+            />
+            <input
+              type="password"
+              autoComplete="new-password"
+              placeholder="Confirm new password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleResetPassword()}
+              style={inputStyle}
+            />
+            <button
+              type="button"
+              onClick={handleResetPassword}
+              disabled={resetLoading}
+              style={{ width: "100%", padding: "10px", fontSize: "13px", fontWeight: "700", background: GREEN, color: WHITE, border: "none", borderRadius: "18px", cursor: resetLoading ? "wait" : "pointer", opacity: resetLoading ? 0.75 : 1 }}
+            >
+              {resetLoading ? "Updating..." : "Set new password"}
+            </button>
           </div>
         )}
 

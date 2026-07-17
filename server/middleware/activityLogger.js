@@ -4,9 +4,13 @@ const IGNORED_PATHS = new Set([
   "/login",
   "/validate-email",
   "/forgot-password",
+  "/forgot-password/verify-otp",
+  "/forgot-password/reset",
   "/api/auth/login",
   "/api/auth/validate-email",
   "/api/auth/forgot-password",
+  "/api/auth/forgot-password/verify-otp",
+  "/api/auth/forgot-password/reset",
 ]);
 
 function cleanRoute(path = "") {

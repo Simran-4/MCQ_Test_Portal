@@ -31,6 +31,9 @@ async function connectDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
     await client.query("CREATE INDEX IF NOT EXISTS app_documents_collection_idx ON app_documents (collection)");
+    await client.query(`CREATE INDEX IF NOT EXISTS app_documents_password_reset_user_idx
+      ON app_documents ((data->>'userId'))
+      WHERE collection = 'PasswordResetOtp'`);
   } finally {
     client.release();
   }
