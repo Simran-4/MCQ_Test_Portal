@@ -1640,13 +1640,70 @@ export default function Dashboard() {
       "Latest Attempted At": formatDateTime(row.latestAttempt),
       "Average Time Taken": formatDuration(row.averageTime),
     }));
+    const attemptRows = reportSpanResults.map((result, index) => ({
+      "Sr. No.": index + 1,
+      "Result ID": result._id || "",
+      "Candidate User ID": result.candidateUserId || "",
+      "Suite ID": resultSuiteId(result),
+      "Test Name": resultTestName(result),
+      "Candidate": resultCandidateName(result),
+      "Candidate Email/Mobile": resultCandidateContact(result),
+      "Project/Department": resultProject(result),
+      "Designation": resultDesignation(result),
+      "Started At": formatDateTime(result.startedAt),
+      "Submitted At": formatDateTime(result.submittedAt),
+      "Time Taken (seconds)": resultTimeTakenSeconds(result) ?? "",
+      "Time Taken": formatDuration(resultTimeTakenSeconds(result)),
+      "Score": Number(result.score || 0),
+      "Total Marks": Number(result.totalMarks || 0),
+      "Correct Answers": result.correctAnswers ?? "",
+      "Total Questions": result.totalQuestions ?? "",
+      "Percentage": resultPct(result),
+      "Grade": resultGrade(result),
+      "Result": resultStatus(result),
+      "Performance Summary": descriptiveAttemptSummary(result),
+    }));
+    const categoryRows = reportSpanResults.flatMap(result =>
+      categoryRowsForResult(result).map((category, categoryIndex) => ({
+        "Result ID": result._id || "",
+        "Suite ID": resultSuiteId(result),
+        "Test Name": resultTestName(result),
+        "Candidate": resultCandidateName(result),
+        "Submitted At": formatDateTime(result.submittedAt),
+        "Category": categoryName(category, categoryIndex),
+        "Score": category.score ?? category.earnedMarks ?? 0,
+        "Total": category.total ?? "",
+        "Percentage": category.percentage ?? "",
+        "Scale Score": category.scaleScore ?? "",
+        "Grade": categoryLabel(category),
+        "Scale Label": category.scaleLabel || "",
+        "Description": category.description || "-",
+        "Raw Category Data": exportText(category),
+      }))
+    );
+    const questionRows = reportSpanResults.flatMap(result => personalQuestionExportRows(result, null));
     const wb = XLSX.utils.book_new();
     const summaryWs = XLSX.utils.json_to_sheet(summaryRows);
     const detailWs = XLSX.utils.json_to_sheet(rows);
+    const attemptWs = XLSX.utils.json_to_sheet(attemptRows);
+    const categoryWs = XLSX.utils.json_to_sheet(categoryRows.length > 0 ? categoryRows : [{ "Category": "No category breakdown available" }]);
+    const questionWs = XLSX.utils.json_to_sheet(questionRows.length > 0 ? questionRows : [{ "Question": "No question-wise answer data available" }]);
     summaryWs["!cols"] = Object.keys(summaryRows[0]).map(key => ({ wch: Math.max(16, key.length + 4) }));
     detailWs["!cols"] = Object.keys(rows[0]).map(key => ({ wch: Math.max(18, key.length + 4) }));
+    attemptWs["!cols"] = Object.keys(attemptRows[0]).map(key => ({
+      wch: key === "Performance Summary" ? 62 : Math.max(16, key.length + 4),
+    }));
+    categoryWs["!cols"] = categoryRows.length > 0
+      ? Object.keys(categoryRows[0]).map(key => ({ wch: key === "Description" || key === "Raw Category Data" ? 42 : Math.max(18, key.length + 4) }))
+      : [{ wch: 34 }];
+    questionWs["!cols"] = questionRows.length > 0
+      ? Object.keys(questionRows[0]).map(key => ({ wch: key === "Question" || key.includes("Answer") || key === "Review" ? 42 : 20 }))
+      : [{ wch: 42 }];
     XLSX.utils.book_append_sheet(wb, summaryWs, "Time Span Summary");
-    XLSX.utils.book_append_sheet(wb, detailWs, "Attempt Analysis");
+    XLSX.utils.book_append_sheet(wb, detailWs, "PDF Summary");
+    XLSX.utils.book_append_sheet(wb, attemptWs, "All Attempts");
+    XLSX.utils.book_append_sheet(wb, categoryWs, "Category Analysis");
+    XLSX.utils.book_append_sheet(wb, questionWs, "Question Review");
     downloadExcelWorkbook(XLSX, wb, `attempt_analysis_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
