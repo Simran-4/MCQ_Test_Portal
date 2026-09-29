@@ -677,12 +677,18 @@ router.post("/login", async (req, res) => {
         if (matchingUsers.length === 0) {
             return res.status(400).json({ message: "User not found" });
         }
-        if (matchingUsers.length > 1) {
+        // Old imported accounts can share an email or username. Only a
+        // password that identifies exactly one matching account may log in;
+        // shared passwords must never select an arbitrary account or role.
+        const passwordMatches = await Promise.all(matchingUsers.map(async user =>
+            Boolean(user.password && await bcrypt.compare(password, user.password))
+        ));
+        const matchingPasswordUsers = matchingUsers.filter((_, index) => passwordMatches[index]);
+        if (matchingPasswordUsers.length > 1) {
             return res.status(409).json({ message: "This login ID belongs to multiple accounts. Contact IT support to correct the account details." });
         }
-
-        const user = matchingUsers[0];
-        if (!user.password || !(await bcrypt.compare(password, user.password))) {
+        const user = matchingPasswordUsers[0];
+        if (!user) {
             return res.status(400).json({ message: "Invalid credentials" });
         }
 
