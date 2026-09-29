@@ -12,6 +12,7 @@ const OrgOption = require("./models/OrgOption");
 const ActivityLog = require("./models/ActivityLog");
 const PasswordResetOtp = require("./models/PasswordResetOtp");
 const authMiddleware = require("./middleware/authMiddleware");
+const { normalizeUsername, normalizeMobile, normalizeEmail, usersMatchingIdentifier } = require("./utils/userIdentifier");
 const {
     OTP_EXPIRY_MINUTES,
     OTP_RESEND_COOLDOWN_SECONDS,
@@ -222,15 +223,10 @@ async function createUserFromPayload(payload, options = {}) {
     }
 
     const storedEmail = normalizedEmail || `${normalizedUsername}@mobile.local`;
-    const existingUser = await User.findOne({
-        $or: [
-            { username: normalizedUsername },
-            { email: storedEmail },
-            ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
-            ...(normalizedMobile ? [{ mobile: normalizedMobile }] : []),
-        ],
-    });
-    if (existingUser) {
+    const users = await User.find();
+    if ([normalizedUsername, normalizedEmail, normalizedMobile]
+        .filter(Boolean)
+        .some(value => usersMatchingIdentifier(users, value).length > 0)) {
         return { status: 400, error: "Username, email, or mobile number already exists" };
     }
 
@@ -325,17 +321,14 @@ async function updateUserFromPayload(userId, payload, requesterId) {
     }
 
     const storedEmail = normalizedEmail || `${normalizedUsername}@mobile.local`;
-    const changedIdentityChecks = [
-        ...(usernameChanged ? [{ username: normalizedUsername }] : []),
-        ...(emailChanged && normalizedEmail ? [{ email: normalizedEmail }] : []),
-        ...(mobileChanged && normalizedMobile ? [{ mobile: normalizedMobile }] : []),
+    const changedIdentifiers = [
+        ...(usernameChanged ? [normalizedUsername] : []),
+        ...(emailChanged && normalizedEmail ? [normalizedEmail] : []),
+        ...(mobileChanged && normalizedMobile ? [normalizedMobile] : []),
     ];
-    if (changedIdentityChecks.length) {
-        const existingUser = await User.findOne({
-            _id: { $ne: user._id },
-            $or: changedIdentityChecks,
-        });
-        if (existingUser) {
+    if (changedIdentifiers.length) {
+        const otherUsers = (await User.find()).filter(candidate => String(candidate._id) !== String(user._id));
+        if (changedIdentifiers.some(value => usersMatchingIdentifier(otherUsers, value).length > 0)) {
             return { status: 400, error: "The updated username, email, or mobile number is already used by another account" };
         }
     }
@@ -527,18 +520,6 @@ async function migrateDesignationReferences(projectName, currentDepartment, next
     }));
 }
 
-function normalizeUsername(value) {
-    return String(value || "").toLowerCase().trim().replace(/\s+/g, "");
-}
-
-function normalizeMobile(value) {
-    return String(value || "").replace(/[^\d+]/g, "").trim();
-}
-
-function normalizeEmail(value) {
-    return String(value || "").toLowerCase().trim();
-}
-
 function basicEmailValidation(email) {
     const normalized = normalizeEmail(email);
     if (!normalized) return { valid: false, message: "Enter an email address" };
@@ -692,29 +673,16 @@ router.post("/login", async (req, res) => {
                 return res.status(400).json({ message: basicEmail.message });
             }
         }
-        const normalizedUsername = normalizeUsername(rawIdentifier);
-        const normalizedMobile = normalizeMobile(rawIdentifier);
-
-        const matchingUsers = await User.find({
-            $or: [
-                { email: normalizedIdentifier },
-                { username: normalizedUsername },
-                { mobile: normalizedMobile },
-            ],
-        });
+        const matchingUsers = usersMatchingIdentifier(await User.find(), rawIdentifier);
         if (matchingUsers.length === 0) {
             return res.status(400).json({ message: "User not found" });
         }
+        if (matchingUsers.length > 1) {
+            return res.status(409).json({ message: "This login ID belongs to multiple accounts. Contact IT support to correct the account details." });
+        }
 
-        const passwordMatches = await Promise.all(matchingUsers.map(async user => {
-            try {
-                return await bcrypt.compare(password, user.password);
-            } catch {
-                return false;
-            }
-        }));
-        const user = matchingUsers.find((candidate, index) => passwordMatches[index]);
-        if (!user) {
+        const user = matchingUsers[0];
+        if (!user.password || !(await bcrypt.compare(password, user.password))) {
             return res.status(400).json({ message: "Invalid credentials" });
         }
 
@@ -820,13 +788,11 @@ router.post("/forgot-password", async (req, res) => {
             return res.status(400).json({ message: "Username, email, or mobile number is required" });
         }
 
-        const user = await User.findOne({
-            $or: [
-                { email: normalizeEmail(rawIdentifier) },
-                { username: normalizeUsername(rawIdentifier) },
-                { mobile: normalizeMobile(rawIdentifier) },
-            ],
-        });
+        const matchingUsers = usersMatchingIdentifier(await User.find(), rawIdentifier);
+        if (matchingUsers.length > 1) {
+            return res.status(409).json({ message: "This login ID belongs to multiple accounts. Contact IT support to correct the account details." });
+        }
+        const user = matchingUsers[0];
         const genericMessage = "If an active account matches these details, a WhatsApp OTP has been sent to its registered mobile number.";
         if (!user || user.isActive === false) {
             return res.json({ message: genericMessage, otpRequired: true });
@@ -876,13 +842,11 @@ router.post("/forgot-password/verify-otp", async (req, res) => {
         if (!rawIdentifier || !/^\d{6}$/.test(otp)) {
             return res.status(400).json({ message: "Enter the six-digit OTP from WhatsApp." });
         }
-        const user = await User.findOne({
-            $or: [
-                { email: normalizeEmail(rawIdentifier) },
-                { username: normalizeUsername(rawIdentifier) },
-                { mobile: normalizeMobile(rawIdentifier) },
-            ],
-        });
+        const matchingUsers = usersMatchingIdentifier(await User.find(), rawIdentifier);
+        if (matchingUsers.length > 1) {
+            return res.status(409).json({ message: "This login ID belongs to multiple accounts. Contact IT support to correct the account details." });
+        }
+        const user = matchingUsers[0];
         const resetOtp = user && await PasswordResetOtp.findOne({ userId: String(user._id) });
         const isExpired = !resetOtp || new Date(resetOtp.expiresAt || 0).getTime() <= Date.now();
         if (!user || user.isActive === false || isExpired || resetOtp.usedAt || resetOtp.attempts >= OTP_MAX_ATTEMPTS) {
