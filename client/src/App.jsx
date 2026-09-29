@@ -61,7 +61,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       refreshCurrentUser()
         .then(applyFreshUser)
         .catch(err => {
-          if (err.status === 401 || err.status === 403) {
+          if ((err.status === 401 || err.status === 403) && getAuthToken() === err.authToken) {
             clearAuthSession();
             if (!cancelled) setUser({});
           }
