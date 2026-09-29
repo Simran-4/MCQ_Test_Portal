@@ -15,6 +15,7 @@ const {
   resolveQuestionSelectionMode,
 } = require("../utils/questionSelection");
 const {
+  candidateSourceQuestions,
   questionsForLanguage,
   selectQuestionsForLanguage,
   translateQuestionsWithStatus,
@@ -530,14 +531,20 @@ router.get("/", async (req, res) => {
     const suites = await TestSuite.find(query).sort({ createdAt: -1 });
     const suitesWithCount = await Promise.all(
       suites.map(async (suite) => {
-        const totalCount = await Question.countDocuments({ testSuite: suite._id });
-        const effectiveCount = getEffectiveQuestionCount(suite, totalCount);
+        const suiteQuestions = await Question.find({ testSuite: suite._id }).select("_id language");
+        const totalCount = suiteQuestions.length;
         const mode = resolveQuestionSelectionMode(suite);
+        const sourceCount = candidateSourceQuestions(suiteQuestions).length;
+        const effectiveCount = getEffectiveQuestionCount(
+          suite,
+          mode === "selected" ? totalCount : sourceCount
+        );
         return {
           ...suiteToObject(suite),
           questionSelectionMode: mode,
           questionCount: user?.role === "candidate" ? effectiveCount : totalCount,
           totalQuestionCount: totalCount,
+          sourceQuestionCount: sourceCount,
           effectiveQuestionCount: effectiveCount,
         };
       })
