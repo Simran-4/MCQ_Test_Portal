@@ -1,4 +1,4 @@
-const API = import.meta.env.VITE_API_URL || "";
+const API = import.meta.env?.VITE_API_URL || "";
 const TOKEN_KEY = "token";
 const USER_KEY = "user";
 
@@ -55,15 +55,26 @@ export function getCurrentUser() {
 }
 
 export async function refreshCurrentUser() {
+  const authToken = getAuthToken();
   const res = await fetch(`${API}/api/auth/me`, {
-    headers: getAuthHeaders(),
+    headers: authToken ? { Authorization: authToken } : {},
   });
+  const ensureSameSession = () => {
+    if (getAuthToken() !== authToken) {
+      const err = new Error("Login changed while loading the current user");
+      err.stale = true;
+      throw err;
+    }
+  };
+  ensureSameSession();
   if (!res.ok) {
     const err = new Error("Unable to refresh current user");
     err.status = res.status;
+    err.authToken = authToken;
     throw err;
   }
   const user = await res.json();
+  ensureSameSession();
   sessionStorage.setItem(USER_KEY, JSON.stringify(user));
   return user;
 }
