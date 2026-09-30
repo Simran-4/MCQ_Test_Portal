@@ -684,10 +684,11 @@ router.post("/login", async (req, res) => {
             Boolean(user.password && await bcrypt.compare(password, user.password))
         ));
         const matchingPasswordUsers = matchingUsers.filter((_, index) => passwordMatches[index]);
-        if (matchingPasswordUsers.length > 1) {
+        const activePasswordUsers = matchingPasswordUsers.filter(user => user.isActive !== false);
+        if (activePasswordUsers.length > 1) {
             return res.status(409).json({ message: "This login ID belongs to multiple accounts. Contact IT support to correct the account details." });
         }
-        const user = matchingPasswordUsers[0];
+        const user = activePasswordUsers[0] || matchingPasswordUsers[0];
         if (!user) {
             return res.status(400).json({ message: "Invalid credentials" });
         }
