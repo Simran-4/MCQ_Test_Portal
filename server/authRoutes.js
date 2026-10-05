@@ -686,7 +686,7 @@ router.post("/login", async (req, res) => {
         const matchingPasswordUsers = matchingUsers.filter((_, index) => passwordMatches[index]);
         const activePasswordUsers = matchingPasswordUsers.filter(user => user.isActive !== false);
 const activeSuperAdmins = activePasswordUsers.filter(user => user.role === "superadmin");
-if (activePasswordUsers.length > 1 && activeSuperAdmins.length !== 1) {
+if (activePasswordUsers.length > 1 && activeSuperAdmins.length === 0) {
     return res.status(409).json({ message: "This login ID belongs to multiple accounts. Contact IT support to correct the account details." });
 }
 
