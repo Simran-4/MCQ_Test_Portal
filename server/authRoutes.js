@@ -685,10 +685,12 @@ router.post("/login", async (req, res) => {
         ));
         const matchingPasswordUsers = matchingUsers.filter((_, index) => passwordMatches[index]);
         const activePasswordUsers = matchingPasswordUsers.filter(user => user.isActive !== false);
-        if (activePasswordUsers.length > 1) {
-            return res.status(409).json({ message: "This login ID belongs to multiple accounts. Contact IT support to correct the account details." });
-        }
-        const user = activePasswordUsers[0] || matchingPasswordUsers[0];
+const activeSuperAdmins = activePasswordUsers.filter(user => user.role === "superadmin");
+if (activePasswordUsers.length > 1 && activeSuperAdmins.length !== 1) {
+    return res.status(409).json({ message: "This login ID belongs to multiple accounts. Contact IT support to correct the account details." });
+}
+
+const user = activeSuperAdmins[0] || activePasswordUsers[0] || matchingPasswordUsers[0];
         if (!user) {
             return res.status(400).json({ message: "Invalid credentials" });
         }
